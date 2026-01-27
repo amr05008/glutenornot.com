@@ -16,10 +16,13 @@ A free PWA that helps people with celiac disease scan ingredient labels and get 
 ```bash
 npm install
 cp .env.example .env   # Add your API keys
-npm run dev            # http://localhost:3000
+npx vercel login       # One-time auth
+npx vercel dev         # http://localhost:3000
 ```
 
-The frontend works without API keys, but scanning requires:
+Note: `vercel dev` runs the serverless functions locally. For static-only serving (no API), use `npm run dev:static`.
+
+Scanning requires:
 - `GOOGLE_CLOUD_VISION_API_KEY`
 - `ANTHROPIC_API_KEY`
 
