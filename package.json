@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev:static": "npx serve -l 3000",
-    "start": "npx serve -l 3000"
+    "start": "npx serve -l 3000",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "celiac",
@@ -17,6 +20,7 @@
   "license": "MIT",
   "devDependencies": {
     "serve": "^14.2.0",
-    "vercel": "^50.6.2"
+    "vercel": "^50.6.2",
+    "vitest": "^4.0.18"
   }
 }

@@ -1,0 +1,82 @@
+{
+  "valid_unsafe": {
+    "input": "{\"verdict\": \"unsafe\", \"flagged_ingredients\": [\"wheat flour\"], \"allergen_warnings\": [], \"explanation\": \"Contains wheat\", \"confidence\": \"high\"}",
+    "expected": {
+      "verdict": "unsafe",
+      "flagged_ingredients": ["wheat flour"],
+      "allergen_warnings": [],
+      "explanation": "Contains wheat",
+      "confidence": "high"
+    }
+  },
+  "valid_safe": {
+    "input": "{\"verdict\": \"safe\", \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"No gluten found\", \"confidence\": \"high\"}",
+    "expected": {
+      "verdict": "safe",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "No gluten found",
+      "confidence": "high"
+    }
+  },
+  "valid_with_surrounding_text": {
+    "input": "Here's my analysis:\n{\"verdict\": \"safe\", \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"No gluten found\", \"confidence\": \"high\"}\nLet me know if you need more.",
+    "expected": {
+      "verdict": "safe",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "No gluten found",
+      "confidence": "high"
+    }
+  },
+  "missing_optional_fields": {
+    "input": "{\"verdict\": \"caution\"}",
+    "expected": {
+      "verdict": "caution",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "",
+      "confidence": "medium"
+    }
+  },
+  "invalid_verdict_value": {
+    "input": "{\"verdict\": \"maybe\", \"flagged_ingredients\": [], \"explanation\": \"Not sure\"}",
+    "expected": {
+      "verdict": "caution",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Unable to fully analyze the ingredients. Please review manually.",
+      "confidence": "low"
+    }
+  },
+  "no_json_found": {
+    "input": "I could not analyze this image properly.",
+    "expected": {
+      "verdict": "caution",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Unable to fully analyze the ingredients. Please review manually.",
+      "confidence": "low"
+    }
+  },
+  "malformed_json": {
+    "input": "{\"verdict\": \"safe\", flagged_ingredients: [broken",
+    "expected": {
+      "verdict": "caution",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Unable to fully analyze the ingredients. Please review manually.",
+      "confidence": "low"
+    }
+  },
+  "empty_response": {
+    "input": "",
+    "expected": {
+      "verdict": "caution",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Unable to fully analyze the ingredients. Please review manually.",
+      "confidence": "low"
+    }
+  }
+}

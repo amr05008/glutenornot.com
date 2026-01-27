@@ -57,6 +57,21 @@ Designed for Vercel:
 2. Add environment variables
 3. Deploy
 
+## Testing
+
+Run tests:
+
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Run in watch mode
+npm run test:coverage # Run with coverage report
+```
+
+Tests cover:
+- Claude response parsing and fallback behavior
+- Rate limiting logic
+- API error handling
+
 ## Known Limitations
 
 - **Rate limiting**: In-memory storage won't persist across serverless instances. Migrate to Vercel KV for production.

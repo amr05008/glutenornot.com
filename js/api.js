@@ -155,5 +155,6 @@ export {
   analyzeImage,
   checkHealth,
   APIError,
-  ErrorType
+  ErrorType,
+  handleErrorResponse
 };

@@ -4,9 +4,18 @@
  */
 
 // Rate limiting storage (in-memory for development, use Vercel KV in production)
-const rateLimitMap = new Map();
+let rateLimitMap = new Map();
 const RATE_LIMIT = 50; // requests per day per IP
 const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+// For testing: allow injecting a custom rate limit map
+function _setRateLimitMap(map) {
+  rateLimitMap = map;
+}
+
+function _getRateLimitMap() {
+  return rateLimitMap;
+}
 
 /**
  * Claude prompt for ingredient analysis
@@ -167,6 +176,56 @@ async function performOCR(base64Image) {
 }
 
 /**
+ * Parse and validate Claude's response
+ * Exported for testing
+ */
+function parseClaudeResponse(content) {
+  // Handle empty/null input
+  if (!content || content.trim() === '') {
+    return {
+      verdict: 'caution',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'Unable to fully analyze the ingredients. Please review manually.',
+      confidence: 'low'
+    };
+  }
+
+  try {
+    // Try to extract JSON from the response (Claude might add extra text)
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+
+    // Validate required fields
+    if (!result.verdict || !['safe', 'caution', 'unsafe'].includes(result.verdict)) {
+      throw new Error('Invalid verdict');
+    }
+
+    // Ensure arrays exist
+    result.flagged_ingredients = result.flagged_ingredients || [];
+    result.allergen_warnings = result.allergen_warnings || [];
+    result.explanation = result.explanation || '';
+    result.confidence = result.confidence || 'medium';
+
+    return result;
+
+  } catch (parseError) {
+    // Return a caution verdict if we can't parse
+    return {
+      verdict: 'caution',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'Unable to fully analyze the ingredients. Please review manually.',
+      confidence: 'low'
+    };
+  }
+}
+
+/**
  * Analyze ingredients with Claude
  */
 async function analyzeWithClaude(ocrText) {
@@ -205,40 +264,7 @@ async function analyzeWithClaude(ocrText) {
     throw new Error('CLAUDE_ERROR');
   }
 
-  // Parse JSON from Claude's response
-  try {
-    // Try to extract JSON from the response (Claude might add extra text)
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
-
-    // Validate required fields
-    if (!result.verdict || !['safe', 'caution', 'unsafe'].includes(result.verdict)) {
-      throw new Error('Invalid verdict');
-    }
-
-    // Ensure arrays exist
-    result.flagged_ingredients = result.flagged_ingredients || [];
-    result.allergen_warnings = result.allergen_warnings || [];
-    result.explanation = result.explanation || '';
-    result.confidence = result.confidence || 'medium';
-
-    return result;
-
-  } catch (parseError) {
-    console.error('Failed to parse Claude response:', parseError, content);
-    // Return a caution verdict if we can't parse
-    return {
-      verdict: 'caution',
-      flagged_ingredients: [],
-      allergen_warnings: [],
-      explanation: 'Unable to fully analyze the ingredients. Please review manually.',
-      confidence: 'low'
-    };
-  }
+  return parseClaudeResponse(content);
 }
 
 /**
@@ -305,3 +331,15 @@ function formatTimeRemaining(ms) {
   }
   return `${minutes} minute${minutes > 1 ? 's' : ''}`;
 }
+
+// Export internal functions for testing
+export {
+  parseClaudeResponse,
+  checkRateLimit,
+  incrementRateLimit,
+  formatTimeRemaining,
+  RATE_LIMIT,
+  RATE_LIMIT_WINDOW,
+  _setRateLimitMap,
+  _getRateLimitMap
+};

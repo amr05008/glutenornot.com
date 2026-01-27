@@ -47,6 +47,7 @@ Required for API functionality:
 - **Flag all oats as "caution"**: Cross-contamination risk unless certified GF
 - **Optimize for in-store use**: Speed, clarity, minimal taps
 - **Keep code simple**: This is an MVP, avoid over-engineering
+- **Run tests before committing**: `npm test` must pass before committing changes
 
 ## Imports
 
