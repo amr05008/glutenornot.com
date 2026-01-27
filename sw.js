@@ -3,7 +3,7 @@
  * Handles caching and offline fallback
  */
 
-const CACHE_NAME = 'glutenornot-v1';
+const CACHE_NAME = 'glutenornot-v2';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [
