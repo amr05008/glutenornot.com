@@ -1,0 +1,16 @@
+{
+  "name": "glutenornot.com",
+  "version": "1.0.0",
+  "description": "PWA to help people with celiac disease scan ingredient labels for gluten",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve -l 3000",
+    "start": "npx serve -l 3000"
+  },
+  "keywords": ["celiac", "gluten-free", "pwa", "ingredient-scanner"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}

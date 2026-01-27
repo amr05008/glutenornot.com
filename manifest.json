@@ -1,0 +1,25 @@
+{
+  "name": "GlutenOrNot",
+  "short_name": "GlutenOrNot",
+  "description": "Scan ingredient labels to check if they're safe for celiac disease",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2d7d46",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["health", "food", "utilities"]
+}
