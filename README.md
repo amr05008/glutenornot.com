@@ -5,6 +5,7 @@ A free PWA that helps people with celiac disease scan ingredient labels and get 
 ## Features
 
 - **Photo scanning**: Take a photo of any ingredient label
+- **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
 - **Offline support**: Works as a PWA with offline fallback
@@ -12,57 +13,55 @@ A free PWA that helps people with celiac disease scan ingredient labels and get 
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js 18+
-- Google Cloud Vision API key
-- Anthropic API key
-
-### Development
-
-1. Clone the repository
-2. Copy `.env.example` to `.env` and add your API keys
-3. Install dependencies and start the dev server:
-
 ```bash
 npm install
-npm run dev
+cp .env.example .env   # Add your API keys
+npm run dev            # http://localhost:3000
 ```
 
-4. Open http://localhost:3000
+The frontend works without API keys, but scanning requires:
+- `GOOGLE_CLOUD_VISION_API_KEY`
+- `ANTHROPIC_API_KEY`
 
-### Deployment
+## Project Structure
 
-This app is designed for Vercel deployment:
-
-1. Connect your repository to Vercel
-2. Add environment variables:
-   - `GOOGLE_CLOUD_VISION_API_KEY`
-   - `ANTHROPIC_API_KEY`
-3. Deploy
+```
+index.html              # Single-page app (all UI states)
+css/styles.css          # Mobile-first styles
+js/
+  app.js                # Main orchestration
+  camera.js             # Photo capture, drag-drop, paste
+  api.js                # API client
+  ui.js                 # UI state transitions
+api/
+  analyze.js            # Serverless: OCR + Claude analysis
+  health.js             # Health check
+```
 
 ## How It Works
 
-1. User takes a photo of an ingredient label
-2. Image is sent to Google Cloud Vision for OCR
-3. Extracted text is analyzed by Claude
-4. User receives a verdict:
-   - **Safe**: No gluten-containing ingredients detected
-   - **Caution**: Contains ambiguous ingredients or warnings
-   - **Unsafe**: Contains wheat, barley, rye, or derivatives
+1. User provides image (camera, upload, drag-drop, or paste)
+2. Image is resized and sent to `/api/analyze`
+3. Google Cloud Vision extracts text via OCR
+4. Claude analyzes ingredients and returns verdict
+5. UI displays result: Safe / Caution / Unsafe
 
-## Tech Stack
+## Deployment
 
-- **Frontend**: Vanilla HTML/CSS/JS (no framework)
-- **Backend**: Vercel serverless functions
-- **OCR**: Google Cloud Vision API
-- **Analysis**: Claude API (Sonnet)
-- **Hosting**: Vercel
+Designed for Vercel:
+
+1. Connect repo to Vercel
+2. Add environment variables
+3. Deploy
 
 ## Known Limitations
 
-- **Rate limiting**: Currently uses in-memory storage (50 scans/IP/day). This won't persist across serverless function instances in production. For production use, migrate to Vercel KV or similar persistent storage.
-- **Icons**: Using SVG icons which may not be supported on all platforms for PWA installation. PNG versions (192x192, 512x512) recommended for full compatibility.
+- **Rate limiting**: In-memory storage won't persist across serverless instances. Migrate to Vercel KV for production.
+- **Icons**: SVG only. Add PNG versions (192x192, 512x512) for full PWA compatibility.
+
+## Contributing
+
+Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
 
 ## License
 
