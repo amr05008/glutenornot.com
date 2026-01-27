@@ -21,3 +21,4 @@ Thumbs.db
 
 # Project ideas (personal notes)
 PROJECT_IDEAS.md
+.env*.local

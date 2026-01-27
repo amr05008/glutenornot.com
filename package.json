@@ -4,13 +4,19 @@
   "description": "PWA to help people with celiac disease scan ingredient labels for gluten",
   "type": "module",
   "scripts": {
-    "dev": "npx serve -l 3000",
+    "dev:static": "npx serve -l 3000",
     "start": "npx serve -l 3000"
   },
-  "keywords": ["celiac", "gluten-free", "pwa", "ingredient-scanner"],
+  "keywords": [
+    "celiac",
+    "gluten-free",
+    "pwa",
+    "ingredient-scanner"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "serve": "^14.2.0"
+    "serve": "^14.2.0",
+    "vercel": "^50.6.2"
   }
 }

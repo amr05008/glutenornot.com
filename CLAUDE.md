@@ -30,8 +30,10 @@
 
 ```bash
 npm install
-npm run dev     # Runs local server on port 3000
+npx vercel dev  # Runs Vercel dev server with API functions
 ```
+
+Note: Requires Vercel CLI login (`npx vercel login`). For static-only serving without APIs, use `npm run dev:static`.
 
 ## Environment Variables
 
