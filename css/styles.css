@@ -302,6 +302,14 @@ body {
   overflow: hidden;
 }
 
+.result-thumbnail {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 12px 12px 0 0;
+  background: #f5f5f5;
+}
+
 /* Verdict Badge */
 .verdict-badge {
   display: flex;

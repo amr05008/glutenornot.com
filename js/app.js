@@ -21,6 +21,9 @@ import {
 const SCAN_COUNT_KEY = 'glutenornot_scan_count';
 const SCAN_DATE_KEY = 'glutenornot_scan_date';
 
+// Store current image for result display
+let currentImage = null;
+
 /**
  * Initialize the application
  */
@@ -79,6 +82,7 @@ function setupEventListeners() {
   // Scan again button
   const scanAgainBtn = document.getElementById('scan-again-btn');
   scanAgainBtn.addEventListener('click', () => {
+    currentImage = null;
     showReady();
   });
 }
@@ -111,6 +115,7 @@ async function handleImageCapture(base64Image) {
     return;
   }
 
+  currentImage = base64Image;
   showProcessing();
 
   try {
@@ -120,7 +125,7 @@ async function handleImageCapture(base64Image) {
     incrementScanCount();
     updateScanCountDisplay();
 
-    showResult(result);
+    showResult(result, currentImage);
 
   } catch (error) {
     handleError(error);

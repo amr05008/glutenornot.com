@@ -51,6 +51,11 @@ function showProcessing() {
  * Show the ready state
  */
 function showReady() {
+  const thumbnail = document.getElementById('result-thumbnail');
+  if (thumbnail) {
+    thumbnail.style.display = 'none';
+    thumbnail.src = '';
+  }
   setState(STATES.READY);
 }
 
@@ -64,7 +69,7 @@ function showOffline() {
 /**
  * Render and show the result
  */
-function showResult(result) {
+function showResult(result, imageData = null) {
   const { verdict, flagged_ingredients, allergen_warnings, explanation, confidence } = result;
 
   // Update verdict badge
@@ -122,6 +127,17 @@ function showResult(result) {
     confidenceValue.className = `confidence-value ${confidence}`;
   } else {
     confidenceSection.style.display = 'none';
+  }
+
+  // Display thumbnail
+  const thumbnail = document.getElementById('result-thumbnail');
+  if (thumbnail) {
+    if (imageData) {
+      thumbnail.src = `data:image/jpeg;base64,${imageData}`;
+      thumbnail.style.display = 'block';
+    } else {
+      thumbnail.style.display = 'none';
+    }
   }
 
   setState(STATES.RESULT);
