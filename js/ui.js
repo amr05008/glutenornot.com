@@ -163,7 +163,7 @@ function updateScanCounter(count) {
   const counter = document.getElementById('scan-counter');
   if (counter) {
     if (count === 0) {
-      counter.textContent = '';
+      counter.textContent = '0 scans today';
     } else if (count === 1) {
       counter.textContent = '1 scan today';
     } else {
