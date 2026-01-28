@@ -86,13 +86,12 @@ A prioritized todo list for improving the PWA and setting the stage for potentia
 
 ### 3.1 Celiac Beta Testing
 - [ ] Create a feedback form (Google Forms or Typeform)
-- [ ] Share with dad for testing
-- [ ] Share with Richard for testing
+- [ ] Share with others for testing 
 - [ ] Document common edge cases and failures
 - [ ] Iterate on prompt based on real-world accuracy issues
 
 ### 3.2 Accuracy Tracking
-- [ ] Add optional "Was this accurate?" feedback after results
+- [ ] Add optional "Was this accurate?" feedback after results (eh dont love this, we just have to make sure its pretty bang on)
 - [ ] Log feedback for prompt improvement
 - [ ] Track false positives/negatives patterns
 
