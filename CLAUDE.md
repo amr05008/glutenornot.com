@@ -4,6 +4,7 @@
 
 - **Tech Stack**: Vanilla HTML/CSS/JS, Vercel serverless functions
 - **APIs**: Google Cloud Vision (OCR), Claude API (Sonnet)
+- **Roadmap**: `ROADMAP.md` - prioritized improvement plan
 - **Session history**: `.claude/sessions/`
 - **Decisions**: `.claude/decisions/`
 

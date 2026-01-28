@@ -79,7 +79,9 @@ Tests cover:
 
 ## Contributing
 
-Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
+See [`ROADMAP.md`](./ROADMAP.md) for the prioritized improvement plan.
+
+Guidelines: Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
 
 ## License
 
