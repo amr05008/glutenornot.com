@@ -1,6 +1,22 @@
 # Dependencies
 node_modules/
 
+# React Native / Expo
+mobile/.expo/
+mobile/dist/
+mobile/ios/
+mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Metro
+.metro-health-check*
+
 # Environment variables
 .env
 .env.local

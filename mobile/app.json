@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "GlutenOrNot",
+    "slug": "glutenornot",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "glutenornot",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2d7d46"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.glutenornot.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "GlutenOrNot needs camera access to scan ingredient labels for gluten content.",
+        "NSPhotoLibraryUsageDescription": "GlutenOrNot needs photo library access to select photos of ingredient labels.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2d7d46"
+      },
+      "package": "com.glutenornot.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "GlutenOrNot needs camera access to scan ingredient labels for gluten content."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ddfbd94a-effe-4f50-b26c-e15e86e8caee"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ddfbd94a-effe-4f50-b26c-e15e86e8caee"
+    }
+  }
+}

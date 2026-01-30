@@ -10,8 +10,11 @@ A free PWA that helps people with celiac disease scan ingredient labels and get 
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
 - **Offline support**: Works as a PWA with offline fallback
 - **Privacy-focused**: No accounts required, no images stored
+- **Mobile app**: iOS app via React Native/Expo
 
 ## Getting Started
+
+### Web App
 
 ```bash
 npm install
@@ -22,6 +25,18 @@ npx vercel dev         # http://localhost:3000
 
 Note: `vercel dev` runs the serverless functions locally. For static-only serving (no API), use `npm run dev:static`.
 
+### Mobile App (iOS)
+
+```bash
+cd mobile
+npm install
+npx expo start
+```
+
+Then:
+- **iOS Simulator**: Press `i` in the terminal
+- **Physical device**: Install "Expo Go" from App Store, scan the QR code
+
 Scanning requires:
 - `GOOGLE_CLOUD_VISION_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -29,16 +44,25 @@ Scanning requires:
 ## Project Structure
 
 ```
-index.html              # Single-page app (all UI states)
-css/styles.css          # Mobile-first styles
-js/
-  app.js                # Main orchestration
-  camera.js             # Photo capture, drag-drop, paste
-  api.js                # API client
-  ui.js                 # UI state transitions
-api/
-  analyze.js            # Serverless: OCR + Claude analysis
-  health.js             # Health check
+glutenornot.com/
+├── web/                    # Web PWA
+│   ├── index.html          # Single-page app (all UI states)
+│   ├── css/styles.css      # Mobile-first styles
+│   ├── js/
+│   │   ├── app.js          # Main orchestration
+│   │   ├── camera.js       # Photo capture, drag-drop, paste
+│   │   ├── api.js          # API client
+│   │   └── ui.js           # UI state transitions
+│   └── tests/              # Vitest tests
+├── mobile/                 # React Native (Expo) iOS app
+│   ├── app/                # Expo Router screens
+│   ├── components/         # Reusable components
+│   ├── services/           # API client
+│   └── constants/          # Shared constants
+├── api/                    # Shared Vercel serverless functions
+│   ├── analyze.js          # Serverless: OCR + Claude analysis
+│   └── health.js           # Health check
+└── package.json            # Monorepo root
 ```
 
 ## How It Works
@@ -51,11 +75,20 @@ api/
 
 ## Deployment
 
-Designed for Vercel:
+### Web (Vercel)
 
 1. Connect repo to Vercel
 2. Add environment variables
 3. Deploy
+
+### Mobile (TestFlight)
+
+```bash
+cd mobile
+npx eas-cli login
+npx eas-cli build --platform ios --profile preview
+npx eas-cli submit --platform ios
+```
 
 ## Testing
 

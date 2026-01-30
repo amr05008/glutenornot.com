@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "web",
   "rewrites": [
     {
       "source": "/((?!api|css|js|assets|.*\\..*).*)",

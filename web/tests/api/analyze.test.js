@@ -8,7 +8,7 @@ import {
   RATE_LIMIT_WINDOW,
   _setRateLimitMap,
   _getRateLimitMap
-} from '../../api/analyze.js';
+} from '../../../api/analyze.js';
 import fixtures from '../fixtures/claude-responses.json';
 
 describe('parseClaudeResponse', () => {
