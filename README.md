@@ -1,17 +1,29 @@
 # GlutenOrNot
 
-A free app that helps people with celiac disease scan ingredient labels and get instant safety assessments. Available as a web PWA and iOS mobile app.
+A free PWA that helps people with celiac disease scan ingredient labels and get instant safety assessments.
 
-## Quick Start
+## Features
+
+- **Photo scanning**: Take a photo of any ingredient label
+- **Desktop support**: Drag-drop images or paste from clipboard
+- **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
+- **Clear verdicts**: Safe, Caution, or Unsafe with explanations
+- **Offline support**: Works as a PWA with offline fallback
+- **Privacy-focused**: No accounts required, no images stored
+- **Mobile app**: iOS app via React Native/Expo
+
+## Getting Started
 
 ### Web App
 
 ```bash
-cd web
 npm install
-cp ../.env.example ../.env   # Add your API keys
-npx vercel dev               # http://localhost:3000
+cp .env.example .env   # Add your API keys
+npx vercel login       # One-time auth
+npx vercel dev         # http://localhost:3000
 ```
+
+Note: `vercel dev` runs the serverless functions locally. For static-only serving (no API), use `npm run dev:static`.
 
 ### Mobile App (iOS)
 
@@ -25,95 +37,51 @@ Then:
 - **iOS Simulator**: Press `i` in the terminal
 - **Physical device**: Install "Expo Go" from App Store, scan the QR code
 
+Scanning requires:
+- `GOOGLE_CLOUD_VISION_API_KEY`
+- `ANTHROPIC_API_KEY`
+
 ## Project Structure
 
 ```
 glutenornot.com/
 ├── web/                    # Web PWA
-│   ├── index.html          # Single-page app
+│   ├── index.html          # Single-page app (all UI states)
 │   ├── css/styles.css      # Mobile-first styles
-│   ├── js/                 # Frontend modules
+│   ├── js/
 │   │   ├── app.js          # Main orchestration
-│   │   ├── camera.js       # Photo capture
+│   │   ├── camera.js       # Photo capture, drag-drop, paste
 │   │   ├── api.js          # API client
-│   │   └── ui.js           # UI state management
-│   └── tests/              # Web tests
+│   │   └── ui.js           # UI state transitions
+│   └── tests/              # Vitest tests
 ├── mobile/                 # React Native (Expo) iOS app
 │   ├── app/                # Expo Router screens
-│   │   ├── index.tsx       # Camera screen
-│   │   └── result.tsx      # Result display
 │   ├── components/         # Reusable components
-│   ├── services/api.ts     # API client
+│   ├── services/           # API client
 │   └── constants/          # Shared constants
 ├── api/                    # Shared Vercel serverless functions
-│   ├── analyze.js          # OCR + Claude analysis
+│   ├── analyze.js          # Serverless: OCR + Claude analysis
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
 
-## Environment Variables
-
-Create a `.env` file in the root with:
-
-```
-GOOGLE_CLOUD_VISION_API_KEY=your_key_here
-ANTHROPIC_API_KEY=your_key_here
-```
-
-Required for the `/api/analyze` endpoint to work.
-
 ## How It Works
 
-1. User takes a photo of an ingredient label
+1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
-4. Claude analyzes ingredients for gluten content
-5. Returns verdict: **Safe** / **Caution** / **Unsafe**
+4. Claude analyzes ingredients and returns verdict
+5. UI displays result: Safe / Caution / Unsafe
 
-## API Endpoints
+## Deployment
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/analyze` | POST | Analyze ingredient label image |
-| `/api/health` | GET | Health check |
+### Web (Vercel)
 
-### POST /api/analyze
+1. Connect repo to Vercel
+2. Add environment variables
+3. Deploy
 
-```json
-// Request
-{ "image": "<base64-encoded-jpeg>" }
-
-// Response
-{
-  "verdict": "safe" | "caution" | "unsafe",
-  "flagged_ingredients": ["wheat flour"],
-  "allergen_warnings": ["Contains wheat"],
-  "explanation": "This product contains wheat...",
-  "confidence": "high" | "medium" | "low"
-}
-```
-
-## Development
-
-### Run Web Locally
-```bash
-npx vercel dev
-```
-
-### Run Mobile Locally
-```bash
-cd mobile
-npx expo start
-```
-
-### Run Tests
-```bash
-npm test              # Run all tests
-npm run test:watch    # Watch mode
-npm run test:coverage # With coverage
-```
-
-## Mobile App - TestFlight Deployment
+### Mobile (TestFlight)
 
 ```bash
 cd mobile
@@ -122,15 +90,31 @@ npx eas-cli build --platform ios --profile preview
 npx eas-cli submit --platform ios
 ```
 
-## Deployment (Web)
+## Testing
 
-1. Connect repo to Vercel
-2. Add environment variables in Vercel dashboard
-3. Deploy
+Run tests:
 
-## Guidelines
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Run in watch mode
+npm run test:coverage # Run with coverage report
+```
 
-Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
+Tests cover:
+- Claude response parsing and fallback behavior
+- Rate limiting logic
+- API error handling
+
+## Known Limitations
+
+- **Rate limiting**: In-memory storage won't persist across serverless instances. Migrate to Vercel KV for production.
+- **Icons**: SVG only. Add PNG versions (192x192, 512x512) for full PWA compatibility.
+
+## Contributing
+
+See [`ROADMAP.md`](./ROADMAP.md) for the prioritized improvement plan.
+
+Guidelines: Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
 
 ## License
 
