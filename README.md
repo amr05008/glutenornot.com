@@ -128,6 +128,10 @@ npx eas-cli submit --platform ios
 2. Add environment variables in Vercel dashboard
 3. Deploy
 
+## Guidelines
+
+Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
+
 ## License
 
 MIT

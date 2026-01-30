@@ -12,6 +12,8 @@ GlutenOrNot is a gluten detection app for people with celiac disease. Users phot
 - **Mobile**: React Native with Expo (iOS)
 - **Backend**: Vercel serverless functions
 - **APIs**: Google Cloud Vision (OCR), Claude API (Sonnet)
+- **Session history**: `.claude/sessions/`
+- **Decisions**: `.claude/decisions/`
 
 ## Project Structure (Monorepo)
 
