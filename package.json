@@ -1,14 +1,17 @@
 {
-  "name": "glutenornot.com",
+  "name": "glutenornot",
   "version": "1.0.0",
-  "description": "PWA to help people with celiac disease scan ingredient labels for gluten",
-  "type": "module",
+  "private": true,
+  "description": "GlutenOrNot - Gluten ingredient scanner (web + mobile)",
+  "workspaces": [
+    "web"
+  ],
   "scripts": {
-    "dev:static": "npx serve -l 3000",
-    "start": "npx serve -l 3000",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "dev": "cd web && npx serve -l 3000",
+    "dev:web": "cd web && npx serve -l 3000",
+    "test": "vitest run --root web",
+    "test:watch": "vitest --root web",
+    "test:coverage": "vitest run --coverage --root web"
   },
   "keywords": [
     "celiac",
