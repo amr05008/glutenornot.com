@@ -17,9 +17,8 @@ import {
   STATES
 } from './ui.js';
 
-// Storage key for scan count
-const SCAN_COUNT_KEY = 'glutenornot_scan_count';
-const SCAN_DATE_KEY = 'glutenornot_scan_date';
+// Storage key for lifetime scan count
+const LIFETIME_SCAN_COUNT_KEY = 'glutenornot_lifetime_scan_count';
 
 // Store current image for result display
 let currentImage = null;
@@ -172,43 +171,18 @@ function handleError(error) {
 }
 
 /**
- * Get today's date string for comparison
- */
-function getTodayString() {
-  return new Date().toISOString().split('T')[0];
-}
-
-/**
- * Get the current scan count for today
+ * Get the lifetime scan count
  */
 function getScanCount() {
-  const storedDate = localStorage.getItem(SCAN_DATE_KEY);
-  const today = getTodayString();
-
-  if (storedDate !== today) {
-    // Reset count for new day
-    localStorage.setItem(SCAN_DATE_KEY, today);
-    localStorage.setItem(SCAN_COUNT_KEY, '0');
-    return 0;
-  }
-
-  return parseInt(localStorage.getItem(SCAN_COUNT_KEY) || '0', 10);
+  return parseInt(localStorage.getItem(LIFETIME_SCAN_COUNT_KEY) || '0', 10);
 }
 
 /**
- * Increment the scan count
+ * Increment the lifetime scan count
  */
 function incrementScanCount() {
-  const today = getTodayString();
-  const storedDate = localStorage.getItem(SCAN_DATE_KEY);
-
-  if (storedDate !== today) {
-    localStorage.setItem(SCAN_DATE_KEY, today);
-    localStorage.setItem(SCAN_COUNT_KEY, '1');
-  } else {
-    const count = getScanCount();
-    localStorage.setItem(SCAN_COUNT_KEY, String(count + 1));
-  }
+  const count = getScanCount();
+  localStorage.setItem(LIFETIME_SCAN_COUNT_KEY, String(count + 1));
 }
 
 /**

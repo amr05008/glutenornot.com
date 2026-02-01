@@ -162,12 +162,10 @@ function showError(title, message) {
 function updateScanCounter(count) {
   const counter = document.getElementById('scan-counter');
   if (counter) {
-    if (count === 0) {
-      counter.textContent = '0 scans today';
-    } else if (count === 1) {
-      counter.textContent = '1 scan today';
+    if (count === 1) {
+      counter.textContent = '1 scan';
     } else {
-      counter.textContent = `${count} scans today`;
+      counter.textContent = `${count} scans`;
     }
   }
 }

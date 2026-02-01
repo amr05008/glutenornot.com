@@ -4,6 +4,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useRouter } from 'expo-router';
 import { analyzeImage, APIError } from '../services/api';
+import { incrementLifetimeScanCount } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { AnalysisResult } from '../constants/verdicts';
 
@@ -64,10 +65,13 @@ export default function CameraScreen() {
       const result = await analyzeImage(manipulated.base64);
       console.log('API result:', result);
 
+      // Increment scan count on successful analysis
+      const scanCount = await incrementLifetimeScanCount();
+
       // Navigate to result screen
       router.push({
         pathname: '/result',
-        params: { result: JSON.stringify(result) },
+        params: { result: JSON.stringify(result), scanCount: String(scanCount) },
       });
     } catch (error) {
       let message = 'Something went wrong. Please try again.';

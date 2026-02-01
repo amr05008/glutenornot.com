@@ -5,8 +5,9 @@ import { ResultCard } from '../components/ResultCard';
 import { AnalysisResult } from '../constants/verdicts';
 
 export default function ResultScreen() {
-  const { result } = useLocalSearchParams<{ result: string }>();
+  const { result, scanCount } = useLocalSearchParams<{ result: string; scanCount: string }>();
   const router = useRouter();
+  const count = scanCount ? parseInt(scanCount, 10) : 0;
 
   if (!result) {
     return (
@@ -43,6 +44,9 @@ export default function ResultScreen() {
         >
           <Text style={styles.buttonText}>Scan Another</Text>
         </TouchableOpacity>
+        <Text style={styles.scanCounter}>
+          {count === 1 ? '1 scan' : `${count} scans`}
+        </Text>
       </View>
     </View>
   );
@@ -79,5 +83,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  scanCounter: {
+    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 14,
+    color: '#888',
   },
 });

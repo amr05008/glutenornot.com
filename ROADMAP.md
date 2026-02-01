@@ -7,16 +7,21 @@ A prioritized todo list for improving the PWA and setting the stage for potentia
 
 ## Phase 1: Polish & Trust (High Priority)
 
-### 1.1 Persistent Lifetime Counter
-**Current**: Counter resets daily (shows "X scans today")
-**Goal**: Show total lifetime scans to build trust over time
+### 1.1 Persistent Lifetime Counter ✅
+**Status**: Complete (2026-01-31)
 
-- [ ] Add `LIFETIME_SCAN_COUNT_KEY` to localStorage
-- [ ] Update `incrementScanCount()` to track lifetime count
-- [ ] Update footer display: "X scans" (lifetime total)
-- [ ] Consider showing milestone messages (e.g., "100 scans!")
+- [x] Add `LIFETIME_SCAN_COUNT_KEY` to localStorage
+- [x] Update `incrementScanCount()` to track lifetime count
+- [x] Update footer display: "X scans" (lifetime total)
+- [x] Mobile app: Added same feature using AsyncStorage
+- [ ] Consider showing milestone messages (e.g., "100 scans!") — deferred
 
-**Files**: `js/app.js`, `js/ui.js`, `index.html`
+**Files changed**: `web/js/app.js`, `web/js/ui.js`, `mobile/services/storage.ts`, `mobile/app/index.tsx`, `mobile/app/result.tsx`
+
+**Notes**:
+- Web and mobile track counts independently (no sync between platforms)
+- New storage key means existing users start fresh at 0
+- Session log: `.claude/sessions/2026-01-31-add-lifetime-counter.md`
 
 ### 1.2 Friendlier Output Messages
 **Current**: Functional but clinical explanations
@@ -167,7 +172,7 @@ Before deciding on native app, maximize PWA capabilities:
 ## Recommended Priority Order
 
 ### Immediate (This Week)
-1. **1.1 Persistent Counter** - Quick win, builds trust
+1. ~~**1.1 Persistent Counter**~~ ✅ Done
 2. **1.3 Real About Content** - Your story removes "AI slop" feeling
 
 ### Soon (Before Wider Testing)

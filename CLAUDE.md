@@ -32,7 +32,8 @@
 │   │   ├── ResultCard.tsx  # Verdict display component
 │   │   └── LoadingSpinner.tsx
 │   ├── services/
-│   │   └── api.ts          # API client (calls production backend)
+│   │   ├── api.ts          # API client (calls production backend)
+│   │   └── storage.ts      # AsyncStorage utilities (scan count, future: history)
 │   ├── constants/
 │   │   └── verdicts.ts     # Verdict colors, types, API URL
 │   ├── app.json            # Expo config (bundle ID, permissions)
@@ -85,8 +86,10 @@ Required for API functionality:
 
 ## Mobile Roadmap
 
+**Note**: `mobile/services/storage.ts` provides AsyncStorage utilities. Use this for any local persistence (history, favorites, etc.).
+
 ### High Priority
-- [ ] **Recents screen**: Show scan history (local storage, no account needed)
+- [ ] **Recents screen**: Show scan history (extend `storage.ts`, no account needed)
 - [ ] **Barcode scanning**: Integrate barcode scanner alongside OCR
 - [ ] **Mode toggle**: Switch between camera (OCR) and barcode modes
 
