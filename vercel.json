@@ -2,7 +2,11 @@
   "outputDirectory": "web",
   "rewrites": [
     {
-      "source": "/((?!api|css|js|assets|privacy-policy|.*\\..*).*)",
+      "source": "/privacy-policy",
+      "destination": "/privacy-policy.html"
+    },
+    {
+      "source": "/((?!api|css|js|assets|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
