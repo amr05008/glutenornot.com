@@ -1,7 +1,7 @@
 # GlutenOrNot Improvement Roadmap
 
 ## Overview
-A prioritized todo list for improving the PWA and setting the stage for potential mobile app development. Designed for collaboration.
+A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React Native mobile app). Designed for collaboration.
 
 ---
 
@@ -49,10 +49,36 @@ A prioritized todo list for improving the PWA and setting the stage for potentia
 - [ ] Add accuracy disclaimer with specifics
 - [ ] Consider adding a "Report an issue" link
 - [ ] Draft the story together during implementation
+- [ ] add way to contact us (feedback, bugs, w.e)
 
 **Files**: `index.html` (lines 177-203)
 
-### 1.4 Enhanced Trust Signals
+### 1.4 iOS App Store Release
+**Status**: In Progress
+**Goal**: Publish the React Native app to the iOS App Store
+
+#### Pre-Submission
+- [ ] Complete EAS build with production profile
+- [ ] Configure app credentials (certificates, provisioning profiles)
+- [ ] Test thoroughly via TestFlight with beta testers
+- [ ] Fix any crash reports or critical bugs from TestFlight
+
+#### App Store Connect Setup
+- [ ] Write compelling app description (highlight celiac-friendly, free, private)
+- [ ] Create App Store screenshots (6.7" and 5.5" sizes minimum)
+- [ ] Design app preview video (optional but recommended)
+- [ ] Write privacy policy and host it (required)
+- [ ] Set up app metadata (category: Health & Fitness or Food & Drink)
+- [ ] Add keywords for ASO (gluten-free, celiac, food scanner, etc.)
+
+#### Submission
+- [ ] Submit for App Review
+- [ ] Respond to any review feedback
+- [ ] Plan soft launch and marketing
+
+**Files**: `mobile/app.json`, `mobile/eas.json`
+
+### 1.5 Enhanced Trust Signals
 **Current**: "Free forever" and "Privacy first" notes
 **Goal**: Stronger trust indicators
 
@@ -107,70 +133,26 @@ A prioritized todo list for improving the PWA and setting the stage for potentia
 
 ---
 
-## Phase 4: PWA Enhancements (For Mobile App Decision)
+## Phase 4: Future Enhancements (Lower Priority)
 
-### 4.1 PWA Improvements
-Before deciding on native app, maximize PWA capabilities:
-
-- [ ] Add "Add to Home Screen" prompt for first-time users
-- [ ] Improve offline experience with cached UI
-- [ ] Add haptic feedback where supported
-- [ ] Test install experience on iOS and Android
-- [ ] Add app shortcuts for quick scan (manifest)
-
-**Files**: `sw.js`, `manifest.json`, `js/app.js`
-
-### 4.2 Features That Might Require Native
-**You want: Barcode scanning + App Store presence**
-
-| Feature | PWA | Native Needed? |
-|---------|-----|----------------|
-| Camera access | Works | No |
-| Offline use | Partial | Better with native |
-| Push notifications | Works | No |
-| **Barcode scanning** | Possible (libs like QuaggaJS) | Easier + faster native |
-| Widget (home screen) | No | Yes |
-| **App Store presence** | No | **Yes** |
-| Faster cold start | No | Yes |
-
-### 4.3 Mobile App Decision Framework
-**Your goals point toward building a native app:**
-- App Store presence = requires native (or PWA wrapper like Capacitor)
-- Barcode scanning = better UX native, but possible in PWA
-
-**Recommended path:**
-1. **Now**: Finish polishing PWA (Phases 1-3)
-2. **After testing**: Use **Capacitor** to wrap PWA for App Store
-   - Reuses all existing HTML/CSS/JS
-   - Adds native barcode scanning via plugins
-   - Single codebase for web + iOS + Android
-3. **Later**: Migrate to full native only if needed
-
-**Capacitor advantages:**
-- `@capacitor/barcode-scanner` plugin for native scanning
-- Submit to App Store with minimal code changes
-- PWA remains for desktop/web users
-- Faster time-to-market than React Native rewrite
-
----
-
-## Phase 5: Future Enhancements (Lower Priority)
-
-### 5.1 Scan History
+### 4.1 Scan History
 - [ ] Store recent scans in localStorage
 - [ ] Show history in a simple list
 - [ ] Allow "scan again" from history
 
-### 5.2 Product Database (Pairs with Barcode Scanning)
+### 4.2 Product Database (Pairs with Barcode Scanning)
 - [ ] Build database of verified safe/unsafe products
 - [ ] Store barcode -> verdict mappings for instant lookup
 - [ ] Allow community contributions
 - [ ] Skip OCR for known products (faster UX)
 
-### 5.3 Sharing & Social
+### 4.3 Sharing & Social
 - [ ] Add "Share result" button
 - [ ] Generate shareable image of verdict
 - [ ] Consider social proof ("Join X celiacs using this")
+
+### 4.4 Cost remediation 
+- batch had some ideas here about how to bring down costs if need be. 
 
 ---
 
@@ -179,21 +161,21 @@ Before deciding on native app, maximize PWA capabilities:
 ### Immediate (This Week)
 1. ~~**1.1 Persistent Counter**~~ ✅ Done
 2. **1.3 Real About Content** - Your story removes "AI slop" feeling
+3. **1.4 iOS App Store Release** - Get the native app live
 
 ### Soon (Before Wider Testing)
-3. ~~**1.2 Friendlier Output**~~ ✅ Done
-4. **2.1 Logo & Branding** - Visual trust + needed for App Store
-5. **1.4 Trust Signals** - Strengthen free/open message
+4. ~~**1.2 Friendlier Output**~~ ✅ Done
+5. **2.1 Logo & Branding** - Visual trust + needed for App Store
+6. **1.5 Trust Signals** - Strengthen free/open message
 
 ### Testing Phase
-6. **3.1 Celiac Beta Testing** - Dad + Richard + others
-7. **3.2 Accuracy Tracking** - Learn from real usage
+7. **3.1 Celiac Beta Testing** - Dad + Richard + others
+8. **3.2 Accuracy Tracking** - Learn from real usage
 
-### App Store Prep
-8. **4.1 PWA Improvements** - Polish before wrapping
-9. **4.3 Capacitor Integration** - Wrap for iOS/Android
-10. **Barcode feature** - Add via Capacitor plugin
-11. **App Store submission** - iOS first, then Android
+### Future
+9. **4.1 Scan History** - Store and display recent scans
+10. **4.2 Product Database** - Barcode scanning + instant lookups
+11. **4.3 Sharing & Social** - Share verdicts with others
 
 ---
 
