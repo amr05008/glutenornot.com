@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Privacy Policy for GlutenOrNot - a free tool to check ingredient labels for gluten">
+  <meta name="theme-color" content="#2d7d46">
+
+  <title>Privacy Policy - GlutenOrNot</title>
+
+  <link rel="icon" type="image/svg+xml" href="/assets/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/assets/icons/icon.svg">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* Privacy Policy specific styles */
+    .privacy-content {
+      max-width: 680px;
+      width: 100%;
+      padding: var(--spacing-lg);
+    }
+
+    .privacy-content h2 {
+      font-size: 1.5rem;
+      margin-top: var(--spacing-xl);
+      margin-bottom: var(--spacing-md);
+      color: var(--color-text);
+    }
+
+    .privacy-content h2:first-of-type {
+      margin-top: 0;
+    }
+
+    .privacy-content h3 {
+      font-size: 1.125rem;
+      margin-top: var(--spacing-lg);
+      margin-bottom: var(--spacing-sm);
+      color: var(--color-text);
+    }
+
+    .privacy-content p {
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-md);
+      line-height: 1.7;
+    }
+
+    .privacy-content ul {
+      color: var(--color-text-secondary);
+      margin-left: var(--spacing-lg);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .privacy-content li {
+      margin-bottom: var(--spacing-sm);
+      line-height: 1.6;
+    }
+
+    .privacy-content a {
+      color: var(--color-primary);
+    }
+
+    .privacy-content a:hover {
+      color: var(--color-primary-dark);
+    }
+
+    .effective-date {
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .highlight-box {
+      background: var(--color-safe-bg);
+      border-left: 4px solid var(--color-primary);
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+      border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    }
+
+    .highlight-box p {
+      margin-bottom: 0;
+      color: var(--color-text);
+    }
+
+    .main {
+      justify-content: flex-start;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <a href="/" style="text-decoration: none;">
+        <h1 class="logo">Gluten<span class="logo-accent">Or</span>Not</h1>
+      </a>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <div class="privacy-content">
+        <h2>Privacy Policy</h2>
+        <p class="effective-date">Effective Date: February 1, 2026</p>
+
+        <div class="highlight-box">
+          <p><strong>The short version:</strong> GlutenOrNot is designed with privacy first. We don't collect personal data, don't require accounts, and don't store your photos. Your scans stay on your device.</p>
+        </div>
+
+        <h2>Introduction</h2>
+        <p>GlutenOrNot ("we," "our," or "the app") is a free tool that helps people with celiac disease check ingredient labels for gluten. This Privacy Policy explains how we handle your information when you use our web app at glutenornot.com or our iOS mobile app.</p>
+
+        <h2>Information We Collect</h2>
+
+        <h3>Information We Do NOT Collect</h3>
+        <p>We want to be clear about what we don't collect:</p>
+        <ul>
+          <li>No user accounts, emails, or personal identifiers</li>
+          <li>No device IDs or advertising identifiers</li>
+          <li>No location data</li>
+          <li>No analytics or usage tracking beyond basic aggregate statistics</li>
+          <li>No scan history on our servers</li>
+          <li>No images are stored — photos are processed and immediately discarded</li>
+        </ul>
+
+        <h3>Information Stored Locally on Your Device</h3>
+        <p>The app stores a simple scan counter on your device to show you how many labels you've scanned. This counter:</p>
+        <ul>
+          <li>Never leaves your device</li>
+          <li>Is not linked to any personal information</li>
+          <li>Can be cleared by uninstalling the app or clearing app data</li>
+        </ul>
+
+        <h3>Information Processed (But Not Stored)</h3>
+        <p>When you scan an ingredient label, your photo is temporarily processed to analyze the ingredients. Here's how it works:</p>
+        <ul>
+          <li>Your photo is sent to our server over an encrypted connection (HTTPS)</li>
+          <li>We use Google Cloud Vision API to extract text from the image</li>
+          <li>The extracted text (not the image) is sent to Anthropic's Claude API for analysis</li>
+          <li>You receive a verdict (safe, caution, or unsafe)</li>
+          <li>The image and text are not stored — they are discarded after processing</li>
+        </ul>
+
+        <h2>Third-Party Services</h2>
+        <p>We use the following third-party services to provide the app's functionality:</p>
+
+        <h3>Google Cloud Vision API</h3>
+        <p>We use Google Cloud Vision to perform optical character recognition (OCR) on your photos. Google processes the image to extract text. We do not send any personal identifiers to Google. For more information, see <a href="https://cloud.google.com/vision/docs/data-usage" target="_blank" rel="noopener">Google Cloud Vision's data usage policy</a>.</p>
+
+        <h3>Anthropic Claude API</h3>
+        <p>We use Anthropic's Claude to analyze extracted ingredient text. Only the text from your label is sent to Anthropic — not the original image or any personal information. For more information, see <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</p>
+
+        <h3>Expo (Mobile App Only)</h3>
+        <p>Our iOS app is built with Expo, which provides standard app update functionality. Expo may collect basic crash reports and app update information. For more information, see <a href="https://expo.dev/privacy" target="_blank" rel="noopener">Expo's privacy policy</a>.</p>
+
+        <h3>Vercel (Web App Only)</h3>
+        <p>Our web app is hosted on Vercel. Vercel may collect basic server logs including IP addresses for security and performance purposes. For more information, see <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Vercel's privacy policy</a>.</p>
+
+        <h2>Data Retention</h2>
+        <p>We do not retain your data. Images are processed in real-time and immediately discarded. We have no database of user scans or personal information.</p>
+        <p>The only data that persists is your local scan counter, which is stored on your device and never transmitted to us.</p>
+
+        <h2>Data Security</h2>
+        <p>All data transmitted between your device and our servers is encrypted using HTTPS. We do not store sensitive data, which minimizes security risks.</p>
+
+        <h2>Children's Privacy</h2>
+        <p>GlutenOrNot is not directed at children under 13 years of age. We do not knowingly collect personal information from children. Since we don't collect personal information from any users, this naturally extends to children as well.</p>
+
+        <h2>Your Rights</h2>
+        <p>Since we don't collect or store personal data, there is no personal information for us to access, correct, or delete. Your scan counter is stored locally on your device and can be cleared by uninstalling the app or clearing app data.</p>
+
+        <h2>Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. If we make material changes, we will update the "Effective Date" at the top of this page. We encourage you to review this policy periodically.</p>
+
+        <h2>Contact Us</h2>
+        <p>If you have questions about this Privacy Policy or our privacy practices, please contact us at:</p>
+        <p><a href="mailto:privacy@glutenornot.com">privacy@glutenornot.com</a></p>
+
+        <h2>App Store Information</h2>
+        <p>GlutenOrNot is available as a free app. We do not display advertisements or sell user data. The app is provided as-is to help the celiac community.</p>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <a href="/" class="footer-link">Back to App</a>
+    </footer>
+  </div>
+</body>
+</html>
