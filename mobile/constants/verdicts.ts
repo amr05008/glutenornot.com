@@ -20,13 +20,13 @@ export const VERDICT_CONFIG = {
     color: '#f9a825',
     backgroundColor: '#fff8e1',
     label: 'Caution',
-    icon: '!',
+    icon: '⚠',
   },
   unsafe: {
     color: '#c62828',
     backgroundColor: '#ffebee',
     label: 'Unsafe',
-    icon: '✕',
+    icon: '✗',
   },
 } as const;
 

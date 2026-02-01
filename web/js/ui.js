@@ -3,18 +3,14 @@
  * Handles showing/hiding states and rendering results
  */
 
+import { VERDICT_CONFIG } from './config.js';
+
 const STATES = {
   READY: 'ready',
   PROCESSING: 'processing',
   RESULT: 'result',
   ERROR: 'error',
   OFFLINE: 'offline'
-};
-
-const VERDICT_ICONS = {
-  safe: '✓',
-  caution: '⚠',
-  unsafe: '✗'
 };
 
 let currentState = STATES.READY;
@@ -71,6 +67,7 @@ function showOffline() {
  */
 function showResult(result, imageData = null) {
   const { verdict, flagged_ingredients, allergen_warnings, explanation, confidence } = result;
+  const config = VERDICT_CONFIG[verdict] || VERDICT_CONFIG.caution;
 
   // Update verdict badge
   const verdictBadge = document.getElementById('verdict-badge');
@@ -78,8 +75,8 @@ function showResult(result, imageData = null) {
   const verdictText = document.getElementById('verdict-text');
 
   verdictBadge.className = `verdict-badge ${verdict}`;
-  verdictIcon.textContent = VERDICT_ICONS[verdict] || '';
-  verdictText.textContent = verdict;
+  verdictIcon.textContent = config.icon;
+  verdictText.textContent = config.label;
 
   // Update flagged ingredients
   const flaggedSection = document.getElementById('flagged-section');

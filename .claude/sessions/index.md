@@ -10,3 +10,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-01-27 | [add-trust-messaging](./2026-01-27-add-trust-messaging.md) | Added "Free Forever" trust messaging to main screen |
 | 2026-01-27 | [plan-improvement-roadmap](./2026-01-27-plan-improvement-roadmap.md) | Created comprehensive improvement roadmap for PWA |
 | 2026-01-31 | [add-lifetime-counter](./2026-01-31-add-lifetime-counter.md) | Converted daily scan counter to persistent lifetime counter (web + mobile) |
+| 2026-01-31 | [add-friendlier-output-messages](./2026-01-31-add-friendlier-output-messages.md) | Added friendlier headlines and warmer Claude explanations |

@@ -23,16 +23,21 @@ A prioritized todo list for improving the PWA and setting the stage for potentia
 - New storage key means existing users start fresh at 0
 - Session log: `.claude/sessions/2026-01-31-add-lifetime-counter.md`
 
-### 1.2 Friendlier Output Messages
-**Current**: Functional but clinical explanations
-**Goal**: Warmer, more reassuring language
+### 1.2 Friendlier Output Messages ✅
+**Status**: Complete (2026-01-31)
 
-- [ ] Add emoji or icons to verdicts (already has checkmark/warning/x)
-- [ ] Rewrite Claude prompt to generate friendlier explanations
-- [ ] Add encouraging messages ("You're all set!" vs just "Safe")
-- [ ] Consider adding quick tips based on verdict
+- [x] Unified icons across web and mobile (✓, ⚠, ✗)
+- [x] Rewrite Claude prompt to generate friendlier explanations
+- [x] Added tone guidance with examples for each verdict type
+- [x] Strengthened oats rule (always caution, even if labeled GF)
+- [ ] Consider adding quick tips based on verdict — deferred
 
-**Files**: `api/analyze.js` (lines 23-57), `js/ui.js`
+**Files changed**: `api/analyze.js`, `mobile/constants/verdicts.ts`, `web/js/ui.js`, `web/js/config.js` (new)
+
+**Notes**:
+- Headlines ("All clear!", etc.) were tested but removed as redundant with verdict badges
+- Oats now always flagged as caution - manufacturer "gluten-free" labels don't override this
+- Session log: `.claude/sessions/2026-01-31-add-friendlier-output-messages.md`
 
 ### 1.3 Real About Content
 **Current**: Basic modal with generic descriptions
@@ -176,7 +181,7 @@ Before deciding on native app, maximize PWA capabilities:
 2. **1.3 Real About Content** - Your story removes "AI slop" feeling
 
 ### Soon (Before Wider Testing)
-3. **1.2 Friendlier Output** - Better user experience
+3. ~~**1.2 Friendlier Output**~~ ✅ Done
 4. **2.1 Logo & Branding** - Visual trust + needed for App Store
 5. **1.4 Trust Signals** - Strengthen free/open message
 
