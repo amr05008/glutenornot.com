@@ -2,7 +2,7 @@
   "outputDirectory": "web",
   "rewrites": [
     {
-      "source": "/((?!api|css|js|assets|.*\\..*).*)",
+      "source": "/((?!api|css|js|assets|privacy-policy|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
