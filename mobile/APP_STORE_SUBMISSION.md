@@ -91,38 +91,41 @@ Instantly check if food is gluten-free. Just snap a photo of the ingredient labe
 
 ### Full Description
 ```
-GlutenOrNot helps people with celiac disease quickly check ingredient labels for gluten. Just point your camera at an ingredient list and get an instant verdict.
+GlutenOrNot instantly checks if packaged foods are safe for people with celiac disease. Point your camera at an ingredient label and get a clear verdict in seconds—no account required, completely free.
+
+We built this because we have celiac disease ourselves. Figuring out what we could and couldn't eat was confusing at first, and we didn't want to pay for an app just to scan ingredients. We hope this makes it a little easier for you too.
 
 HOW IT WORKS
+
 1. Point your camera at an ingredient label
 2. Tap to scan
 3. Get a clear verdict: Safe, Caution, or Unsafe
 
 FEATURES
-• Instant Analysis - Results in seconds, not minutes
-• AI-Powered - Uses advanced AI to understand ingredient labels
-• Privacy First - No account required, photos aren't stored
-• Works Offline-Ready - Results cached for repeat scans
-• Free - No ads, no subscriptions, no hidden costs
+
+- Instant results in seconds
+- AI-powered ingredient analysis
+- No account required
+- No ads, no subscriptions, no hidden costs
+- Photos never leave your device
 
 VERDICTS EXPLAINED
-✓ SAFE - No gluten-containing ingredients detected
-⚠ CAUTION - Contains oats or uncertain ingredients (may have cross-contamination)
-✗ UNSAFE - Contains wheat, barley, rye, or other gluten sources
+✓ SAFE – No gluten-containing ingredients detected
+⚠ CAUTION – Contains oats or uncertain ingredients that may have cross-contamination risk
+✗ UNSAFE – Contains wheat, barley, rye, or other gluten sources
 
 PERFECT FOR
-• People with celiac disease
-• Gluten sensitivity or intolerance
-• Anyone following a gluten-free diet
-• Caregivers and family members
 
-IMPORTANT DISCLAIMER
-GlutenOrNot is a helpful tool but should not replace medical advice. Always check with manufacturers about cross-contamination and consult your healthcare provider about dietary restrictions. When in doubt, don't eat it.
+- People with celiac disease
+- Gluten sensitivity or intolerance
+- Anyone following a gluten-free diet
+- Caregivers and family members shopping for loved ones
+
+IMPORTANT
+GlutenOrNot is a helpful tool but does not replace medical advice. Always check with manufacturers about cross-contamination and consult your healthcare provider about dietary restrictions. When in doubt, don't eat it.
 
 PRIVACY
-We don't collect personal data, require accounts, or store your photos. Your scans stay on your device. See our full privacy policy at glutenornot.com/privacy-policy
-
-Made with care by celiacs for celiacs.
+We don't collect personal data, require accounts, or store your photos. See our full privacy policy at glutenornot.com/privacy-policy
 ```
 
 ### What's New (Release Notes)
