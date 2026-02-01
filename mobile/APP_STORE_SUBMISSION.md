@@ -122,7 +122,7 @@ GlutenOrNot is a helpful tool but should not replace medical advice. Always chec
 PRIVACY
 We don't collect personal data, require accounts, or store your photos. Your scans stay on your device. See our full privacy policy at glutenornot.com/privacy-policy
 
-Made with care for the celiac community.
+Made with care by celiacs for celiacs.
 ```
 
 ### What's New (Release Notes)

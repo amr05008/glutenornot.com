@@ -64,17 +64,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Fix any crash reports or critical bugs from TestFlight
 
 #### App Store Connect Setup
-- [ ] Write compelling app description (highlight celiac-friendly, free, private)
-- [ ] Create App Store screenshots (6.7" and 5.5" sizes minimum)
-- [ ] Design app preview video (optional but recommended)
-- [ ] Write privacy policy and host it (required)
-- [ ] Set up app metadata (category: Health & Fitness or Food & Drink)
-- [ ] Add keywords for ASO (gluten-free, celiac, food scanner, etc.)
-
-#### Submission
-- [ ] Submit for App Review
-- [ ] Respond to any review feedback
-- [ ] Plan soft launch and marketing
+- [ ] Plan is here: glutenornot.com/mobile/APP_STORE_SUBMISSION.md
 
 **Files**: `mobile/app.json`, `mobile/eas.json`
 
