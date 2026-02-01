@@ -39,16 +39,15 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - Oats now always flagged as caution - manufacturer "gluten-free" labels don't override this
 - Session log: `.claude/sessions/2026-01-31-add-friendlier-output-messages.md`
 
-### 1.3 Real About Content
+### 1.3 Real About Content ✅
 **Current**: Basic modal with generic descriptions
 **Goal**: Authentic, personal content with your celiac story
+**Status**: Complete (2026-02-01)
 
-- [ ] Write real "why we built this" story (you have one!)
-- [ ] Add creator credits/names
-- [ ] Explain the technology honestly (OCR + AI)
-- [ ] Add accuracy disclaimer with specifics
+- [x] Write real "why we built this" story (you have one!)
+- [x] Add creator credits/names
+- [x] Add accuracy disclaimer with specifics
 - [ ] Consider adding a "Report an issue" link
-- [ ] Draft the story together during implementation
 - [ ] add way to contact us (feedback, bugs, w.e)
 
 **Files**: `index.html` (lines 177-203)
