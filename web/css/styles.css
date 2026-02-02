@@ -1,15 +1,16 @@
 /* CSS Variables */
 :root {
-  --color-safe: #2d7d46;
-  --color-safe-bg: #e8f5e9;
-  --color-caution: #f59e0b;
-  --color-caution-bg: #fef3c7;
-  --color-unsafe: #dc2626;
-  --color-unsafe-bg: #fee2e2;
+  --color-safe: #16A34A;
+  --color-safe-bg: #DCFCE7;
+  --color-caution: #F59E0B;
+  --color-caution-bg: #FEF3C7;
+  --color-unsafe: #DC2626;
+  --color-unsafe-bg: #FEE2E2;
 
-  --color-primary: #2d7d46;
-  --color-primary-dark: #236339;
-  --color-text: #1f2937;
+  --color-primary: #0D9488;
+  --color-primary-dark: #0F766E;
+  --color-accent: #5EEAD4;
+  --color-text: #0F172A;
   --color-text-secondary: #6b7280;
   --color-background: #f9fafb;
   --color-surface: #ffffff;
@@ -60,10 +61,9 @@ body {
 
 /* Header */
 .header {
-  background: var(--color-surface);
+  background: var(--color-primary);
   padding: var(--spacing-md) var(--spacing-lg);
   text-align: center;
-  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -72,12 +72,19 @@ body {
 .logo {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: #ffffff;
   letter-spacing: -0.5px;
 }
 
 .logo-accent {
-  color: var(--color-primary);
+  color: var(--color-accent);
+}
+
+.tagline {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: var(--spacing-xs);
+  font-weight: 400;
 }
 
 /* Main Content */

@@ -9,22 +9,30 @@ export interface AnalysisResult {
   confidence: Confidence;
 }
 
+// Brand colors for consistent theming
+export const BRAND_COLORS = {
+  primary: '#0D9488',
+  primaryDark: '#0F766E',
+  accent: '#5EEAD4',
+  text: '#0F172A',
+} as const;
+
 export const VERDICT_CONFIG = {
   safe: {
-    color: '#2d7d46',
-    backgroundColor: '#e8f5e9',
+    color: '#16A34A',
+    backgroundColor: '#DCFCE7',
     label: 'Safe',
     icon: '✓',
   },
   caution: {
-    color: '#f9a825',
-    backgroundColor: '#fff8e1',
+    color: '#F59E0B',
+    backgroundColor: '#FEF3C7',
     label: 'Caution',
     icon: '⚠',
   },
   unsafe: {
-    color: '#c62828',
-    backgroundColor: '#ffebee',
+    color: '#DC2626',
+    backgroundColor: '#FEE2E2',
     label: 'Unsafe',
     icon: '✗',
   },

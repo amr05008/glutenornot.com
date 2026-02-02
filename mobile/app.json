@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2d7d46"
+      "backgroundColor": "#0D9488"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,7 +25,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2d7d46"
+        "backgroundColor": "#0D9488"
       },
       "package": "com.glutenornot.app",
       "permissions": [

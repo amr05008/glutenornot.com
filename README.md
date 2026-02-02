@@ -111,8 +111,6 @@ Tests cover:
 
 - **Rate limiting**: In-memory storage won't persist across serverless instances. Migrate to Vercel KV for production.
 
-- **Icons**: SVG only. Add PNG versions (192x192, 512x512) for full PWA compatibility.
-
 ## Contributing
 
 See [`ROADMAP.md`](./ROADMAP.md) for the prioritized improvement plan.

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
-import { AnalysisResult } from '../constants/verdicts';
+import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 
 export default function ResultScreen() {
   const { result, scanCount } = useLocalSearchParams<{ result: string; scanCount: string }>();
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   button: {
-    backgroundColor: '#2d7d46',
+    backgroundColor: BRAND_COLORS.primary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

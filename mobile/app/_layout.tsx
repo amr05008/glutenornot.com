@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { BRAND_COLORS } from '../constants/verdicts';
 
 export default function RootLayout() {
   return (
@@ -8,7 +9,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerStyle: {
-            backgroundColor: '#2d7d46',
+            backgroundColor: BRAND_COLORS.primary,
           },
           headerTintColor: '#fff',
           headerTitleStyle: {

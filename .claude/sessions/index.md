@@ -12,3 +12,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-01-31 | [add-lifetime-counter](./2026-01-31-add-lifetime-counter.md) | Converted daily scan counter to persistent lifetime counter (web + mobile) |
 | 2026-01-31 | [add-friendlier-output-messages](./2026-01-31-add-friendlier-output-messages.md) | Added friendlier headlines and warmer Claude explanations |
 | 2026-02-01 | [add-app-store-submission-guide](./2026-02-01-add-app-store-submission-guide.md) | Created App Store submission reference document |
+| 2026-02-01 | [rebrand-teal-theme](./2026-02-01-rebrand-teal-theme.md) | Rebranded web and mobile apps to teal color scheme |

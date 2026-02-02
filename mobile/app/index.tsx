@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { analyzeImage, APIError } from '../services/api';
 import { incrementLifetimeScanCount } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { AnalysisResult } from '../constants/verdicts';
+import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   permissionButton: {
-    backgroundColor: '#2d7d46',
+    backgroundColor: BRAND_COLORS.primary,
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 8,

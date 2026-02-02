@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { BRAND_COLORS } from '../constants/verdicts';
 
 interface LoadingSpinnerProps {
   message?: string;
@@ -8,7 +9,7 @@ interface LoadingSpinnerProps {
 export function LoadingSpinner({ message = 'Analyzing...' }: LoadingSpinnerProps) {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#2d7d46" />
+      <ActivityIndicator size="large" color={BRAND_COLORS.primary} />
       <Text style={styles.message}>{message}</Text>
     </View>
   );

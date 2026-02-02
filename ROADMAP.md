@@ -71,22 +71,30 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ## Phase 2: Visual Design (Medium Priority)
 
-### 2.1 Logo & Branding
-**Current**: Text-only "GlutenOrNot" header with accent color
-**Goal**: Memorable visual identity
+### 2.1 Logo & Branding ✅
+**Status**: Complete (2026-02-01)
 
-- [ ] Design a simple, recognizable logo/icon
-- [ ] Update `assets/icons/` with real app icons
-- [ ] Update favicon
-- [ ] Consider a subtle animation on load
+- [x] Design a simple, recognizable logo/icon (leaf icon)
+- [x] Update `assets/icons/` with real app icons (SVG + PNGs)
+- [x] Update favicon
+- [x] Rebrand to teal color scheme (#0D9488)
+- [x] Lowercase logo with mint accent ("glutenornot" with "or" in #5EEAD4)
+- [x] Add tagline: "Scan any label. Know in seconds."
+- [ ] Consider a subtle animation on load — deferred
 
-**Files**: `assets/icons/`, `index.html`, `manifest.json`
+**Files changed**: `web/assets/icons/icon.svg`, `web/css/styles.css`, `web/index.html`, `web/manifest.json`, `web/privacy-policy.html`, `mobile/assets/*.png`, `mobile/app.json`, `mobile/constants/verdicts.ts`, `mobile/app/*.tsx`, `mobile/components/LoadingSpinner.tsx`
+
+**Notes**:
+- New color palette: Primary teal (#0D9488), accent mint (#5EEAD4), text navy (#0F172A)
+- Verdict colors kept semantically distinct: Safe green (#16A34A), Caution amber (#F59E0B), Unsafe red (#DC2626)
+- Mobile uses centralized `BRAND_COLORS` constant for easy future updates
+- Session log: `.claude/sessions/2026-02-01-rebrand-teal-theme.md`
 
 ### 2.2 Visual Polish
-**Current**: Clean but basic styling
+**Current**: Clean styling with new teal brand
 **Goal**: More polished, trustworthy appearance
 
-- [ ] Refine color palette (current green/amber/red is good)
+- [x] Refine color palette (teal/mint brand, distinct verdict colors)
 - [ ] Add subtle shadows/depth to cards
 - [ ] Improve typography hierarchy
 - [ ] Add micro-interactions (button feedback, transitions)
@@ -128,7 +136,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Soon (Before Wider Testing)
 4. ~~**1.2 Friendlier Output**~~ ✅ Done
-5. **2.1 Logo & Branding** - Visual trust + needed for App Store
+5. ~~**2.1 Logo & Branding**~~ ✅ Done - Teal rebrand with leaf icon
 6. **1.5 Trust Signals** - Strengthen free/open message
 
 ### Future
