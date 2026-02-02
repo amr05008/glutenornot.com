@@ -556,6 +556,13 @@ body {
   color: var(--color-text-secondary);
 }
 
+.feedback-prompt {
+  text-align: center;
+  margin-top: var(--spacing-md);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
 /* Modal */
 .modal {
   position: fixed;

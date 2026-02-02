@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
 import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
@@ -32,6 +32,10 @@ export default function ResultScreen() {
     router.back();
   };
 
+  const handleFeedback = () => {
+    Linking.openURL('https://forms.gle/ZtSwSTuhCpAGwsHKA');
+  };
+
   return (
     <View style={styles.container}>
       <ResultCard result={analysisResult} />
@@ -46,6 +50,12 @@ export default function ResultScreen() {
         </TouchableOpacity>
         <Text style={styles.scanCounter}>
           {count === 1 ? '1 scan' : `${count} scans`}
+        </Text>
+        <Text style={styles.feedbackPrompt}>
+          Run into an issue?{' '}
+          <Text style={styles.feedbackLink} onPress={handleFeedback}>
+            Share your feedback
+          </Text>
         </Text>
       </View>
     </View>
@@ -89,5 +99,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#888',
+  },
+  feedbackPrompt: {
+    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 14,
+    color: '#888',
+  },
+  feedbackLink: {
+    color: BRAND_COLORS.primary,
+    textDecorationLine: 'underline',
   },
 });
