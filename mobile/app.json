@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.glutenornot.app",
+      "deploymentTarget": "15.1",
+      "bundleIdentifier": "com.glutenornot.scanner",
       "infoPlist": {
         "NSCameraUsageDescription": "GlutenOrNot needs camera access to scan ingredient labels for gluten content.",
         "NSPhotoLibraryUsageDescription": "GlutenOrNot needs photo library access to select photos of ingredient labels.",
