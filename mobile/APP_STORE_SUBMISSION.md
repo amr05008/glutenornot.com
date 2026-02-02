@@ -9,7 +9,7 @@ Reference document for completing the GlutenOrNot App Store listing.
 ### Ready
 - [x] App icon (1024x1024)
 - [x] Splash screen
-- [x] Bundle ID configured (`com.glutenornot.app`)
+- [x] Bundle ID configured (`com.glutenornot.scanner`)
 - [x] Privacy policy at `glutenornot.com/privacy-policy`
 - [x] EAS Build configured
 - [x] Camera permissions with clear descriptions
@@ -152,7 +152,7 @@ Made for the celiac community. Stay safe out there!
 | App Name | GlutenOrNot |
 | Subtitle | Scan Labels for Gluten |
 | Primary Language | English (U.S.) |
-| Bundle ID | com.glutenornot.app |
+| Bundle ID | com.glutenornot.scanner |
 | SKU | glutenornot-ios-001 |
 | Privacy Policy URL | https://glutenornot.com/privacy-policy |
 | Support URL | https://glutenornot.com |

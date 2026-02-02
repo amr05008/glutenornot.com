@@ -45,6 +45,8 @@ export default function ResultScreen() {
           style={styles.button}
           onPress={handleScanAnother}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Scan another product"
         >
           <Text style={styles.buttonText}>Scan Another</Text>
         </TouchableOpacity>
@@ -53,7 +55,12 @@ export default function ResultScreen() {
         </Text>
         <Text style={styles.feedbackPrompt}>
           Run into an issue?{' '}
-          <Text style={styles.feedbackLink} onPress={handleFeedback}>
+          <Text
+            style={styles.feedbackLink}
+            onPress={handleFeedback}
+            accessibilityRole="link"
+            accessibilityLabel="Share your feedback"
+          >
             Share your feedback
           </Text>
         </Text>

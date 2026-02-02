@@ -12,7 +12,11 @@ export function ResultCard({ result }: ResultCardProps) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Verdict Badge */}
-      <View style={[styles.badge, { backgroundColor: config.backgroundColor }]}>
+      <View
+        style={[styles.badge, { backgroundColor: config.backgroundColor }]}
+        accessibilityRole="header"
+        accessibilityLabel={`Verdict: ${config.label}`}
+      >
         <Text style={[styles.badgeIcon, { color: config.color }]}>{config.icon}</Text>
         <Text style={[styles.badgeLabel, { color: config.color }]}>{config.label}</Text>
       </View>
@@ -23,7 +27,7 @@ export function ResultCard({ result }: ResultCardProps) {
       {/* Flagged Ingredients */}
       {result.flagged_ingredients.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Flagged Ingredients</Text>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Flagged Ingredients</Text>
           {result.flagged_ingredients.map((ingredient, index) => (
             <View key={index} style={styles.listItem}>
               <Text style={styles.bullet}>•</Text>
@@ -36,7 +40,7 @@ export function ResultCard({ result }: ResultCardProps) {
       {/* Allergen Warnings */}
       {result.allergen_warnings.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Allergen Warnings</Text>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Allergen Warnings</Text>
           {result.allergen_warnings.map((warning, index) => (
             <View key={index} style={styles.listItem}>
               <Text style={styles.bullet}>⚠</Text>
@@ -47,7 +51,10 @@ export function ResultCard({ result }: ResultCardProps) {
       )}
 
       {/* Confidence */}
-      <Text style={styles.confidence}>
+      <Text
+        style={styles.confidence}
+        accessibilityLabel={`Analysis confidence: ${result.confidence}`}
+      >
         Confidence: {result.confidence}
       </Text>
     </ScrollView>

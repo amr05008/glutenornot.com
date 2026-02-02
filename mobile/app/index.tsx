@@ -25,7 +25,12 @@ export default function CameraScreen() {
         <Text style={styles.permissionText}>
           GlutenOrNot needs camera access to scan ingredient labels.
         </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={requestPermission}
+          accessibilityRole="button"
+          accessibilityLabel="Grant camera permission"
+        >
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
         </TouchableOpacity>
       </View>
@@ -112,6 +117,9 @@ export default function CameraScreen() {
           style={styles.captureButton}
           onPress={handleCapture}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Capture photo of ingredients"
+          accessibilityHint="Takes a photo to scan for gluten"
         >
           <View style={styles.captureButtonInner} />
         </TouchableOpacity>
