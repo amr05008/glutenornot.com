@@ -134,8 +134,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   viewfinder: {
-    width: '80%',
-    height: 200,
+    width: '85%',
+    aspectRatio: 3 / 4,
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 12,
