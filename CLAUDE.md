@@ -107,7 +107,7 @@ Required for API functionality:
 
 - **Expo account**: peanutbutterbaddy
 - **Project ID**: ddfbd94a-effe-4f50-b26c-e15e86e8caee
-- **Bundle ID**: com.glutenornot.app
+- **Bundle ID**: com.glutenornot.scanner
 
 ## Imports
 
