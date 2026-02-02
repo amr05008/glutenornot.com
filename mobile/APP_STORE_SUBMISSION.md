@@ -126,6 +126,9 @@ GlutenOrNot is a helpful tool but does not replace medical advice. Always check 
 
 PRIVACY
 We don't collect personal data, require accounts, or store your photos. See our full privacy policy at glutenornot.com/privacy-policy
+
+FEEDBACK
+Run into an issue or have feedback for us? Let us know with this form: https://forms.gle/SdJmYM8yahsz973E8
 ```
 
 ### What's New (Release Notes)
