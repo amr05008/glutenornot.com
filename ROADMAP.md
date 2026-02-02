@@ -52,20 +52,33 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 **Files**: `index.html` (lines 177-203)
 
-### 1.4 iOS App Store Release
-**Status**: In Progress
+### 1.4 iOS App Store Release ✅
+**Status**: Submitted for Review (2026-02-02)
 **Goal**: Publish the React Native app to the iOS App Store
 
 #### Pre-Submission
-- [ ] Complete EAS build with production profile
-- [ ] Configure app credentials (certificates, provisioning profiles)
-- [ ] Test thoroughly via TestFlight with beta testers
-- [ ] Fix any crash reports or critical bugs from TestFlight
+- [x] Complete EAS build with production profile
+- [x] Configure app credentials (certificates, provisioning profiles)
+- [x] Test thoroughly via TestFlight with beta testers
+- [x] Fix any crash reports or critical bugs from TestFlight
 
 #### App Store Connect Setup
-- [ ] Plan is here: glutenornot.com/mobile/APP_STORE_SUBMISSION.md
+- [x] Screenshots (4 screenshots at 6.5" size)
+- [x] App metadata (description, keywords, promotional text)
+- [x] App Information (categories, content rights)
+- [x] App Privacy ("Data Not Collected")
+- [x] Age Rating (4+)
+- [x] Pricing (Free, 175 countries)
+- [x] Build uploaded via Xcode
+- [x] Submitted for review
 
-**Files**: `mobile/app.json`, `mobile/eas.json`
+**Submission Details**:
+- Submitted: Feb 2, 2026 at 1:00 PM
+- Bundle ID: `com.glutenornot.scanner`
+- Version: 1.0.0 (Build 2)
+- Release: Automatic upon approval
+
+**Files**: `mobile/app.json`, `mobile/eas.json`, `mobile/APP_STORE_SUBMISSION.md`
 
 ---
 
@@ -131,8 +144,8 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Immediate (This Week)
 1. ~~**1.1 Persistent Counter**~~ ✅ Done
-2. **1.3 Real About Content** - ✅ Done
-3. **1.4 iOS App Store Release** - Get the native app live
+2. ~~**1.3 Real About Content**~~ ✅ Done
+3. ~~**1.4 iOS App Store Release**~~ ✅ Submitted (Feb 2, 2026) - Awaiting Apple review
 
 ### Soon (Before Wider Testing)
 4. ~~**1.2 Friendlier Output**~~ ✅ Done
