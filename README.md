@@ -1,6 +1,8 @@
 # GlutenOrNot
 
-A free PWA that helps people with celiac disease scan ingredient labels and get instant safety assessments.
+GlutenOrNot instantly checks if packaged foods are safe for people with celiac disease. Point your camera at an ingredient label and get a clear verdict in seconds—no account required, completely free. Uses google OCR + Claude to scan and produce results. 
+
+We built this because we have celiac disease ourselves. Figuring out what we could and couldn't eat was confusing at first, and we didn't want to pay for an app just to scan ingredients. We hope this makes it a little easier for you too. If you want to run locally or make your own version, just add your own API credentials (or modify as you see fit). 
 
 ## Features
 
@@ -108,6 +110,7 @@ Tests cover:
 ## Known Limitations
 
 - **Rate limiting**: In-memory storage won't persist across serverless instances. Migrate to Vercel KV for production.
+
 - **Icons**: SVG only. Add PNG versions (192x192, 512x512) for full PWA compatibility.
 
 ## Contributing

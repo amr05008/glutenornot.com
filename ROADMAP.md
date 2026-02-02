@@ -67,17 +67,6 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 **Files**: `mobile/app.json`, `mobile/eas.json`
 
-### 1.5 Enhanced Trust Signals
-**Current**: "Free forever" and "Privacy first" notes
-**Goal**: Stronger trust indicators
-
-- [ ] Add "Open source" badge with GitHub link
-- [ ] Consider adding "Made by celiacs, for celiacs" if applicable
-- [ ] Add testimonial/review prompt after X scans
-- [ ] Consider a "How we're different" section vs paid apps
-
-**Files**: `index.html`, `css/styles.css`
-
 ---
 
 ## Phase 2: Visual Design (Medium Priority)
@@ -107,40 +96,25 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ---
 
-## Phase 3: User Testing (Critical for Trust)
+## Phase 3: Future Enhancements (Lower Priority)
 
-### 3.1 Celiac Beta Testing
-- [ ] Create a feedback form (Google Forms or Typeform)
-- [ ] Share with others for testing 
-- [ ] Document common edge cases and failures
-- [ ] Iterate on prompt based on real-world accuracy issues
-
-### 3.2 Accuracy Tracking
-- [ ] Add optional "Was this accurate?" feedback after results (eh dont love this, we just have to make sure its pretty bang on)
-- [ ] Log feedback for prompt improvement
-- [ ] Track false positives/negatives patterns
-
----
-
-## Phase 4: Future Enhancements (Lower Priority)
-
-### 4.1 Scan History
+### 3.1 Scan History
 - [ ] Store recent scans in localStorage
 - [ ] Show history in a simple list
 - [ ] Allow "scan again" from history
 
-### 4.2 Product Database (Pairs with Barcode Scanning)
+### 3.2 Product Database (Pairs with Barcode Scanning)
 - [ ] Build database of verified safe/unsafe products
 - [ ] Store barcode -> verdict mappings for instant lookup
 - [ ] Allow community contributions
 - [ ] Skip OCR for known products (faster UX)
 
-### 4.3 Sharing & Social
+### 3.3 Sharing & Social
 - [ ] Add "Share result" button
 - [ ] Generate shareable image of verdict
 - [ ] Consider social proof ("Join X celiacs using this")
 
-### 4.4 Cost remediation 
+### 3.4 Cost remediation 
 - batch had some ideas here about how to bring down costs if need be. 
 
 ---
@@ -149,17 +123,13 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Immediate (This Week)
 1. ~~**1.1 Persistent Counter**~~ ✅ Done
-2. **1.3 Real About Content** - Your story removes "AI slop" feeling
+2. **1.3 Real About Content** - ✅ Done
 3. **1.4 iOS App Store Release** - Get the native app live
 
 ### Soon (Before Wider Testing)
 4. ~~**1.2 Friendlier Output**~~ ✅ Done
 5. **2.1 Logo & Branding** - Visual trust + needed for App Store
 6. **1.5 Trust Signals** - Strengthen free/open message
-
-### Testing Phase
-7. **3.1 Celiac Beta Testing** - Dad + Richard + others
-8. **3.2 Accuracy Tracking** - Learn from real usage
 
 ### Future
 9. **4.1 Scan History** - Store and display recent scans
