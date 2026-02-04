@@ -16,9 +16,16 @@ export class APIError extends Error {
 
 const TIMEOUT_MS = 60000; // 60 seconds - OCR + Claude can take a while
 
-export async function analyzeImage(base64Image: string): Promise<AnalysisResult> {
+export async function analyzeImage(
+  base64Image: string,
+  externalSignal?: AbortSignal,
+): Promise<AnalysisResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  // If external signal fires, abort our internal controller too
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort);
 
   console.log('Starting API call to:', API_URL);
   console.log('Payload size:', Math.round(base64Image.length / 1024), 'KB');
@@ -37,7 +44,7 @@ export async function analyzeImage(base64Image: string): Promise<AnalysisResult>
     console.log('Response received in', Date.now() - startTime, 'ms');
 
     clearTimeout(timeoutId);
-
+    externalSignal?.removeEventListener('abort', onExternalAbort);
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
 
@@ -65,6 +72,7 @@ export async function analyzeImage(base64Image: string): Promise<AnalysisResult>
     return await response.json();
   } catch (error) {
     clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
 
     if (error instanceof APIError) {
       throw error;
