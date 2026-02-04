@@ -80,6 +80,23 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 **Files**: `mobile/app.json`, `mobile/eas.json`, `mobile/APP_STORE_SUBMISSION.md`
 
+### 1.5 Crash Reporting (Sentry) ✅
+**Status**: Complete (2026-02-04)
+
+- [x] Install `@sentry/react-native` via `npx expo install`
+- [x] Configure Sentry Expo plugin in `app.json`
+- [x] Initialize Sentry in root layout (`_layout.tsx`)
+- [x] Create `errorReporting.ts` wrapper with `reportError()`
+- [x] Add error reporting to camera capture and result parsing
+- [ ] Add EAS secret for source map uploads (manual step)
+
+**Files changed**: `mobile/.npmrc`, `mobile/app.json`, `mobile/app/_layout.tsx`, `mobile/services/errorReporting.ts` (new), `mobile/app/index.tsx`, `mobile/app/result.tsx`
+
+**Notes**:
+- Disabled in dev (`enabled: !__DEV__`), no performance tracing (`tracesSampleRate: 0`)
+- Network/timeout errors tagged as `warning` level; others as `error`
+- Session log: `.claude/sessions/2026-02-04-add-sentry-crash-reporting.md`
+
 ---
 
 ## Phase 2: Visual Design (Medium Priority)

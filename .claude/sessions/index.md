@@ -16,3 +16,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-01 | [fix-testflight-xcode-setup](./2026-02-01-fix-testflight-xcode-setup.md) | Resolved Xcode signing/build issues for TestFlight |
 | 2026-02-02 | [add-accessibility-labels](./2026-02-02-add-accessibility-labels.md) | Added VoiceOver accessibility labels for App Store compliance |
 | 2026-02-02 | [submit-app-store](./2026-02-02-submit-app-store.md) | Submitted iOS app to App Store for review |
+| 2026-02-04 | [add-sentry-crash-reporting](./2026-02-04-add-sentry-crash-reporting.md) | Integrated Sentry crash reporting into mobile app |

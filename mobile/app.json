@@ -43,6 +43,13 @@
         {
           "cameraPermission": "GlutenOrNot needs camera access to scan ingredient labels for gluten content."
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "aaron-roy",
+          "project": "glutenornot-mobile"
+        }
       ]
     ],
     "extra": {

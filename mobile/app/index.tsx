@@ -4,6 +4,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useRouter } from 'expo-router';
 import { analyzeImage, APIError } from '../services/api';
+import { reportError } from '../services/errorReporting';
 import { incrementLifetimeScanCount } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
@@ -79,6 +80,8 @@ export default function CameraScreen() {
         params: { result: JSON.stringify(result), scanCount: String(scanCount) },
       });
     } catch (error) {
+      reportError(error);
+
       let message = 'Something went wrong. Please try again.';
 
       if (error instanceof APIError) {

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
+import { reportError } from '../services/errorReporting';
 import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 
 export default function ResultScreen() {
@@ -20,7 +21,8 @@ export default function ResultScreen() {
   let analysisResult: AnalysisResult;
   try {
     analysisResult = JSON.parse(result);
-  } catch {
+  } catch (error) {
+    reportError(error, { rawResult: result?.substring(0, 500) });
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Invalid result data</Text>
