@@ -5,8 +5,65 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ---
 
-## Phase 1: Polish & Trust (High Priority)
+## Planning (In priority order)
+### iOS app
+- [ ] release latest version with fixes from what broke in v1.0. **OWNER = Roy**
 
+### Android App
+- [ ] Build and release initial Android app on google play store **OWNER = Batch**
+
+### Exploring how to better support restauraunt menus
+- [ ] current view finder on mobile app is a bit wonky when used on a restauraunt menu. will scan all items, only report back what it flagged but doesnt ness. clear any specific listings. HMW we make it more clear something is "fine" while other items on the page are "unsafe"? 
+
+### Visual Polish
+- [ ] Improve screenshots for Apple/Android app store listings
+- [ ] Consider a subtle animation on load 
+- [ ] Add subtle shadows/depth to cards
+- [ ] Add micro-interactions (button feedback, transitions)
+- [ ] Consider a light/dark mode toggle
+
+### Support for languages outside English
+- [ ] Testing and upgrading the prompts to translate ingredients in other languages (Spanish, Portugese to start)
+
+### Scan History
+- [ ] Store recent scans in localStorage
+- [ ] Show history in a simple list
+- [ ] Allow "scan again" from history
+
+### Product Database (Pairs with Barcode Scanning)
+- [ ] Build database of verified safe/unsafe products
+- [ ] Store barcode -> verdict mappings for instant lookup
+- [ ] Allow community contributions
+- [ ] Skip OCR for known products (faster UX)
+
+### Cost remediation 
+- batch had some ideas here about how to bring down costs if need be. 
+
+---
+
+## Verification Plan
+
+After each change:
+1. Run `npm test` - all tests must pass
+2. Test locally with `npx vercel dev`
+3. Test on real phone (iOS Safari, Android Chrome)
+4. Have a celiac tester verify changes
+
+---
+
+## Session Workflow
+
+To work on a specific item, start a new session with:
+```
+Let's work on [item name] from ROADMAP.md
+```
+
+Each completed item should:
+1. Have tests pass (`npm test`)
+2. Be documented in `.claude/sessions/`
+3. Have its checkbox marked complete in this file
+
+## Past 
 ### 1.1 Persistent Lifetime Counter ✅
 **Status**: Complete (2026-01-31)
 
@@ -97,10 +154,6 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - Network/timeout errors tagged as `warning` level; others as `error`
 - Session log: `.claude/sessions/2026-02-04-add-sentry-crash-reporting.md`
 
----
-
-## Phase 2: Visual Design (Medium Priority)
-
 ### 2.1 Logo & Branding ✅
 **Status**: Complete (2026-02-01)
 
@@ -110,7 +163,6 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Rebrand to teal color scheme (#0D9488)
 - [x] Lowercase logo with mint accent ("glutenornot" with "or" in #5EEAD4)
 - [x] Add tagline: "Scan any label. Know in seconds."
-- [ ] Consider a subtle animation on load — deferred
 
 **Files changed**: `web/assets/icons/icon.svg`, `web/css/styles.css`, `web/index.html`, `web/manifest.json`, `web/privacy-policy.html`, `mobile/assets/*.png`, `mobile/app.json`, `mobile/constants/verdicts.ts`, `mobile/app/*.tsx`, `mobile/components/LoadingSpinner.tsx`
 
@@ -120,80 +172,3 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - Mobile uses centralized `BRAND_COLORS` constant for easy future updates
 - Session log: `.claude/sessions/2026-02-01-rebrand-teal-theme.md`
 
-### 2.2 Visual Polish
-**Current**: Clean styling with new teal brand
-**Goal**: More polished, trustworthy appearance
-
-- [x] Refine color palette (teal/mint brand, distinct verdict colors)
-- [ ] Add subtle shadows/depth to cards
-- [ ] Improve typography hierarchy
-- [ ] Add micro-interactions (button feedback, transitions)
-- [ ] Consider a light/dark mode toggle
-
-**Files**: `css/styles.css`
-
----
-
-## Phase 3: Future Enhancements (Lower Priority)
-
-### 3.1 Scan History
-- [ ] Store recent scans in localStorage
-- [ ] Show history in a simple list
-- [ ] Allow "scan again" from history
-
-### 3.2 Product Database (Pairs with Barcode Scanning)
-- [ ] Build database of verified safe/unsafe products
-- [ ] Store barcode -> verdict mappings for instant lookup
-- [ ] Allow community contributions
-- [ ] Skip OCR for known products (faster UX)
-
-### 3.3 Sharing & Social
-- [ ] Add "Share result" button
-- [ ] Generate shareable image of verdict
-- [ ] Consider social proof ("Join X celiacs using this")
-
-### 3.4 Cost remediation 
-- batch had some ideas here about how to bring down costs if need be. 
-
----
-
-## Recommended Priority Order
-
-### Immediate (This Week)
-1. ~~**1.1 Persistent Counter**~~ ✅ Done
-2. ~~**1.3 Real About Content**~~ ✅ Done
-3. ~~**1.4 iOS App Store Release**~~ ✅ Submitted (Feb 2, 2026) - Awaiting Apple review
-
-### Soon (Before Wider Testing)
-4. ~~**1.2 Friendlier Output**~~ ✅ Done
-5. ~~**2.1 Logo & Branding**~~ ✅ Done - Teal rebrand with leaf icon
-6. **1.5 Trust Signals** - Strengthen free/open message
-
-### Future
-9. **4.1 Scan History** - Store and display recent scans
-10. **4.2 Product Database** - Barcode scanning + instant lookups
-11. **4.3 Sharing & Social** - Share verdicts with others
-
----
-
-## Verification Plan
-
-After each change:
-1. Run `npm test` - all tests must pass
-2. Test locally with `npx vercel dev`
-3. Test on real phone (iOS Safari, Android Chrome)
-4. Have a celiac tester verify changes
-
----
-
-## Session Workflow
-
-To work on a specific item, start a new session with:
-```
-Let's work on [item name] from ROADMAP.md
-```
-
-Each completed item should:
-1. Have tests pass (`npm test`)
-2. Be documented in `.claude/sessions/`
-3. Have its checkbox marked complete in this file
