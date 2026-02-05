@@ -12,6 +12,9 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 ### Android App
 - [ ] Build and release initial Android app on google play store **OWNER = Batch**
 
+### In app star rating prompt 
+ - [ ]  add the native iOS rating prompt to the app (after a successful scan, for example). It's the highest-conversion way to collect ratings since users don't leave the app. Can maybe use SKStoreReviewController / requestReview API — Expo has expo-store-review for this.
+
 ### Exploring how to better support restauraunt menus
 - [ ] current view finder on mobile app is a bit wonky when used on a restauraunt menu. will scan all items, only report back what it flagged but doesnt ness. clear any specific listings. HMW we make it more clear something is "fine" while other items on the page are "unsafe"? 
 
