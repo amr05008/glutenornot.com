@@ -12,6 +12,7 @@ import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
@@ -26,6 +27,8 @@ export default function CameraScreen() {
         nextState === 'active'
       ) {
         resumedFromBackground.current = true;
+        // Camera session needs to re-establish after background
+        setCameraReady(false);
         // Cancel any stuck request on resume
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -70,7 +73,7 @@ export default function CameraScreen() {
   }
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isAnalyzing) return;
+    if (!cameraRef.current || isAnalyzing || !cameraReady) return;
 
     try {
       setIsAnalyzing(true);
@@ -155,6 +158,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
+        onCameraReady={() => setCameraReady(true)}
       >
         {/* Viewfinder overlay */}
         <View style={styles.overlay}>
@@ -166,14 +170,15 @@ export default function CameraScreen() {
       {/* Capture button */}
       <View style={styles.controls}>
         <TouchableOpacity
-          style={styles.captureButton}
+          style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
           onPress={handleCapture}
           activeOpacity={0.7}
+          disabled={!cameraReady}
           accessibilityRole="button"
           accessibilityLabel="Capture photo of ingredients"
           accessibilityHint="Takes a photo to scan for gluten"
         >
-          <View style={styles.captureButtonInner} />
+          <View style={[styles.captureButtonInner, !cameraReady && styles.captureButtonInnerDisabled]} />
         </TouchableOpacity>
       </View>
     </View>
@@ -228,6 +233,12 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: '#fff',
+  },
+  captureButtonDisabled: {
+    opacity: 0.4,
+  },
+  captureButtonInnerDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   permissionContainer: {
     flex: 1,

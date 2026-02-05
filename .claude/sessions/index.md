@@ -18,3 +18,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-02 | [submit-app-store](./2026-02-02-submit-app-store.md) | Submitted iOS app to App Store for review |
 | 2026-02-04 | [add-sentry-crash-reporting](./2026-02-04-add-sentry-crash-reporting.md) | Integrated Sentry crash reporting into mobile app |
 | 2026-02-04 | [fix-background-scan-hang](./2026-02-04-fix-background-scan-hang.md) | Fix mobile app hanging on scan after prolonged background inactivity |
+| 2026-02-05 | [fix-camera-ready-crash](./2026-02-05-fix-camera-ready-crash.md) | Fix fatal crash when capturing photo before camera session is ready |
