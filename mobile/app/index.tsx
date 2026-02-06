@@ -27,8 +27,6 @@ export default function CameraScreen() {
         nextState === 'active'
       ) {
         resumedFromBackground.current = true;
-        // Camera session needs to re-establish after background
-        setCameraReady(false);
         // Cancel any stuck request on resume
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -40,6 +38,13 @@ export default function CameraScreen() {
     });
     return () => sub.remove();
   }, []);
+
+  // Fallback: if onCameraReady never fires (production build race), force-enable after 2s
+  useEffect(() => {
+    if (cameraReady) return;
+    const timeout = setTimeout(() => setCameraReady(true), 2000);
+    return () => clearTimeout(timeout);
+  }, [cameraReady]);
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -73,7 +78,7 @@ export default function CameraScreen() {
   }
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isAnalyzing || !cameraReady) return;
+    if (!cameraRef.current || isAnalyzing) return;
 
     try {
       setIsAnalyzing(true);
@@ -159,13 +164,13 @@ export default function CameraScreen() {
         style={styles.camera}
         facing="back"
         onCameraReady={() => setCameraReady(true)}
-      >
-        {/* Viewfinder overlay */}
-        <View style={styles.overlay}>
-          <View style={styles.viewfinder} />
-          <Text style={styles.hint}>Point at the ingredients list</Text>
-        </View>
-      </CameraView>
+      />
+
+      {/* Viewfinder overlay — outside CameraView to avoid children warning */}
+      <View style={styles.overlay} pointerEvents="box-none">
+        <View style={styles.viewfinder} />
+        <Text style={styles.hint}>Point at the ingredients list</Text>
+      </View>
 
       {/* Capture button */}
       <View style={styles.controls}>
@@ -173,7 +178,6 @@ export default function CameraScreen() {
           style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
           onPress={handleCapture}
           activeOpacity={0.7}
-          disabled={!cameraReady}
           accessibilityRole="button"
           accessibilityLabel="Capture photo of ingredients"
           accessibilityHint="Takes a photo to scan for gluten"
@@ -194,7 +198,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
