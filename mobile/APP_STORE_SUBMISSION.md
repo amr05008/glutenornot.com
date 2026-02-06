@@ -208,19 +208,22 @@ When completing Apple's privacy questionnaire:
 
 ## 6. Build Commands
 
-### Preview Build (TestFlight)
+### Local Build (Xcode)
 ```bash
 cd mobile
-npx eas build --platform ios --profile preview
-npx eas submit --platform ios
+# 1. Bump version in app.json
+# 2. Regenerate native project
+npx expo prebuild --platform ios --clean
+# 3. Open in Xcode
+open ios/GlutenOrNot.xcworkspace
 ```
 
-### Production Build (App Store)
-```bash
-cd mobile
-npx eas build --platform ios --profile production
-npx eas submit --platform ios
-```
+In Xcode:
+1. GlutenOrNot target → Signing & Capabilities → Automatically manage signing → select Team
+2. General tab → set Version and Build number (must be higher than last upload)
+3. Set destination to "Any iOS Device (arm64)"
+4. Product → Archive
+5. Organizer → Distribute App → App Store Connect → Upload
 
 ---
 

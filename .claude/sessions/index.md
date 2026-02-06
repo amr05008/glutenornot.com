@@ -22,3 +22,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-05 | [build-v1.0.1-release](./2026-02-05-build-v1.0.1-release.md) | Build and submit v1.0.1 production release to App Store |
 | 2026-02-05 | [fix-camera-button-disabled](./2026-02-05-fix-camera-button-disabled.md) | Fix camera button permanently disabled in TestFlight 1.0.1 |
 | 2026-02-05 | [fix-cancel-timeout-error](./2026-02-05-fix-cancel-timeout-error.md) | Fix Cancel button incorrectly showing "Request timed out" error |
+| 2026-02-05 | [switch-local-xcode-builds](./2026-02-05-switch-local-xcode-builds.md) | Switch to local Xcode builds, bump version to 1.0.2 |

@@ -64,12 +64,18 @@ npx expo start --tunnel     # Remote access (public URL)
 npx expo start --ios        # iOS simulator
 ```
 
-### TestFlight Build
+### iOS Build (Local via Xcode)
 ```bash
 cd mobile
-npx eas-cli build --platform ios --profile preview
-npx eas-cli submit --platform ios
+npx expo prebuild --platform ios --clean   # Generate native project
+open ios/GlutenOrNot.xcworkspace           # Open in Xcode
 ```
+
+In Xcode:
+1. Select GlutenOrNot target → Signing & Capabilities → select your Team
+2. Set version/build number in General tab
+3. Select "Any iOS Device (arm64)" → Product → Archive
+4. Distribute App → App Store Connect → Upload
 
 ## Environment Variables
 
