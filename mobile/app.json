@@ -2,7 +2,7 @@
   "expo": {
     "name": "GlutenOrNot",
     "slug": "glutenornot",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.glutenornot.app",
+      "deploymentTarget": "15.1",
+      "bundleIdentifier": "com.glutenornot.scanner",
       "infoPlist": {
         "NSCameraUsageDescription": "GlutenOrNot needs camera access to scan ingredient labels for gluten content.",
         "NSPhotoLibraryUsageDescription": "GlutenOrNot needs photo library access to select photos of ingredient labels.",
@@ -38,6 +39,13 @@
         "expo-camera",
         {
           "cameraPermission": "GlutenOrNot needs camera access to scan ingredient labels for gluten content."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "aaron-roy",
+          "project": "glutenornot-mobile"
         }
       ]
     ],

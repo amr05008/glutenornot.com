@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
+import { reportError } from '../services/errorReporting';
 import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 
 export default function ResultScreen() {
@@ -20,7 +21,8 @@ export default function ResultScreen() {
   let analysisResult: AnalysisResult;
   try {
     analysisResult = JSON.parse(result);
-  } catch {
+  } catch (error) {
+    reportError(error, { rawResult: result?.substring(0, 500) });
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Invalid result data</Text>
@@ -45,6 +47,8 @@ export default function ResultScreen() {
           style={styles.button}
           onPress={handleScanAnother}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Scan another product"
         >
           <Text style={styles.buttonText}>Scan Another</Text>
         </TouchableOpacity>
@@ -53,7 +57,12 @@ export default function ResultScreen() {
         </Text>
         <Text style={styles.feedbackPrompt}>
           Run into an issue?{' '}
-          <Text style={styles.feedbackLink} onPress={handleFeedback}>
+          <Text
+            style={styles.feedbackLink}
+            onPress={handleFeedback}
+            accessibilityRole="link"
+            accessibilityLabel="Share your feedback"
+          >
             Share your feedback
           </Text>
         </Text>

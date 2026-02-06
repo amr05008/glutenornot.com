@@ -5,8 +5,68 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ---
 
-## Phase 1: Polish & Trust (High Priority)
+## Planning (In priority order)
+### iOS app
+- [ ] release latest version with fixes from what broke in v1.0. **OWNER = Roy**
 
+### Android App
+- [ ] Build and release initial Android app on google play store **OWNER = Batch**
+
+### In app star rating prompt 
+ - [ ]  add the native iOS rating prompt to the app (after a successful scan, for example). It's the highest-conversion way to collect ratings since users don't leave the app. Can maybe use SKStoreReviewController / requestReview API — Expo has expo-store-review for this.
+
+### Exploring how to better support restauraunt menus
+- [ ] current view finder on mobile app is a bit wonky when used on a restauraunt menu. will scan all items, only report back what it flagged but doesnt ness. clear any specific listings. HMW we make it more clear something is "fine" while other items on the page are "unsafe"? 
+
+### Visual Polish
+- [ ] Improve screenshots for Apple/Android app store listings
+- [ ] Consider a subtle animation on load 
+- [ ] Add subtle shadows/depth to cards
+- [ ] Add micro-interactions (button feedback, transitions)
+- [ ] Consider a light/dark mode toggle
+
+### Support for languages outside English
+- [ ] Testing and upgrading the prompts to translate ingredients in other languages (Spanish, Portugese to start)
+
+### Scan History
+- [ ] Store recent scans in localStorage
+- [ ] Show history in a simple list
+- [ ] Allow "scan again" from history
+
+### Product Database (Pairs with Barcode Scanning)
+- [ ] Build database of verified safe/unsafe products
+- [ ] Store barcode -> verdict mappings for instant lookup
+- [ ] Allow community contributions
+- [ ] Skip OCR for known products (faster UX)
+
+### Cost remediation 
+- batch had some ideas here about how to bring down costs if need be. 
+
+---
+
+## Verification Plan
+
+After each change:
+1. Run `npm test` - all tests must pass
+2. Test locally with `npx vercel dev`
+3. Test on real phone (iOS Safari, Android Chrome)
+4. Have a celiac tester verify changes
+
+---
+
+## Session Workflow
+
+To work on a specific item, start a new session with:
+```
+Let's work on [item name] from ROADMAP.md
+```
+
+Each completed item should:
+1. Have tests pass (`npm test`)
+2. Be documented in `.claude/sessions/`
+3. Have its checkbox marked complete in this file
+
+## Past 
 ### 1.1 Persistent Lifetime Counter ✅
 **Status**: Complete (2026-01-31)
 
@@ -52,24 +112,50 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 **Files**: `index.html` (lines 177-203)
 
-### 1.4 iOS App Store Release
-**Status**: In Progress
+### 1.4 iOS App Store Release ✅
+**Status**: Submitted for Review (2026-02-02)
 **Goal**: Publish the React Native app to the iOS App Store
 
 #### Pre-Submission
-- [ ] Complete EAS build with production profile
-- [ ] Configure app credentials (certificates, provisioning profiles)
-- [ ] Test thoroughly via TestFlight with beta testers
-- [ ] Fix any crash reports or critical bugs from TestFlight
+- [x] Complete EAS build with production profile
+- [x] Configure app credentials (certificates, provisioning profiles)
+- [x] Test thoroughly via TestFlight with beta testers
+- [x] Fix any crash reports or critical bugs from TestFlight
 
 #### App Store Connect Setup
-- [ ] Plan is here: glutenornot.com/mobile/APP_STORE_SUBMISSION.md
+- [x] Screenshots (4 screenshots at 6.5" size)
+- [x] App metadata (description, keywords, promotional text)
+- [x] App Information (categories, content rights)
+- [x] App Privacy ("Data Not Collected")
+- [x] Age Rating (4+)
+- [x] Pricing (Free, 175 countries)
+- [x] Build uploaded via Xcode
+- [x] Submitted for review
 
-**Files**: `mobile/app.json`, `mobile/eas.json`
+**Submission Details**:
+- Submitted: Feb 2, 2026 at 1:00 PM
+- Bundle ID: `com.glutenornot.scanner`
+- Version: 1.0.0 (Build 2)
+- Release: Automatic upon approval
 
----
+**Files**: `mobile/app.json`, `mobile/eas.json`, `mobile/APP_STORE_SUBMISSION.md`
 
-## Phase 2: Visual Design (Medium Priority)
+### 1.5 Crash Reporting (Sentry) ✅
+**Status**: Complete (2026-02-04)
+
+- [x] Install `@sentry/react-native` via `npx expo install`
+- [x] Configure Sentry Expo plugin in `app.json`
+- [x] Initialize Sentry in root layout (`_layout.tsx`)
+- [x] Create `errorReporting.ts` wrapper with `reportError()`
+- [x] Add error reporting to camera capture and result parsing
+- [ ] Add EAS secret for source map uploads (manual step)
+
+**Files changed**: `mobile/.npmrc`, `mobile/app.json`, `mobile/app/_layout.tsx`, `mobile/services/errorReporting.ts` (new), `mobile/app/index.tsx`, `mobile/app/result.tsx`
+
+**Notes**:
+- Disabled in dev (`enabled: !__DEV__`), no performance tracing (`tracesSampleRate: 0`)
+- Network/timeout errors tagged as `warning` level; others as `error`
+- Session log: `.claude/sessions/2026-02-04-add-sentry-crash-reporting.md`
 
 ### 2.1 Logo & Branding ✅
 **Status**: Complete (2026-02-01)
@@ -80,7 +166,6 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Rebrand to teal color scheme (#0D9488)
 - [x] Lowercase logo with mint accent ("glutenornot" with "or" in #5EEAD4)
 - [x] Add tagline: "Scan any label. Know in seconds."
-- [ ] Consider a subtle animation on load — deferred
 
 **Files changed**: `web/assets/icons/icon.svg`, `web/css/styles.css`, `web/index.html`, `web/manifest.json`, `web/privacy-policy.html`, `mobile/assets/*.png`, `mobile/app.json`, `mobile/constants/verdicts.ts`, `mobile/app/*.tsx`, `mobile/components/LoadingSpinner.tsx`
 
@@ -90,80 +175,3 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - Mobile uses centralized `BRAND_COLORS` constant for easy future updates
 - Session log: `.claude/sessions/2026-02-01-rebrand-teal-theme.md`
 
-### 2.2 Visual Polish
-**Current**: Clean styling with new teal brand
-**Goal**: More polished, trustworthy appearance
-
-- [x] Refine color palette (teal/mint brand, distinct verdict colors)
-- [ ] Add subtle shadows/depth to cards
-- [ ] Improve typography hierarchy
-- [ ] Add micro-interactions (button feedback, transitions)
-- [ ] Consider a light/dark mode toggle
-
-**Files**: `css/styles.css`
-
----
-
-## Phase 3: Future Enhancements (Lower Priority)
-
-### 3.1 Scan History
-- [ ] Store recent scans in localStorage
-- [ ] Show history in a simple list
-- [ ] Allow "scan again" from history
-
-### 3.2 Product Database (Pairs with Barcode Scanning)
-- [ ] Build database of verified safe/unsafe products
-- [ ] Store barcode -> verdict mappings for instant lookup
-- [ ] Allow community contributions
-- [ ] Skip OCR for known products (faster UX)
-
-### 3.3 Sharing & Social
-- [ ] Add "Share result" button
-- [ ] Generate shareable image of verdict
-- [ ] Consider social proof ("Join X celiacs using this")
-
-### 3.4 Cost remediation 
-- batch had some ideas here about how to bring down costs if need be. 
-
----
-
-## Recommended Priority Order
-
-### Immediate (This Week)
-1. ~~**1.1 Persistent Counter**~~ ✅ Done
-2. **1.3 Real About Content** - ✅ Done
-3. **1.4 iOS App Store Release** - Get the native app live
-
-### Soon (Before Wider Testing)
-4. ~~**1.2 Friendlier Output**~~ ✅ Done
-5. ~~**2.1 Logo & Branding**~~ ✅ Done - Teal rebrand with leaf icon
-6. **1.5 Trust Signals** - Strengthen free/open message
-
-### Future
-9. **4.1 Scan History** - Store and display recent scans
-10. **4.2 Product Database** - Barcode scanning + instant lookups
-11. **4.3 Sharing & Social** - Share verdicts with others
-
----
-
-## Verification Plan
-
-After each change:
-1. Run `npm test` - all tests must pass
-2. Test locally with `npx vercel dev`
-3. Test on real phone (iOS Safari, Android Chrome)
-4. Have a celiac tester verify changes
-
----
-
-## Session Workflow
-
-To work on a specific item, start a new session with:
-```
-Let's work on [item name] from ROADMAP.md
-```
-
-Each completed item should:
-1. Have tests pass (`npm test`)
-2. Be documented in `.claude/sessions/`
-3. Have its checkbox marked complete in this file

@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-- **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions
+- **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions, Sentry (crash reporting)
 - **APIs**: Google Cloud Vision (OCR), Claude API (Sonnet)
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
 - **Session history**: `.claude/sessions/`
@@ -33,6 +33,7 @@
 │   │   └── LoadingSpinner.tsx
 │   ├── services/
 │   │   ├── api.ts          # API client (calls production backend)
+│   │   ├── errorReporting.ts # Sentry error reporting wrapper
 │   │   └── storage.ts      # AsyncStorage utilities (scan count, future: history)
 │   ├── constants/
 │   │   └── verdicts.ts     # Verdict colors, types, API URL
@@ -75,6 +76,7 @@ npx eas-cli submit --platform ios
 Required for API functionality:
 - `GOOGLE_CLOUD_VISION_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `SENTRY_AUTH_TOKEN` (EAS secret — for source map uploads during builds)
 
 ## Guidelines
 
@@ -107,7 +109,7 @@ Required for API functionality:
 
 - **Expo account**: peanutbutterbaddy
 - **Project ID**: ddfbd94a-effe-4f50-b26c-e15e86e8caee
-- **Bundle ID**: com.glutenornot.app
+- **Bundle ID**: com.glutenornot.scanner
 
 ## Imports
 

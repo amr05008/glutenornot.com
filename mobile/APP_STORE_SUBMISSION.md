@@ -6,18 +6,25 @@ Reference document for completing the GlutenOrNot App Store listing.
 
 ## Current Status
 
-### Ready
+**SUBMITTED FOR REVIEW** - Feb 2, 2026 at 1:00 PM
+
+Version 1.0.0 (Build 2) is waiting for Apple review. Release set to automatic upon approval.
+
+### Completed
 - [x] App icon (1024x1024)
 - [x] Splash screen
-- [x] Bundle ID configured (`com.glutenornot.app`)
+- [x] Bundle ID configured (`com.glutenornot.scanner`)
 - [x] Privacy policy at `glutenornot.com/privacy-policy`
 - [x] EAS Build configured
 - [x] Camera permissions with clear descriptions
-
-### Needed
-- [ ] Screenshots (required)
-- [ ] App Store metadata (descriptions, keywords, etc.)
-- [ ] App Store Connect configuration
+- [x] Screenshots (4 at 6.5" size)
+- [x] App Store metadata (descriptions, keywords, etc.)
+- [x] App Store Connect configuration
+- [x] App Privacy published ("Data Not Collected")
+- [x] Age Rating (4+)
+- [x] Pricing (Free, 175 countries)
+- [x] Build uploaded via Xcode
+- [x] Submitted for review
 
 ---
 
@@ -152,7 +159,7 @@ Made for the celiac community. Stay safe out there!
 | App Name | GlutenOrNot |
 | Subtitle | Scan Labels for Gluten |
 | Primary Language | English (U.S.) |
-| Bundle ID | com.glutenornot.app |
+| Bundle ID | com.glutenornot.scanner |
 | SKU | glutenornot-ios-001 |
 | Privacy Policy URL | https://glutenornot.com/privacy-policy |
 | Support URL | https://glutenornot.com |
@@ -187,15 +194,15 @@ When completing Apple's privacy questionnaire:
 
 ## 5. Pre-Submission Checklist
 
-- [ ] Create 3-5 screenshots (6.7" size minimum)
-- [ ] Write/finalize app description
-- [ ] Choose subtitle and keywords
-- [ ] Verify privacy policy URL works (`glutenornot.com/privacy-policy`)
-- [ ] Set up support email
-- [ ] Build via EAS: `npx eas build --platform ios --profile production`
-- [ ] Complete App Store Connect privacy questionnaire
-- [ ] Test production build on TestFlight
-- [ ] Submit for review
+- [x] Create 3-5 screenshots (6.5" size: 1284 x 2778)
+- [x] Write/finalize app description
+- [x] Choose subtitle and keywords
+- [x] Verify privacy policy URL works (`glutenornot.com/privacy-policy`)
+- [x] Set up support URL (glutenornot.com)
+- [x] Build via Xcode (Archive → Distribute → App Store Connect)
+- [x] Complete App Store Connect privacy questionnaire
+- [x] Test production build on TestFlight
+- [x] Submit for review ✅ (Feb 2, 2026)
 
 ---
 
