@@ -80,6 +80,9 @@ export async function analyzeImage(
 
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
+        if (externalSignal?.aborted) {
+          throw error; // User cancelled — preserve AbortError for caller
+        }
         throw new APIError(
           'Request timed out. Please check your connection and try again.',
           'timeout'

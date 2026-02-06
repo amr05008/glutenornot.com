@@ -21,3 +21,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-05 | [fix-camera-ready-crash](./2026-02-05-fix-camera-ready-crash.md) | Fix fatal crash when capturing photo before camera session is ready |
 | 2026-02-05 | [build-v1.0.1-release](./2026-02-05-build-v1.0.1-release.md) | Build and submit v1.0.1 production release to App Store |
 | 2026-02-05 | [fix-camera-button-disabled](./2026-02-05-fix-camera-button-disabled.md) | Fix camera button permanently disabled in TestFlight 1.0.1 |
+| 2026-02-05 | [fix-cancel-timeout-error](./2026-02-05-fix-cancel-timeout-error.md) | Fix Cancel button incorrectly showing "Request timed out" error |

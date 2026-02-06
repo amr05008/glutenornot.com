@@ -124,13 +124,13 @@ export default function CameraScreen() {
         params: { result: JSON.stringify(result), scanCount: String(scanCount) },
       });
     } catch (error) {
-      const context = resumedFromBackground.current ? 'scan_after_resume' : 'normal_scan';
-      reportError(error, { context });
-
-      // Don't show alert if the user manually cancelled
+      // Don't report or alert if user manually cancelled
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
+
+      const context = resumedFromBackground.current ? 'scan_after_resume' : 'normal_scan';
+      reportError(error, { context });
 
       let message = 'Something went wrong. Please try again.';
 
