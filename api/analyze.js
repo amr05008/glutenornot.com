@@ -1,6 +1,6 @@
 /**
  * Analyze Endpoint
- * Orchestrates OCR and Claude analysis for ingredient labels
+ * Orchestrates OCR and Claude analysis for ingredient labels and restaurant menus
  */
 
 // Rate limiting storage (in-memory for development, use Vercel KV in production)
@@ -150,7 +150,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
-        message: "Couldn't read the label. Try getting the ingredients list in focus."
+        message: "Couldn't read the text. Try getting the ingredients or menu in focus."
       });
     }
 
@@ -169,7 +169,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
-        message: "Couldn't read the label. Try getting the ingredients list in focus."
+        message: "Couldn't read the text. Try getting the ingredients or menu in focus."
       });
     }
 
