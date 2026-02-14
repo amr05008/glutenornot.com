@@ -29,14 +29,15 @@
 │   │   ├── index.tsx       # Camera capture screen
 │   │   └── result.tsx      # Result display screen
 │   ├── components/
-│   │   ├── ResultCard.tsx  # Verdict display component
+│   │   ├── ResultCard.tsx      # Verdict display (ingredient labels)
+│   │   ├── MenuResultCard.tsx  # Verdict display (restaurant menus)
 │   │   └── LoadingSpinner.tsx
 │   ├── services/
 │   │   ├── api.ts          # API client (calls production backend)
 │   │   ├── errorReporting.ts # Sentry error reporting wrapper
 │   │   └── storage.ts      # AsyncStorage utilities (scan count, future: history)
 │   ├── constants/
-│   │   └── verdicts.ts     # Verdict colors, types, API URL
+│   │   └── verdicts.ts     # Verdict colors, types (AnalysisResult, MenuItem), API URL
 │   ├── app.json            # Expo config (bundle ID, permissions)
 │   └── eas.json            # EAS Build config
 ├── api/                    # Shared Vercel serverless functions

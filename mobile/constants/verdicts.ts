@@ -1,12 +1,21 @@
 export type Verdict = 'safe' | 'caution' | 'unsafe';
 export type Confidence = 'high' | 'medium' | 'low';
+export type AnalysisMode = 'label' | 'menu';
+
+export interface MenuItem {
+  name: string;
+  verdict: Verdict;
+  notes: string;
+}
 
 export interface AnalysisResult {
+  mode: AnalysisMode;
   verdict: Verdict;
   flagged_ingredients: string[];
   allergen_warnings: string[];
   explanation: string;
   confidence: Confidence;
+  menu_items?: MenuItem[];
 }
 
 // Brand colors for consistent theming

@@ -31,12 +31,27 @@ You will receive OCR-extracted text from either:
 **Auto-detect which type it is.** Menus typically have dish names with descriptions and/or prices. Ingredient labels have ingredient lists, nutrition facts, and allergen statements.
 
 ### Output Format
-Respond with JSON only, no additional text:
+Respond with JSON only, no additional text.
+
+**For ingredient labels:**
 {
+  "mode": "label",
   "verdict": "safe" | "caution" | "unsafe",
   "flagged_ingredients": ["ingredient1"],
   "allergen_warnings": ["May contain wheat"],
   "explanation": "Brief explanation in plain language",
+  "confidence": "high" | "medium" | "low"
+}
+
+**For restaurant menus:**
+{
+  "mode": "menu",
+  "verdict": "safe" | "caution" | "unsafe",
+  "menu_items": [
+    { "name": "Dish Name", "verdict": "safe", "notes": "Why it's safe or what to ask about" }
+  ],
+  "allergen_warnings": ["Menu does not list full ingredients — ask your server about specific dishes"],
+  "explanation": "Brief one-line summary (e.g., '3 items look safe, 1 needs a modification, and 2 are unsafe.')",
   "confidence": "high" | "medium" | "low"
 }
 
@@ -67,18 +82,17 @@ Use the overall verdict to summarize the menu:
 - **caution**: Mix of safe and unsafe items, or not enough detail to be sure (most common for menus)
 - **unsafe**: Every item contains gluten
 
-#### Explanation Format
-Start with "This looks like a restaurant menu. Here's a breakdown of each item:" then list every identifiable menu item, one per line, using these indicators:
-- 🟢 for safe items
-- 🟡 for caution items (modifiable or ambiguous)
-- 🔴 for unsafe items
+#### menu_items
+Return an array of objects, one per identifiable menu item, **ordered safe first, then caution, then unsafe**:
+- Each object has: "name" (dish name), "verdict" ("safe" | "caution" | "unsafe"), "notes" (brief reason or actionable advice)
+- For caution items, include actionable advice in notes (e.g., "Ask to remove croutons", "Check if the sauce contains flour")
+- For safe items, keep notes short (e.g., "No gluten ingredients listed")
 
-**List safe items first**, then caution, then unsafe. End with a one-line summary count (e.g., "3 items look safe, 1 needs a modification, and 2 are unsafe.").
-
-For caution items, include actionable advice (e.g., "ask to remove croutons", "check if the sauce contains flour").
+#### explanation
+A brief one-line summary count (e.g., "3 items look safe, 1 needs a modification, and 2 are unsafe."). Do NOT list individual items here — that's what menu_items is for.
 
 #### flagged_ingredients
-Populate with the caution and unsafe items and their reasons. Example: ["Pasta Bolognese (wheat pasta)", "Caesar Salad (croutons — ask to remove)"]
+Leave as an empty array for menus — the menu_items array replaces this.
 
 #### allergen_warnings
 If the menu doesn't list full ingredients (most don't), include: "Menu does not list full ingredients — ask your server about specific dishes"
@@ -266,6 +280,16 @@ function parseClaudeResponse(content) {
     result.allergen_warnings = result.allergen_warnings || [];
     result.explanation = result.explanation || '';
     result.confidence = result.confidence || 'medium';
+    result.mode = result.mode || 'label';
+
+    // Validate menu_items if present
+    if (result.mode === 'menu' && Array.isArray(result.menu_items)) {
+      result.menu_items = result.menu_items.filter(
+        item => item && item.name && ['safe', 'caution', 'unsafe'].includes(item.verdict)
+      );
+    } else if (result.mode === 'menu') {
+      result.menu_items = [];
+    }
 
     return result;
 

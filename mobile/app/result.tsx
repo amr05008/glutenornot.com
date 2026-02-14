@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
+import { MenuResultCard } from '../components/MenuResultCard';
 import { reportError } from '../services/errorReporting';
 import { AnalysisResult, BRAND_COLORS } from '../constants/verdicts';
 
@@ -40,7 +41,11 @@ export default function ResultScreen() {
 
   return (
     <View style={styles.container}>
-      <ResultCard result={analysisResult} />
+      {analysisResult.mode === 'menu' && analysisResult.menu_items?.length ? (
+        <MenuResultCard result={analysisResult} />
+      ) : (
+        <ResultCard result={analysisResult} />
+      )}
 
       <View style={styles.footer}>
         <TouchableOpacity

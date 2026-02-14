@@ -47,9 +47,23 @@ describe('parseClaudeResponse', () => {
     expect(result).toEqual(fixtures.empty_response.expected);
   });
 
-  it('parses menu-style response with multi-line explanation', () => {
+  it('parses structured menu response with menu_items array', () => {
     const result = parseClaudeResponse(fixtures.valid_menu_response.input);
     expect(result).toEqual(fixtures.valid_menu_response.expected);
+    expect(result.mode).toBe('menu');
+    expect(result.menu_items).toHaveLength(6);
+  });
+
+  it('filters invalid menu_items (bad verdict or missing name)', () => {
+    const result = parseClaudeResponse(fixtures.menu_with_invalid_items.input);
+    expect(result).toEqual(fixtures.menu_with_invalid_items.expected);
+    expect(result.menu_items).toHaveLength(1);
+    expect(result.menu_items[0].name).toBe('Good Item');
+  });
+
+  it('defaults mode to label when not specified', () => {
+    const result = parseClaudeResponse(fixtures.valid_unsafe.input);
+    expect(result.mode).toBe('label');
   });
 });
 
