@@ -6,7 +6,8 @@
       "flagged_ingredients": ["wheat flour"],
       "allergen_warnings": [],
       "explanation": "Contains wheat",
-      "confidence": "high"
+      "confidence": "high",
+      "mode": "label"
     }
   },
   "valid_safe": {
@@ -16,7 +17,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "No gluten found",
-      "confidence": "high"
+      "confidence": "high",
+      "mode": "label"
     }
   },
   "valid_with_surrounding_text": {
@@ -26,7 +28,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "No gluten found",
-      "confidence": "high"
+      "confidence": "high",
+      "mode": "label"
     }
   },
   "missing_optional_fields": {
@@ -36,7 +39,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "",
-      "confidence": "medium"
+      "confidence": "medium",
+      "mode": "label"
     }
   },
   "invalid_verdict_value": {
@@ -80,12 +84,35 @@
     }
   },
   "valid_menu_response": {
-    "input": "{\"verdict\": \"caution\", \"flagged_ingredients\": [\"Pasta Bolognese (wheat pasta)\", \"Fish & Chips (wheat batter)\", \"Caesar Salad (croutons — ask to remove)\"], \"allergen_warnings\": [\"Menu does not list full ingredients — ask your server about specific dishes\"], \"explanation\": \"This looks like a restaurant menu. Here's a breakdown of each item:\\n\\n🟢 Grilled Salmon — no gluten-containing ingredients listed\\n🟢 Garden Salad — safe without croutons\\n🟢 Grilled Chicken — appears gluten-free as described\\n🟡 Caesar Salad — has croutons (wheat), but you can ask to remove them. Check the dressing too.\\n🔴 Pasta Bolognese — contains wheat pasta\\n🔴 Fish & Chips — battered with wheat flour\\n\\n3 items look safe, 1 needs a modification, and 2 are unsafe.\", \"confidence\": \"medium\"}",
+    "input": "{\"mode\": \"menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Grilled Salmon\", \"verdict\": \"safe\", \"notes\": \"No gluten ingredients listed\"}, {\"name\": \"Garden Salad\", \"verdict\": \"safe\", \"notes\": \"Safe without croutons\"}, {\"name\": \"Grilled Chicken\", \"verdict\": \"safe\", \"notes\": \"Appears gluten-free as described\"}, {\"name\": \"Caesar Salad\", \"verdict\": \"caution\", \"notes\": \"Has croutons (wheat) — ask to remove. Check the dressing too.\"}, {\"name\": \"Pasta Bolognese\", \"verdict\": \"unsafe\", \"notes\": \"Contains wheat pasta\"}, {\"name\": \"Fish & Chips\", \"verdict\": \"unsafe\", \"notes\": \"Battered with wheat flour\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [\"Menu does not list full ingredients — ask your server about specific dishes\"], \"explanation\": \"3 items look safe, 1 needs a modification, and 2 are unsafe.\", \"confidence\": \"medium\"}",
     "expected": {
+      "mode": "menu",
       "verdict": "caution",
-      "flagged_ingredients": ["Pasta Bolognese (wheat pasta)", "Fish & Chips (wheat batter)", "Caesar Salad (croutons — ask to remove)"],
+      "menu_items": [
+        { "name": "Grilled Salmon", "verdict": "safe", "notes": "No gluten ingredients listed" },
+        { "name": "Garden Salad", "verdict": "safe", "notes": "Safe without croutons" },
+        { "name": "Grilled Chicken", "verdict": "safe", "notes": "Appears gluten-free as described" },
+        { "name": "Caesar Salad", "verdict": "caution", "notes": "Has croutons (wheat) — ask to remove. Check the dressing too." },
+        { "name": "Pasta Bolognese", "verdict": "unsafe", "notes": "Contains wheat pasta" },
+        { "name": "Fish & Chips", "verdict": "unsafe", "notes": "Battered with wheat flour" }
+      ],
+      "flagged_ingredients": [],
       "allergen_warnings": ["Menu does not list full ingredients — ask your server about specific dishes"],
-      "explanation": "This looks like a restaurant menu. Here's a breakdown of each item:\n\n🟢 Grilled Salmon — no gluten-containing ingredients listed\n🟢 Garden Salad — safe without croutons\n🟢 Grilled Chicken — appears gluten-free as described\n🟡 Caesar Salad — has croutons (wheat), but you can ask to remove them. Check the dressing too.\n🔴 Pasta Bolognese — contains wheat pasta\n🔴 Fish & Chips — battered with wheat flour\n\n3 items look safe, 1 needs a modification, and 2 are unsafe.",
+      "explanation": "3 items look safe, 1 needs a modification, and 2 are unsafe.",
+      "confidence": "medium"
+    }
+  },
+  "menu_with_invalid_items": {
+    "input": "{\"mode\": \"menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Good Item\", \"verdict\": \"safe\", \"notes\": \"OK\"}, {\"name\": \"Bad Item\", \"verdict\": \"invalid\", \"notes\": \"Should be filtered\"}, {\"verdict\": \"safe\", \"notes\": \"Missing name\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"Test\", \"confidence\": \"medium\"}",
+    "expected": {
+      "mode": "menu",
+      "verdict": "caution",
+      "menu_items": [
+        { "name": "Good Item", "verdict": "safe", "notes": "OK" }
+      ],
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Test",
       "confidence": "medium"
     }
   }

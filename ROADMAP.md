@@ -25,30 +25,17 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 **How it works**: Claude auto-detects from OCR text whether it's a menu or ingredient label. For menus, it returns the same response schema the app already renders — no mobile update needed. The `explanation` field contains a structured item-by-item list, and `flagged_ingredients` calls out what to avoid.
 
-#### Phase 2 — Rich mobile UI (requires app update)
-- [ ] Add `menu_items` array to API response schema: `[{ name, verdict, notes }]`
-- [ ] Build `MenuResultCard.tsx` component with color-coded rows per menu item
-- [ ] Add filter bar in `MenuResultCard` (All | Safe | Caution) to narrow results
-- [ ] Route between `ResultCard` (ingredients) and `MenuResultCard` (menus) in `result.tsx` based on `mode` field
-- [ ] Collapse unsafe items by default (users care most about what they CAN eat)
-- [ ] Update `mobile/constants/verdicts.ts` with `MenuAnalysisResult` type and `mode` field
-
-**Phase 2 response schema** (backward compatible — app ignores unknown fields until updated):
-```json
-{
-  "mode": "menu",
-  "verdict": "caution",
-  "explanation": "...",
-  "menu_items": [
-    { "name": "Grilled Salmon", "verdict": "safe", "notes": "No gluten ingredients" },
-    { "name": "Caesar Salad", "verdict": "caution", "notes": "Ask to remove croutons" },
-    { "name": "Pasta Bolognese", "verdict": "unsafe", "notes": "Contains wheat pasta" }
-  ],
-  "flagged_ingredients": [],
-  "allergen_warnings": [],
-  "confidence": "medium"
-}
-```
+#### Phase 2 — Rich mobile UI (requires app update) ✅
+- [x] Add `mode` field and `menu_items` array to API response schema: `[{ name, verdict, notes }]`
+- [x] Update Claude prompt to return structured JSON with `menu_items` instead of emoji-formatted explanation
+- [x] Build `MenuResultCard.tsx` component with color-coded rows grouped by verdict (safe first)
+- [x] Add summary badge showing item counts per verdict (replaces single "Caution" badge)
+- [x] Add prominent "ask your server" disclaimer banner
+- [x] Route between `ResultCard` (ingredients) and `MenuResultCard` (menus) in `result.tsx` based on `mode` field
+- [x] Update `mobile/constants/verdicts.ts` with `MenuItem` type and `mode` field
+- [x] Validate and filter malformed `menu_items` in `parseClaudeResponse`
+- [x] Add test fixtures and tests for structured menu responses
+- [ ] Add filter bar in `MenuResultCard` (All | Safe | Caution) to narrow results — deferred
 
 #### Future Improvements
 - [ ] **Multi-photo menus**: Let users take multiple photos of a multi-page menu, stitch OCR text before analysis

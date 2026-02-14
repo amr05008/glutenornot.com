@@ -6,7 +6,7 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 
 ## Features
 
-- **Photo scanning**: Take a photo of any ingredient label
+- **Photo scanning**: Take a photo of any ingredient label or restaurant menu
 - **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
@@ -72,7 +72,7 @@ glutenornot.com/
 1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
-4. Claude analyzes ingredients and returns verdict
+4. Claude analyzes ingredients or menu items and returns verdict
 5. UI displays result: Safe / Caution / Unsafe
 
 ## Deployment
