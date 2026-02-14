@@ -103,12 +103,13 @@
     }
   },
   "menu_with_invalid_items": {
-    "input": "{\"mode\": \"menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Good Item\", \"verdict\": \"safe\", \"notes\": \"OK\"}, {\"name\": \"Bad Item\", \"verdict\": \"invalid\", \"notes\": \"Should be filtered\"}, {\"verdict\": \"safe\", \"notes\": \"Missing name\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"Test\", \"confidence\": \"medium\"}",
+    "input": "{\"mode\": \"menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Good Item\", \"verdict\": \"safe\", \"notes\": \"OK\"}, {\"name\": \"Bad Item\", \"verdict\": \"invalid\", \"notes\": \"Should be normalized to caution\"}, {\"verdict\": \"safe\", \"notes\": \"Missing name\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"Test\", \"confidence\": \"medium\"}",
     "expected": {
       "mode": "menu",
       "verdict": "caution",
       "menu_items": [
-        { "name": "Good Item", "verdict": "safe", "notes": "OK" }
+        { "name": "Good Item", "verdict": "safe", "notes": "OK" },
+        { "name": "Bad Item", "verdict": "caution", "notes": "Should be normalized to caution" }
       ],
       "flagged_ingredients": [],
       "allergen_warnings": [],
