@@ -1,6 +1,6 @@
 /**
  * Analyze Endpoint
- * Orchestrates OCR and Claude analysis for ingredient labels
+ * Orchestrates OCR and Claude analysis for ingredient labels and restaurant menus
  */
 
 // Rate limiting storage (in-memory for development, use Vercel KV in production)
@@ -21,13 +21,14 @@ function _getRateLimitMap() {
  * Claude prompt for ingredient analysis
  */
 const CLAUDE_PROMPT = `### Role
-You are a celiac disease ingredient analyzer. Your job is to evaluate ingredient lists and determine if a food product is safe for someone with celiac disease.
+You are a celiac disease ingredient analyzer. Your job is to evaluate food labels AND restaurant menus to determine what is safe for someone with celiac disease.
 
 ### Input
-You will receive OCR-extracted text from a food product's ingredient label. The text may contain:
-- The ingredient list
-- Allergen statements ("Contains: wheat, soy")
-- Advisory warnings ("May contain wheat", "Processed in a facility that handles wheat")
+You will receive OCR-extracted text from either:
+1. A food product's ingredient label (ingredient list, allergen statements, advisory warnings)
+2. A restaurant menu (dish names, descriptions, prices)
+
+**Auto-detect which type it is.** Menus typically have dish names with descriptions and/or prices. Ingredient labels have ingredient lists, nutrition facts, and allergen statements.
 
 ### Output Format
 Respond with JSON only, no additional text:
@@ -39,7 +40,9 @@ Respond with JSON only, no additional text:
   "confidence": "high" | "medium" | "low"
 }
 
-### Verdict Criteria
+### For Ingredient Labels
+
+#### Verdict Criteria
 - **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum)
 - **caution:**
   - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
@@ -48,7 +51,7 @@ Respond with JSON only, no additional text:
   - OCR text is unclear/incomplete
 - **safe:** No gluten-containing ingredients, no ambiguous ingredients, no concerning allergen warnings
 
-### Guidelines
+#### Guidelines
 - Always check for allergen statements AND "may contain" warnings—these are often separate from ingredients
 - Be conservative—when uncertain, use "caution"
 - Flag ALL oats as "caution" even if the product claims to be gluten-free. Oats require third-party certification (like GFCO logo) to be considered safe—manufacturer "gluten-free" labels alone are not sufficient due to cross-contamination risks
@@ -56,8 +59,38 @@ Respond with JSON only, no additional text:
 - If OCR is garbled, return "caution" explaining image quality issue
 - Keep explanations to 1-2 sentences
 
+### For Restaurant Menus
+
+#### Verdict
+Use the overall verdict to summarize the menu:
+- **safe**: Every item on the menu appears gluten-free
+- **caution**: Mix of safe and unsafe items, or not enough detail to be sure (most common for menus)
+- **unsafe**: Every item contains gluten
+
+#### Explanation Format
+Start with "This looks like a restaurant menu. Here's a breakdown of each item:" then list every identifiable menu item, one per line, using these indicators:
+- 🟢 for safe items
+- 🟡 for caution items (modifiable or ambiguous)
+- 🔴 for unsafe items
+
+**List safe items first**, then caution, then unsafe. End with a one-line summary count (e.g., "3 items look safe, 1 needs a modification, and 2 are unsafe.").
+
+For caution items, include actionable advice (e.g., "ask to remove croutons", "check if the sauce contains flour").
+
+#### flagged_ingredients
+Populate with the caution and unsafe items and their reasons. Example: ["Pasta Bolognese (wheat pasta)", "Caesar Salad (croutons — ask to remove)"]
+
+#### allergen_warnings
+If the menu doesn't list full ingredients (most don't), include: "Menu does not list full ingredients — ask your server about specific dishes"
+
+#### Confidence
+Use "medium" or "low" for menus since they rarely list full ingredients. Only use "high" if the menu explicitly lists ingredients or allergen info.
+
+#### Partial Menus
+If the OCR text appears to be only part of a menu (cuts off mid-item, very few items), note in the explanation: "I can only see part of the menu — try capturing the full page for a complete breakdown."
+
 ### Tone
-Write explanations in a warm, supportive tone. Remember: you're helping someone with celiac disease make a quick decision in a store.
+Write explanations in a warm, supportive tone. Remember: you're helping someone with celiac disease make a quick decision in a store or restaurant.
 
 **For safe products:**
 Start with reassurance. Examples:
@@ -117,7 +150,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
-        message: "Couldn't read the label. Try getting the ingredients list in focus."
+        message: "Couldn't read the text. Try getting the ingredients or menu in focus."
       });
     }
 
@@ -136,7 +169,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
-        message: "Couldn't read the label. Try getting the ingredients list in focus."
+        message: "Couldn't read the text. Try getting the ingredients or menu in focus."
       });
     }
 
@@ -267,10 +300,10 @@ async function analyzeWithClaude(ocrText) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `${CLAUDE_PROMPT}\n\n### OCR Text from Label:\n${ocrText}`
+        content: `${CLAUDE_PROMPT}\n\n### OCR Text:\n${ocrText}`
       }]
     })
   });
