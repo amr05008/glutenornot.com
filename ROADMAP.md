@@ -15,8 +15,45 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 ### In app star rating prompt 
  - [ ]  add the native iOS rating prompt to the app (after a successful scan, for example). It's the highest-conversion way to collect ratings since users don't leave the app. Can maybe use SKStoreReviewController / requestReview API — Expo has expo-store-review for this.
 
-### Exploring how to better support restauraunt menus
-- [ ] current view finder on mobile app is a bit wonky when used on a restauraunt menu. will scan all items, only report back what it flagged but doesnt ness. clear any specific listings. HMW we make it more clear something is "fine" while other items on the page are "unsafe"? 
+### Restaurant Menu Scanner Enhancement
+#### Phase 1 — Backend-only (no app update required) ✅
+- [x] Update Claude prompt in `api/analyze.js` to auto-detect menus vs. ingredient labels
+- [x] For menus: format `explanation` as item-by-item breakdown (safe first, color-coded emoji indicators)
+- [x] Populate `flagged_ingredients` with caution/unsafe items and reasons
+- [x] Bump `max_tokens` from 1024 to 2048 for longer menu responses
+- [x] Add menu-response test fixture to `web/tests/fixtures/claude-responses.json`
+
+**How it works**: Claude auto-detects from OCR text whether it's a menu or ingredient label. For menus, it returns the same response schema the app already renders — no mobile update needed. The `explanation` field contains a structured item-by-item list, and `flagged_ingredients` calls out what to avoid.
+
+#### Phase 2 — Rich mobile UI (requires app update)
+- [ ] Add `menu_items` array to API response schema: `[{ name, verdict, notes }]`
+- [ ] Build `MenuResultCard.tsx` component with color-coded rows per menu item
+- [ ] Add filter bar in `MenuResultCard` (All | Safe | Caution) to narrow results
+- [ ] Route between `ResultCard` (ingredients) and `MenuResultCard` (menus) in `result.tsx` based on `mode` field
+- [ ] Collapse unsafe items by default (users care most about what they CAN eat)
+- [ ] Update `mobile/constants/verdicts.ts` with `MenuAnalysisResult` type and `mode` field
+
+**Phase 2 response schema** (backward compatible — app ignores unknown fields until updated):
+```json
+{
+  "mode": "menu",
+  "verdict": "caution",
+  "explanation": "...",
+  "menu_items": [
+    { "name": "Grilled Salmon", "verdict": "safe", "notes": "No gluten ingredients" },
+    { "name": "Caesar Salad", "verdict": "caution", "notes": "Ask to remove croutons" },
+    { "name": "Pasta Bolognese", "verdict": "unsafe", "notes": "Contains wheat pasta" }
+  ],
+  "flagged_ingredients": [],
+  "allergen_warnings": [],
+  "confidence": "medium"
+}
+```
+
+#### Future Improvements
+- [ ] **Multi-photo menus**: Let users take multiple photos of a multi-page menu, stitch OCR text before analysis
+- [ ] **Prompt for full capture**: If OCR text looks truncated, instruct Claude to note "I can only see part of the menu — try capturing the full page"
+- [ ] **Menu item deep-dive**: Tap a menu item to ask the server about its likely ingredients (useful when menus don't list ingredients)
 
 ### Visual Polish
 - [ ] Improve screenshots for Apple/Android app store listings

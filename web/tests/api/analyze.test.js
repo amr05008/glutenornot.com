@@ -46,6 +46,11 @@ describe('parseClaudeResponse', () => {
     const result = parseClaudeResponse(fixtures.empty_response.input);
     expect(result).toEqual(fixtures.empty_response.expected);
   });
+
+  it('parses menu-style response with multi-line explanation', () => {
+    const result = parseClaudeResponse(fixtures.valid_menu_response.input);
+    expect(result).toEqual(fixtures.valid_menu_response.expected);
+  });
 });
 
 describe('checkRateLimit', () => {
