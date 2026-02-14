@@ -169,7 +169,7 @@ export default function CameraScreen() {
       {/* Viewfinder overlay — outside CameraView to avoid children warning */}
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.viewfinder} />
-        <Text style={styles.hint}>Point at the ingredients list</Text>
+        <Text style={styles.hint}>Point at the ingredients or menu</Text>
       </View>
 
       {/* Capture button */}
