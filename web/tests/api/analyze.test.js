@@ -54,11 +54,13 @@ describe('parseClaudeResponse', () => {
     expect(result.menu_items).toHaveLength(6);
   });
 
-  it('filters invalid menu_items (bad verdict or missing name)', () => {
+  it('normalizes invalid verdicts and filters items missing name', () => {
     const result = parseClaudeResponse(fixtures.menu_with_invalid_items.input);
     expect(result).toEqual(fixtures.menu_with_invalid_items.expected);
-    expect(result.menu_items).toHaveLength(1);
+    expect(result.menu_items).toHaveLength(2);
     expect(result.menu_items[0].name).toBe('Good Item');
+    expect(result.menu_items[1].name).toBe('Bad Item');
+    expect(result.menu_items[1].verdict).toBe('caution');
   });
 
   it('defaults mode to label when not specified', () => {

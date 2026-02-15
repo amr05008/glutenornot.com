@@ -246,6 +246,19 @@ async function performOCR(base64Image) {
 }
 
 /**
+ * Normalize a verdict string to one of the valid values.
+ * Claude sometimes returns non-standard verdicts like "warning" or "ask server".
+ */
+function normalizeVerdict(verdict) {
+  if (typeof verdict !== 'string') return 'caution';
+  const v = verdict.toLowerCase().trim();
+  if (v === 'safe') return 'safe';
+  if (v === 'unsafe' || v === 'not safe' || v === 'danger' || v === 'dangerous') return 'unsafe';
+  // Anything else (caution, warning, ask, check, unknown, etc.) → caution
+  return 'caution';
+}
+
+/**
  * Parse and validate Claude's response
  * Exported for testing
  */
@@ -282,11 +295,15 @@ function parseClaudeResponse(content) {
     result.confidence = result.confidence || 'medium';
     result.mode = result.mode || 'label';
 
-    // Validate menu_items if present
+    // Validate and normalize menu_items if present
     if (result.mode === 'menu' && Array.isArray(result.menu_items)) {
-      result.menu_items = result.menu_items.filter(
-        item => item && item.name && ['safe', 'caution', 'unsafe'].includes(item.verdict)
-      );
+      result.menu_items = result.menu_items
+        .filter(item => item && item.name)
+        .map(item => ({
+          ...item,
+          verdict: normalizeVerdict(item.verdict),
+          notes: item.notes || '',
+        }));
     } else if (result.mode === 'menu') {
       result.menu_items = [];
     }
@@ -414,6 +431,7 @@ function formatTimeRemaining(ms) {
 
 // Export internal functions for testing
 export {
+  normalizeVerdict,
   parseClaudeResponse,
   checkRateLimit,
   incrementRateLimit,

@@ -41,7 +41,7 @@ export default function ResultScreen() {
 
   return (
     <View style={styles.container}>
-      {analysisResult.mode === 'menu' && analysisResult.menu_items?.length ? (
+      {analysisResult.mode === 'menu' ? (
         <MenuResultCard result={analysisResult} />
       ) : (
         <ResultCard result={analysisResult} />

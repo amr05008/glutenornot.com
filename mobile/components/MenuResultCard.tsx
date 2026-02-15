@@ -105,9 +105,19 @@ export function MenuResultCard({ result }: MenuResultCardProps) {
       )}
 
       {/* Item groups: safe first, then caution, then unsafe */}
-      <ItemGroup title="Safe to eat" items={groups.safe} verdict="safe" />
-      <ItemGroup title="Ask your server" items={groups.caution} verdict="caution" />
-      <ItemGroup title="Contains gluten" items={groups.unsafe} verdict="unsafe" />
+      {items.length > 0 ? (
+        <>
+          <ItemGroup title="Safe to eat" items={groups.safe} verdict="safe" />
+          <ItemGroup title="Ask your server" items={groups.caution} verdict="caution" />
+          <ItemGroup title="Contains gluten" items={groups.unsafe} verdict="unsafe" />
+        </>
+      ) : (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+            {result.explanation || 'Could not identify individual menu items. Try capturing the menu again with items clearly visible.'}
+          </Text>
+        </View>
+      )}
 
       {/* Explanation summary */}
       {result.explanation ? (
@@ -208,6 +218,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 24,
     lineHeight: 20,
+  },
+  emptyState: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 20,
+  },
+  emptyStateText: {
+    fontSize: 15,
+    color: '#555',
+    lineHeight: 22,
+    textAlign: 'center',
   },
   summaryLine: {
     fontSize: 14,
