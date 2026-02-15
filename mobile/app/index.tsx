@@ -13,6 +13,7 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
@@ -79,6 +80,7 @@ export default function CameraScreen() {
 
   const handleCapture = async () => {
     if (!cameraRef.current || isAnalyzing) return;
+    setOcrError(null);
 
     try {
       setIsAnalyzing(true);
@@ -132,6 +134,11 @@ export default function CameraScreen() {
       const context = resumedFromBackground.current ? 'scan_after_resume' : 'normal_scan';
       reportError(error, { context });
 
+      if (error instanceof APIError && error.type === 'ocr_failed') {
+        setOcrError(error.message);
+        return;
+      }
+
       let message = 'Something went wrong. Please try again.';
 
       if (error instanceof APIError) {
@@ -171,6 +178,16 @@ export default function CameraScreen() {
         <View style={styles.viewfinder} />
         <Text style={styles.hint}>Point at the ingredients or menu</Text>
       </View>
+
+      {/* OCR error banner */}
+      {ocrError && (
+        <View style={styles.ocrErrorBanner}>
+          <Text style={styles.ocrErrorText}>{ocrError}</Text>
+          <TouchableOpacity style={styles.ocrRetryButton} onPress={handleCapture}>
+            <Text style={styles.ocrRetryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Capture button */}
       <View style={styles.controls}>
@@ -273,6 +290,33 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  ocrErrorBanner: {
+    position: 'absolute',
+    bottom: 140,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  ocrErrorText: {
+    color: '#fff',
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  ocrRetryButton: {
+    backgroundColor: BRAND_COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  ocrRetryText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600',
   },
 });
