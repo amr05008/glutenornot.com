@@ -159,6 +159,7 @@ export default function CameraScreen() {
       <LoadingSpinner
         message="Scanning ingredients..."
         slowMessage="This is taking longer than usual. Cancel and try your scan again."
+        slowThresholdMs={30000}
         onCancel={handleCancel}
       />
     );
