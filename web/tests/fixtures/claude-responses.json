@@ -102,6 +102,20 @@
       "confidence": "medium"
     }
   },
+  "menu_with_capitalized_mode": {
+    "input": "{\"mode\": \"Menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Salad\", \"verdict\": \"safe\", \"notes\": \"No gluten ingredients listed\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [\"Menu does not list full ingredients — ask your server about specific dishes\"], \"explanation\": \"1 item looks safe.\", \"confidence\": \"medium\"}",
+    "expected": {
+      "mode": "menu",
+      "verdict": "caution",
+      "menu_items": [
+        { "name": "Salad", "verdict": "safe", "notes": "No gluten ingredients listed" }
+      ],
+      "flagged_ingredients": [],
+      "allergen_warnings": ["Menu does not list full ingredients — ask your server about specific dishes"],
+      "explanation": "1 item looks safe.",
+      "confidence": "medium"
+    }
+  },
   "menu_with_invalid_items": {
     "input": "{\"mode\": \"menu\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Good Item\", \"verdict\": \"safe\", \"notes\": \"OK\"}, {\"name\": \"Bad Item\", \"verdict\": \"invalid\", \"notes\": \"Should be normalized to caution\"}, {\"verdict\": \"safe\", \"notes\": \"Missing name\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"Test\", \"confidence\": \"medium\"}",
     "expected": {

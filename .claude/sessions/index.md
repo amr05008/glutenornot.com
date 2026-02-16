@@ -25,3 +25,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-05 | [switch-local-xcode-builds](./2026-02-05-switch-local-xcode-builds.md) | Switch to local Xcode builds, bump version to 1.0.2 |
 | 2026-02-15 | [fix-ocr-error-handling](./2026-02-15-fix-ocr-error-handling.md) | Handle OCR failures with inline banner instead of alert popup |
 | 2026-02-16 | [increase-slow-scan-threshold](./2026-02-16-increase-slow-scan-threshold.md) | Increase slow scan threshold from 10s to 30s |
+| 2026-02-16 | [fix-menu-mode-display](./2026-02-16-fix-menu-mode-display.md) | Fix menu items not displaying due to capitalized mode from Claude |

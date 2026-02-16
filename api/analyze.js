@@ -259,6 +259,18 @@ function normalizeVerdict(verdict) {
 }
 
 /**
+ * Normalize a mode string to one of the valid values.
+ * Returns null for unknown values so inference logic can handle it.
+ */
+function normalizeMode(mode) {
+  if (typeof mode !== 'string') return null;
+  const m = mode.toLowerCase().trim();
+  if (m === 'menu') return 'menu';
+  if (m === 'label') return 'label';
+  return null;
+}
+
+/**
  * Parse and validate Claude's response
  * Exported for testing
  */
@@ -293,7 +305,9 @@ function parseClaudeResponse(content) {
     result.allergen_warnings = result.allergen_warnings || [];
     result.explanation = result.explanation || '';
     result.confidence = result.confidence || 'medium';
-    // Infer mode from content if Claude omitted it
+    // Normalize mode (handles capitalization like "Menu" → "menu")
+    result.mode = normalizeMode(result.mode);
+    // Infer mode from content if Claude omitted it or returned unknown value
     if (!result.mode && Array.isArray(result.menu_items) && result.menu_items.length > 0) {
       result.mode = 'menu';
     }
@@ -435,6 +449,7 @@ function formatTimeRemaining(ms) {
 
 // Export internal functions for testing
 export {
+  normalizeMode,
   normalizeVerdict,
   parseClaudeResponse,
   checkRateLimit,

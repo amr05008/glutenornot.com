@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  normalizeMode,
   parseClaudeResponse,
   checkRateLimit,
   incrementRateLimit,
@@ -66,6 +67,33 @@ describe('parseClaudeResponse', () => {
   it('defaults mode to label when not specified', () => {
     const result = parseClaudeResponse(fixtures.valid_unsafe.input);
     expect(result.mode).toBe('label');
+  });
+
+  it('normalizes capitalized mode to lowercase', () => {
+    const result = parseClaudeResponse(fixtures.menu_with_capitalized_mode.input);
+    expect(result).toEqual(fixtures.menu_with_capitalized_mode.expected);
+    expect(result.mode).toBe('menu');
+    expect(result.menu_items).toHaveLength(1);
+  });
+});
+
+describe('normalizeMode', () => {
+  it('normalizes "Menu" to "menu"', () => {
+    expect(normalizeMode('Menu')).toBe('menu');
+  });
+
+  it('normalizes "LABEL" to "label"', () => {
+    expect(normalizeMode('LABEL')).toBe('label');
+  });
+
+  it('returns null for unknown mode', () => {
+    expect(normalizeMode('unknown')).toBeNull();
+  });
+
+  it('returns null for non-string input', () => {
+    expect(normalizeMode(undefined)).toBeNull();
+    expect(normalizeMode(null)).toBeNull();
+    expect(normalizeMode(123)).toBeNull();
   });
 });
 
