@@ -293,6 +293,10 @@ function parseClaudeResponse(content) {
     result.allergen_warnings = result.allergen_warnings || [];
     result.explanation = result.explanation || '';
     result.confidence = result.confidence || 'medium';
+    // Infer mode from content if Claude omitted it
+    if (!result.mode && Array.isArray(result.menu_items) && result.menu_items.length > 0) {
+      result.mode = 'menu';
+    }
     result.mode = result.mode || 'label';
 
     // Validate and normalize menu_items if present
