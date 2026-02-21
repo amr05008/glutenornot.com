@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, AppState } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { analyzeImage, APIError } from '../services/api';
 import { reportError } from '../services/errorReporting';
@@ -78,26 +79,15 @@ export default function CameraScreen() {
     );
   }
 
-  const handleCapture = async () => {
-    if (!cameraRef.current || isAnalyzing) return;
+  const processAndAnalyze = async (imageUri: string) => {
     setOcrError(null);
 
     try {
       setIsAnalyzing(true);
 
-      // Capture photo
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      });
-
-      if (!photo?.uri) {
-        throw new Error('Failed to capture photo');
-      }
-
       // Resize and compress image - smaller for faster upload
       const manipulated = await ImageManipulator.manipulateAsync(
-        photo.uri,
+        imageUri,
         [{ resize: { width: 1024 } }],
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
@@ -154,6 +144,36 @@ export default function CameraScreen() {
     }
   };
 
+  const handleCapture = async () => {
+    if (!cameraRef.current || isAnalyzing) return;
+
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.8,
+      base64: false,
+    });
+
+    if (!photo?.uri) {
+      Alert.alert('Error', 'Failed to capture photo');
+      return;
+    }
+
+    await processAndAnalyze(photo.uri);
+  };
+
+  const handlePickImage = async () => {
+    if (isAnalyzing) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    await processAndAnalyze(result.assets[0].uri);
+  };
+
   if (isAnalyzing) {
     return (
       <LoadingSpinner
@@ -190,8 +210,18 @@ export default function CameraScreen() {
         </View>
       )}
 
-      {/* Capture button */}
+      {/* Controls: gallery picker + capture button */}
       <View style={styles.controls}>
+        <TouchableOpacity
+          style={styles.galleryButton}
+          onPress={handlePickImage}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Upload photo from library"
+          accessibilityHint="Pick a screenshot or photo to scan for gluten"
+        >
+          <Text style={styles.galleryIcon}>🖼</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
           onPress={handleCapture}
@@ -202,6 +232,7 @@ export default function CameraScreen() {
         >
           <View style={[styles.captureButtonInner, !cameraReady && styles.captureButtonInnerDisabled]} />
         </TouchableOpacity>
+        <View style={styles.galleryPlaceholder} />
       </View>
     </View>
   );
@@ -240,7 +271,10 @@ const styles = StyleSheet.create({
     bottom: 40,
     left: 0,
     right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 32,
   },
   captureButton: {
     width: 80,
@@ -261,6 +295,20 @@ const styles = StyleSheet.create({
   },
   captureButtonInnerDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  galleryButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  galleryIcon: {
+    fontSize: 24,
+  },
+  galleryPlaceholder: {
+    width: 48,
   },
   permissionContainer: {
     flex: 1,
