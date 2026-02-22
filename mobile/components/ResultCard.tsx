@@ -11,6 +11,11 @@ export function ResultCard({ result }: ResultCardProps) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Product name (from barcode lookup) */}
+      {result.product_name && (
+        <Text style={styles.productName}>{result.product_name}</Text>
+      )}
+
       {/* Verdict Badge */}
       <View
         style={[styles.badge, { backgroundColor: config.backgroundColor }]}
@@ -68,6 +73,13 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+  },
+  productName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 12,
   },
   badge: {
     flexDirection: 'row',

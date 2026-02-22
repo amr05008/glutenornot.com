@@ -1,6 +1,6 @@
-import { API_URL, AnalysisResult } from '../constants/verdicts';
+import { API_URL, BARCODE_API_URL, AnalysisResult } from '../constants/verdicts';
 
-export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error';
+export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found';
 
 export class APIError extends Error {
   type: ErrorType;
@@ -101,5 +101,78 @@ export async function analyzeImage(
       'Something went wrong. Please try again.',
       'server_error'
     );
+  }
+}
+
+const BARCODE_TIMEOUT_MS = 30000; // 30 seconds — no image upload needed
+
+export async function lookupBarcode(
+  barcode: string,
+  externalSignal?: AbortSignal,
+): Promise<AnalysisResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BARCODE_TIMEOUT_MS);
+
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort);
+
+  console.log('Starting barcode lookup:', barcode);
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(BARCODE_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode }),
+      signal: controller.signal,
+    });
+
+    console.log('Barcode response received in', Date.now() - startTime, 'ms');
+
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 404) {
+        throw new APIError(
+          data.message || 'Product not found. Try scanning the ingredient label instead.',
+          'not_found'
+        );
+      }
+
+      if (response.status === 429) {
+        throw new APIError(
+          data.message || 'Rate limit exceeded. Please try again later.',
+          'rate_limit',
+          data.retryAfter
+        );
+      }
+
+      throw new APIError(
+        data.message || 'Something went wrong. Please try again.',
+        'server_error'
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
+
+    if (error instanceof APIError) throw error;
+
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        if (externalSignal?.aborted) throw error;
+        throw new APIError('Request timed out. Please try again.', 'timeout');
+      }
+      if (error.message.includes('Network') || error.message.includes('fetch')) {
+        throw new APIError('Network error. Please check your connection.', 'network');
+      }
+    }
+
+    throw new APIError('Something went wrong. Please try again.', 'server_error');
   }
 }
