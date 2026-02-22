@@ -155,9 +155,11 @@ export default function CameraScreen() {
     }
   };
 
+  const capturingRef = useRef(false);
+
   const handleBarcodeScanned = async (scanResult: BarcodeScanningResult) => {
-    // Debounce: skip if already processing a scan
-    if (isAnalyzing || barcodeScanned) return;
+    // Debounce: skip if already processing a scan or mid-capture
+    if (isAnalyzing || barcodeScanned || capturingRef.current) return;
 
     const { data: barcodeData } = scanResult;
     if (!barcodeData) return;
@@ -190,17 +192,25 @@ export default function CameraScreen() {
   const handleCapture = async () => {
     if (!cameraRef.current || isAnalyzing) return;
 
-    const photo = await cameraRef.current.takePictureAsync({
-      quality: 0.8,
-      base64: false,
-    });
+    capturingRef.current = true;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+      });
 
-    if (!photo?.uri) {
-      Alert.alert('Error', 'Failed to capture photo');
-      return;
+      if (!photo?.uri) {
+        Alert.alert('Error', 'Failed to capture photo');
+        return;
+      }
+
+      await processAndAnalyze(photo.uri);
+    } catch (error) {
+      // Camera can unmount if a barcode scan triggers navigation mid-capture
+      console.warn('Photo capture failed:', error);
+    } finally {
+      capturingRef.current = false;
     }
-
-    await processAndAnalyze(photo.uri);
   };
 
   const handlePickImage = async () => {
