@@ -17,6 +17,8 @@ function _getRateLimitMap() {
 }
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
+const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
+const NUTRITIONIX_API = 'https://trackapi.nutritionix.com/v2/search/item';
 
 /**
  * Claude prompt for barcode-based ingredient analysis
@@ -109,6 +111,11 @@ export default async function handler(req, res) {
     // Step 2: Build ingredient context for Claude
     const ingredientContext = buildIngredientContext(product);
 
+    // Build display name (include brand if available)
+    const displayName = product.brand && product.product_name
+      ? `${product.brand} - ${product.product_name}`
+      : product.product_name;
+
     // If we have no useful data at all, return a caution result directly
     if (!ingredientContext) {
       incrementRateLimit(clientIP);
@@ -117,10 +124,11 @@ export default async function handler(req, res) {
         verdict: 'caution',
         flagged_ingredients: [],
         allergen_warnings: [],
-        explanation: `Found "${product.product_name || 'Unknown product'}" but no ingredient data is available. Try scanning the ingredient label instead.`,
+        explanation: `Found "${displayName || 'Unknown product'}" but no ingredient data is available. Try scanning the ingredient label instead.`,
         confidence: 'low',
-        product_name: product.product_name || null,
+        product_name: displayName || null,
         barcode: cleanBarcode,
+        data_source: product.source,
       });
     }
 
@@ -128,8 +136,9 @@ export default async function handler(req, res) {
     const analysis = await analyzeWithClaude(ingredientContext);
 
     // Add product metadata
-    analysis.product_name = product.product_name || null;
+    analysis.product_name = displayName || null;
     analysis.barcode = cleanBarcode;
+    analysis.data_source = product.source;
 
     incrementRateLimit(clientIP);
 
@@ -153,29 +162,185 @@ export default async function handler(req, res) {
 }
 
 /**
- * Look up a product in Open Food Facts
+ * Look up a product using waterfall approach:
+ * 1. Open Food Facts (free, no key)
+ * 2. USDA FoodData Central (free, no key)
+ * 3. Nutritionix (free tier, requires key)
  */
 async function lookupProduct(barcode) {
-  const url = `${OPEN_FOOD_FACTS_API}/${barcode}?fields=product_name,ingredients_text,allergens_tags,traces_tags,labels_tags`;
-
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
-    },
-  });
-
-  if (!response.ok) {
-    console.error('Open Food Facts API error:', response.status);
-    return null;
+  // Try Open Food Facts first
+  const offResult = await lookupOpenFoodFacts(barcode);
+  if (offResult) {
+    console.log('Found product in Open Food Facts');
+    return offResult;
   }
 
-  const data = await response.json();
-
-  if (data.status !== 1 || !data.product) {
-    return null;
+  // Try USDA FoodData Central (if API key is configured)
+  if (process.env.USDA_API_KEY) {
+    const usdaResult = await lookupUSDA(barcode);
+    if (usdaResult) {
+      console.log('Found product in USDA FoodData Central');
+      return usdaResult;
+    }
   }
 
-  return data.product;
+  // Try Nutritionix (if API keys are configured)
+  if (process.env.NUTRITIONIX_APP_ID && process.env.NUTRITIONIX_API_KEY) {
+    const nutritionixResult = await lookupNutritionix(barcode);
+    if (nutritionixResult) {
+      console.log('Found product in Nutritionix');
+      return nutritionixResult;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Look up a product in Open Food Facts
+ * Tries multiple barcode formats (original, zero-padded to 12/13 digits)
+ */
+async function lookupOpenFoodFacts(barcode) {
+  // Generate barcode variants to try (OFF sometimes needs zero-padding)
+  const variants = [barcode];
+  if (barcode.length < 12) {
+    variants.push(barcode.padStart(12, '0')); // UPC-A format
+  }
+  if (barcode.length < 13) {
+    variants.push(barcode.padStart(13, '0')); // EAN-13 format
+  }
+
+  for (const variant of variants) {
+    try {
+      const url = `${OPEN_FOOD_FACTS_API}/${variant}?fields=product_name,ingredients_text,allergens_tags,traces_tags,labels_tags`;
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
+        },
+      });
+
+      if (!response.ok) {
+        console.error('Open Food Facts API error:', response.status);
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (data.status !== 1 || !data.product) {
+        continue;
+      }
+
+      console.log(`Open Food Facts hit with barcode variant: ${variant}`);
+      return {
+        source: 'openfoodfacts',
+        product_name: data.product.product_name,
+        ingredients_text: data.product.ingredients_text,
+        allergens_tags: data.product.allergens_tags,
+        traces_tags: data.product.traces_tags,
+        labels_tags: data.product.labels_tags,
+      };
+    } catch (error) {
+      console.error('Open Food Facts lookup error:', error.message);
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Look up a product in USDA FoodData Central
+ * Requires USDA_API_KEY env var (free at https://fdc.nal.usda.gov/api-key-signup/)
+ */
+async function lookupUSDA(barcode) {
+  try {
+    const url = `${USDA_API}?query=${barcode}&dataType=Branded&pageSize=1&api_key=${process.env.USDA_API_KEY}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('USDA API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.foods || data.foods.length === 0) {
+      return null;
+    }
+
+    const food = data.foods[0];
+
+    // USDA uses gtinUpc field for barcode - verify it matches
+    if (food.gtinUpc && food.gtinUpc !== barcode) {
+      // Search returned a different product, not a barcode match
+      return null;
+    }
+
+    return {
+      source: 'usda',
+      product_name: food.description || food.brandName,
+      ingredients_text: food.ingredients,
+      allergens_tags: null, // USDA doesn't have structured allergen tags
+      traces_tags: null,
+      labels_tags: null,
+      brand: food.brandName,
+    };
+  } catch (error) {
+    console.error('USDA lookup error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Look up a product in Nutritionix
+ */
+async function lookupNutritionix(barcode) {
+  try {
+    const url = `${NUTRITIONIX_API}?upc=${barcode}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'x-app-id': process.env.NUTRITIONIX_APP_ID,
+        'x-app-key': process.env.NUTRITIONIX_API_KEY,
+        'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // Product not found
+      }
+      console.error('Nutritionix API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.foods || data.foods.length === 0) {
+      return null;
+    }
+
+    const food = data.foods[0];
+
+    return {
+      source: 'nutritionix',
+      product_name: food.food_name || food.brand_name_item_name,
+      ingredients_text: food.nf_ingredient_statement,
+      allergens_tags: null,
+      traces_tags: null,
+      labels_tags: null,
+      brand: food.brand_name,
+    };
+  } catch (error) {
+    console.error('Nutritionix lookup error:', error.message);
+    return null;
+  }
 }
 
 /**
@@ -184,8 +349,13 @@ async function lookupProduct(barcode) {
 function buildIngredientContext(product) {
   const parts = [];
 
-  if (product.product_name) {
-    parts.push(`Product: ${product.product_name}`);
+  // Include brand if available (USDA/Nutritionix provide this separately)
+  const displayName = product.brand && product.product_name
+    ? `${product.brand} - ${product.product_name}`
+    : product.product_name;
+
+  if (displayName) {
+    parts.push(`Product: ${displayName}`);
   }
 
   if (product.ingredients_text) {

@@ -8,6 +8,7 @@ import { analyzeImage, lookupBarcode, APIError } from '../services/api';
 import { reportError } from '../services/errorReporting';
 import { incrementLifetimeScanCount } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Toast } from '../components/Toast';
 import { AnalysisResult, BRAND_COLORS, FOOD_BARCODE_TYPES } from '../constants/verdicts';
 
 export default function CameraScreen() {
@@ -18,6 +19,8 @@ export default function CameraScreen() {
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Scanning ingredients...');
   const cameraRef = useRef<CameraView>(null);
+  const capturingRef = useRef(false);
+  const scanningRef = useRef(false);
   const router = useRouter();
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -155,14 +158,15 @@ export default function CameraScreen() {
     }
   };
 
-  const capturingRef = useRef(false);
-
   const handleBarcodeScanned = async (scanResult: BarcodeScanningResult) => {
-    // Debounce: skip if already processing a scan or mid-capture
-    if (isAnalyzing || barcodeScanned || capturingRef.current) return;
+    // Synchronous ref check prevents duplicate calls before state updates
+    if (scanningRef.current || capturingRef.current) return;
 
     const { data: barcodeData } = scanResult;
     if (!barcodeData) return;
+
+    // Immediately block further scans (synchronous)
+    scanningRef.current = true;
 
     console.log('Barcode detected:', barcodeData);
     setBarcodeScanned(true);
@@ -185,7 +189,10 @@ export default function CameraScreen() {
       abortControllerRef.current = null;
       setIsAnalyzing(false);
       // Reset barcode scan state after a delay to prevent rapid re-scanning
-      setTimeout(() => setBarcodeScanned(false), 2000);
+      setTimeout(() => {
+        setBarcodeScanned(false);
+        scanningRef.current = false;
+      }, 2000);
     }
   };
 
@@ -257,15 +264,12 @@ export default function CameraScreen() {
         <Text style={styles.hint}>Point at ingredients, menu, or barcode</Text>
       </View>
 
-      {/* OCR error banner */}
-      {ocrError && (
-        <View style={styles.ocrErrorBanner}>
-          <Text style={styles.ocrErrorText}>{ocrError}</Text>
-          <TouchableOpacity style={styles.ocrRetryButton} onPress={handleCapture}>
-            <Text style={styles.ocrRetryText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* OCR error toast */}
+      <Toast
+        message={ocrError || ''}
+        visible={!!ocrError}
+        onHide={() => setOcrError(null)}
+      />
 
       {/* Controls: gallery picker + capture button */}
       <View style={styles.controls}>
@@ -396,33 +400,6 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  ocrErrorBanner: {
-    position: 'absolute',
-    bottom: 140,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  ocrErrorText: {
-    color: '#fff',
-    fontSize: 15,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  ocrRetryButton: {
-    backgroundColor: BRAND_COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  ocrRetryText: {
-    color: '#fff',
-    fontSize: 15,
     fontWeight: '600',
   },
 });
