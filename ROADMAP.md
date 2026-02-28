@@ -50,7 +50,9 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Consider a light/dark mode toggle
 
 ### Support for languages outside English
-- [ ] Testing and upgrading the prompts to translate ingredients in other languages (Spanish, Portugese to start)
+- [x] Testing and upgrading the prompts to translate ingredients in other languages (Spanish to start)
+- [ ] Add Portuguese ingredient vocabulary and allergen phrases
+- [ ] Add UI language indicator badge on result screens (optional, deferred)
 
 ### Scan History
 - [ ] Store recent scans in localStorage
