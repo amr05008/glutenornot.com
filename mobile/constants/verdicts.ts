@@ -17,6 +17,8 @@ export interface AnalysisResult {
   explanation: string;
   confidence: Confidence;
   menu_items?: MenuItem[];
+  product_name?: string;
+  barcode?: string;
 }
 
 // Brand colors for consistent theming
@@ -49,3 +51,12 @@ export const VERDICT_CONFIG = {
 } as const;
 
 export const API_URL = 'https://www.glutenornot.com/api/analyze';
+export const BARCODE_API_URL = 'https://www.glutenornot.com/api/barcode';
+
+// Barcode types relevant for food products
+export const FOOD_BARCODE_TYPES = [
+  'ean13',
+  'ean8',
+  'upc_a',
+  'upc_e',
+] as const;
