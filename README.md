@@ -7,6 +7,7 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 ## Features
 
 - **Photo scanning**: Take a photo of any ingredient label or restaurant menu
+- **Barcode scanning**: Point at a product barcode for instant lookup via Open Food Facts, USDA, and Nutritionix
 - **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
@@ -62,18 +63,27 @@ glutenornot.com/
 │   ├── services/           # API client
 │   └── constants/          # Shared constants
 ├── api/                    # Shared Vercel serverless functions
+│   ├── _utils.js           # Shared rate limiting, verdict normalization, constants
 │   ├── analyze.js          # Serverless: OCR + Claude analysis
+│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
 
 ## How It Works
 
+**Photo scanning:**
 1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
 4. Claude analyzes ingredients or menu items and returns verdict
 5. UI displays result: Safe / Caution / Unsafe
+
+**Barcode scanning (mobile):**
+1. Camera auto-detects barcodes (EAN-13, EAN-8, UPC-A, UPC-E)
+2. Barcode is sent to `/api/barcode`
+3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix
+4. Claude analyzes the retrieved ingredients and returns verdict
 
 ## Deployment
 
