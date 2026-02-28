@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   parseClaudeResponse,
   buildIngredientContext,
+} from '../../../api/barcode.js';
+import {
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
   _setRateLimitMap,
   _getRateLimitMap,
-} from '../../../api/barcode.js';
+} from '../../../api/_utils.js';
 
 describe('parseClaudeResponse (barcode)', () => {
   it('parses valid safe response', () => {

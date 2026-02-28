@@ -72,6 +72,8 @@ export default function CameraScreen() {
     });
   }, [router]);
 
+  const handleToastHide = useCallback(() => setOcrError(null), []);
+
   const handleError = useCallback((error: unknown, context: string) => {
     // Don't report or alert if user manually cancelled
     if (error instanceof Error && error.name === 'AbortError') return;
@@ -268,7 +270,7 @@ export default function CameraScreen() {
       <Toast
         message={ocrError || ''}
         visible={!!ocrError}
-        onHide={() => setOcrError(null)}
+        onHide={handleToastHide}
       />
 
       {/* Controls: gallery picker + capture button */}

@@ -3,18 +3,17 @@
  * Looks up a product by barcode via Open Food Facts, then analyzes ingredients with Claude
  */
 
-// Rate limiting (shared pattern with analyze.js)
-let rateLimitMap = new Map();
-const RATE_LIMIT = 50;
-const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000;
-
-function _setRateLimitMap(map) {
-  rateLimitMap = map;
-}
-
-function _getRateLimitMap() {
-  return rateLimitMap;
-}
+import {
+  RATE_LIMIT,
+  CLAUDE_MODEL,
+  getClientIP,
+  checkRateLimit,
+  incrementRateLimit,
+  formatTimeRemaining,
+  normalizeVerdict,
+  _setRateLimitMap,
+  _getRateLimitMap,
+} from './_utils.js';
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -412,7 +411,7 @@ async function analyzeWithClaude(ingredientContext) {
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: CLAUDE_MODEL,
       max_tokens: 1024,
       messages: [{
         role: 'user',
@@ -457,11 +456,7 @@ function parseClaudeResponse(content) {
 
     const result = JSON.parse(jsonMatch[0]);
 
-    // Normalize verdict
-    const v = (result.verdict || '').toLowerCase().trim();
-    if (v === 'safe') result.verdict = 'safe';
-    else if (v === 'unsafe' || v === 'not safe') result.verdict = 'unsafe';
-    else result.verdict = 'caution';
+    result.verdict = normalizeVerdict(result.verdict);
 
     result.mode = 'label';
     result.flagged_ingredients = result.flagged_ingredients || [];
@@ -482,44 +477,7 @@ function parseClaudeResponse(content) {
   }
 }
 
-// --- Rate limiting utilities (same as analyze.js) ---
-
-function getClientIP(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
-}
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record) return { allowed: true };
-  if (now - record.windowStart > RATE_LIMIT_WINDOW) {
-    rateLimitMap.delete(ip);
-    return { allowed: true };
-  }
-  if (record.count < RATE_LIMIT) return { allowed: true };
-  const resetIn = RATE_LIMIT_WINDOW - (now - record.windowStart);
-  return { allowed: false, resetIn };
-}
-
-function incrementRateLimit(ip) {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now - record.windowStart > RATE_LIMIT_WINDOW) {
-    rateLimitMap.set(ip, { windowStart: now, count: 1 });
-  } else {
-    record.count++;
-  }
-}
-
-function formatTimeRemaining(ms) {
-  const hours = Math.floor(ms / (60 * 60 * 1000));
-  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
-  return `${minutes} minute${minutes > 1 ? 's' : ''}`;
-}
-
+// Re-export shared utils + local functions for testing
 export {
   parseClaudeResponse,
   buildIngredientContext,
