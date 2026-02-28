@@ -10,6 +10,7 @@ export interface MenuItem {
 
 export interface AnalysisResult {
   mode: AnalysisMode;
+  detected_language?: string;
   verdict: Verdict;
   flagged_ingredients: string[];
   allergen_warnings: string[];

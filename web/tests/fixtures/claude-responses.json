@@ -130,5 +130,58 @@
       "explanation": "Test",
       "confidence": "medium"
     }
+  },
+  "spanish_label_unsafe": {
+    "input": "{\"verdict\": \"unsafe\", \"detected_language\": \"es\", \"flagged_ingredients\": [\"harina de trigo (wheat flour)\", \"cebada (barley)\"], \"allergen_warnings\": [\"Contiene gluten (Contains gluten)\"], \"explanation\": \"This product contains wheat flour and barley, both of which contain gluten.\", \"confidence\": \"high\", \"mode\": \"label\"}",
+    "expected": {
+      "verdict": "unsafe",
+      "detected_language": "es",
+      "flagged_ingredients": ["harina de trigo (wheat flour)", "cebada (barley)"],
+      "allergen_warnings": ["Contiene gluten (Contains gluten)"],
+      "explanation": "This product contains wheat flour and barley, both of which contain gluten.",
+      "confidence": "high",
+      "mode": "label"
+    }
+  },
+  "spanish_label_safe": {
+    "input": "{\"verdict\": \"safe\", \"detected_language\": \"es\", \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"Good news! This product's ingredients are all gluten-free. The label is in Spanish — all ingredients checked out safe.\", \"confidence\": \"high\", \"mode\": \"label\"}",
+    "expected": {
+      "verdict": "safe",
+      "detected_language": "es",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "Good news! This product's ingredients are all gluten-free. The label is in Spanish — all ingredients checked out safe.",
+      "confidence": "high",
+      "mode": "label"
+    }
+  },
+  "spanish_menu_response": {
+    "input": "{\"mode\": \"menu\", \"detected_language\": \"es\", \"verdict\": \"caution\", \"menu_items\": [{\"name\": \"Ensalada Mixta\", \"verdict\": \"safe\", \"notes\": \"Mixed salad — no gluten ingredients listed\"}, {\"name\": \"Paella de Mariscos\", \"verdict\": \"safe\", \"notes\": \"Seafood rice dish — naturally gluten-free\"}, {\"name\": \"Croquetas de Jamón\", \"verdict\": \"unsafe\", \"notes\": \"Croquettes are made with béchamel (flour-based)\"}, {\"name\": \"Pan con Tomate\", \"verdict\": \"unsafe\", \"notes\": \"Bread with tomato — contains wheat bread\"}], \"flagged_ingredients\": [], \"allergen_warnings\": [\"Menu does not list full ingredients — ask your server (pregunta al camarero)\"], \"explanation\": \"2 items look safe and 2 are unsafe.\", \"confidence\": \"medium\"}",
+    "expected": {
+      "mode": "menu",
+      "detected_language": "es",
+      "verdict": "caution",
+      "menu_items": [
+        { "name": "Ensalada Mixta", "verdict": "safe", "notes": "Mixed salad — no gluten ingredients listed" },
+        { "name": "Paella de Mariscos", "verdict": "safe", "notes": "Seafood rice dish — naturally gluten-free" },
+        { "name": "Croquetas de Jamón", "verdict": "unsafe", "notes": "Croquettes are made with béchamel (flour-based)" },
+        { "name": "Pan con Tomate", "verdict": "unsafe", "notes": "Bread with tomato — contains wheat bread" }
+      ],
+      "flagged_ingredients": [],
+      "allergen_warnings": ["Menu does not list full ingredients — ask your server (pregunta al camarero)"],
+      "explanation": "2 items look safe and 2 are unsafe.",
+      "confidence": "medium"
+    }
+  },
+  "english_label_no_language": {
+    "input": "{\"verdict\": \"safe\", \"flagged_ingredients\": [], \"allergen_warnings\": [], \"explanation\": \"No gluten found\", \"confidence\": \"high\"}",
+    "expected": {
+      "verdict": "safe",
+      "flagged_ingredients": [],
+      "allergen_warnings": [],
+      "explanation": "No gluten found",
+      "confidence": "high",
+      "mode": "label"
+    }
   }
 }
