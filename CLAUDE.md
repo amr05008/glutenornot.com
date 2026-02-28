@@ -31,6 +31,7 @@
 │   ├── components/
 │   │   ├── ResultCard.tsx      # Verdict display (ingredient labels)
 │   │   ├── MenuResultCard.tsx  # Verdict display (restaurant menus)
+│   │   ├── Toast.tsx           # Auto-dismiss notification component
 │   │   └── LoadingSpinner.tsx
 │   ├── services/
 │   │   ├── api.ts          # API client (calls production backend)
@@ -41,7 +42,9 @@
 │   ├── app.json            # Expo config (bundle ID, permissions)
 │   └── eas.json            # EAS Build config
 ├── api/                    # Shared Vercel serverless functions
+│   ├── _utils.js           # Shared rate limiting, verdict normalization, constants
 │   ├── analyze.js          # OCR + Claude analysis
+│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
@@ -85,6 +88,11 @@ Required for API functionality:
 - `ANTHROPIC_API_KEY`
 - `SENTRY_AUTH_TOKEN` (EAS secret — for source map uploads during builds)
 
+Optional (for barcode lookup fallback sources):
+- `USDA_API_KEY` (free at https://fdc.nal.usda.gov/api-key-signup/)
+- `NUTRITIONIX_APP_ID`
+- `NUTRITIONIX_API_KEY`
+
 ## Guidelines
 
 - **Be conservative with verdicts**: When uncertain, use "caution" rather than "safe"
@@ -100,8 +108,8 @@ Required for API functionality:
 
 ### High Priority
 - [ ] **Recents screen**: Show scan history (extend `storage.ts`, no account needed)
-- [ ] **Barcode scanning**: Integrate barcode scanner alongside OCR
-- [ ] **Mode toggle**: Switch between camera (OCR) and barcode modes
+- [x] **Barcode scanning**: Integrated barcode scanner alongside OCR (auto-detects barcodes via camera)
+- [x] **Mode toggle**: Not needed — camera auto-detects barcodes and ingredient labels simultaneously
 
 ### Medium Priority
 - [ ] **Favorites**: Save products you buy regularly

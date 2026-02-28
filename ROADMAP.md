@@ -59,11 +59,16 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Show history in a simple list
 - [ ] Allow "scan again" from history
 
-### Product Database (Pairs with Barcode Scanning)
+### Barcode Scanning ✅
+- [x] Barcode scanning via expo-camera (EAN-13, EAN-8, UPC-A, UPC-E)
+- [x] Waterfall product lookup: Open Food Facts → USDA → Nutritionix
+- [x] Claude analysis of retrieved ingredients
+- [x] Shared rate limiting across analyze + barcode endpoints (`api/_utils.js`)
+
+### Product Database (Future — builds on barcode scanning)
+- [ ] Cache barcode → verdict mappings for instant repeat lookups
 - [ ] Build database of verified safe/unsafe products
-- [ ] Store barcode -> verdict mappings for instant lookup
 - [ ] Allow community contributions
-- [ ] Skip OCR for known products (faster UX)
 
 ### Cost remediation 
 - batch had some ideas here about how to bring down costs if need be. 
