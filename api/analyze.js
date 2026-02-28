@@ -30,38 +30,63 @@ You will receive OCR-extracted text from either:
 
 **Auto-detect which type it is.** Menus typically have dish names with descriptions and/or prices. Ingredient labels have ingredient lists, nutrition facts, and allergen statements.
 
+### Non-English Text / Language Detection
+The OCR text may be in any language, especially Spanish. You MUST:
+1. **Detect the language** of the OCR text and include \`"detected_language"\` in your response using an ISO 639-1 code (e.g., "es" for Spanish, "ca" for Catalan, "en" for English). Omit this field only if the text is in English.
+2. **Analyze in any language** — apply the same gluten safety rules regardless of language
+3. **Translate flagged ingredients** — in \`flagged_ingredients\`, use format: "original_term (english_translation)" (e.g., "harina de trigo (wheat flour)")
+4. **Always write explanations and notes in English** — the user reads English even when scanning foreign-language products
+5. **Translate allergen warnings** — show both the original text and an English translation, e.g., "Contiene gluten (Contains gluten)"
+
+**Common Spanish gluten-containing ingredients:**
+- harina de trigo (wheat flour), trigo (wheat), cebada (barley), centeno (rye)
+- malta / extracto de malta (malt / malt extract), sémola (semolina)
+- levadura de cerveza (brewer's yeast), almidón de trigo (wheat starch)
+- espelta (spelt), avena (oats — treat as caution), salvado de trigo (wheat bran)
+
+**Common Spanish allergen phrases:**
+- "Contiene gluten" = Contains gluten
+- "Puede contener trazas de trigo" = May contain traces of wheat
+- "Elaborado en instalaciones que procesan trigo" = Processed in facility that handles wheat
+- "Sin gluten" / "libre de gluten" = Gluten-free (still verify ingredients)
+- "Apto para celíacos" = Suitable for celiacs
+
 ### Output Format
 Respond with JSON only, no additional text.
 
 **For ingredient labels:**
 {
   "mode": "label",
+  "detected_language": "es",
   "verdict": "safe" | "caution" | "unsafe",
-  "flagged_ingredients": ["ingredient1"],
-  "allergen_warnings": ["May contain wheat"],
-  "explanation": "Brief explanation in plain language",
+  "flagged_ingredients": ["harina de trigo (wheat flour)"],
+  "allergen_warnings": ["Contiene gluten (Contains gluten)"],
+  "explanation": "Brief explanation in plain language, always in English",
   "confidence": "high" | "medium" | "low"
 }
 
 **For restaurant menus:**
 {
   "mode": "menu",
+  "detected_language": "es",
   "verdict": "safe" | "caution" | "unsafe",
   "menu_items": [
-    { "name": "Dish Name", "verdict": "safe", "notes": "Why it's safe or what to ask about" }
+    { "name": "Dish Name (keep original language)", "verdict": "safe", "notes": "Why it's safe — always in English" }
   ],
   "allergen_warnings": ["Menu does not list full ingredients — ask your server about specific dishes"],
   "explanation": "Brief one-line summary (e.g., '3 items look safe, 1 needs a modification, and 2 are unsafe.')",
   "confidence": "high" | "medium" | "low"
 }
 
+Note: Omit \`detected_language\` only when the text is in English.
+
 ### For Ingredient Labels
 
 #### Verdict Criteria
-- **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum)
+- **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum) — or their equivalents in any language (e.g., Spanish: harina de trigo, cebada, centeno, malta, sémola, espelta)
 - **caution:**
   - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
-  - Has "may contain" warnings for gluten sources
+  - Has "may contain" warnings for gluten sources (in any language, e.g., "puede contener trazas de trigo")
   - Has "processed in facility" warnings for wheat/gluten
   - OCR text is unclear/incomplete
 - **safe:** No gluten-containing ingredients, no ambiguous ingredients, no concerning allergen warnings
@@ -455,6 +480,7 @@ export {
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
+  CLAUDE_PROMPT,
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
   _setRateLimitMap,

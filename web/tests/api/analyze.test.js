@@ -5,6 +5,7 @@ import {
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
+  CLAUDE_PROMPT,
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
   _setRateLimitMap,
@@ -74,6 +75,56 @@ describe('parseClaudeResponse', () => {
     expect(result).toEqual(fixtures.menu_with_capitalized_mode.expected);
     expect(result.mode).toBe('menu');
     expect(result.menu_items).toHaveLength(1);
+  });
+
+  it('preserves detected_language for Spanish label response', () => {
+    const result = parseClaudeResponse(fixtures.spanish_label_unsafe.input);
+    expect(result).toEqual(fixtures.spanish_label_unsafe.expected);
+    expect(result.detected_language).toBe('es');
+    expect(result.flagged_ingredients).toContain('harina de trigo (wheat flour)');
+    expect(result.flagged_ingredients).toContain('cebada (barley)');
+  });
+
+  it('preserves detected_language for safe Spanish label', () => {
+    const result = parseClaudeResponse(fixtures.spanish_label_safe.input);
+    expect(result).toEqual(fixtures.spanish_label_safe.expected);
+    expect(result.detected_language).toBe('es');
+    expect(result.verdict).toBe('safe');
+  });
+
+  it('preserves detected_language for Spanish menu response', () => {
+    const result = parseClaudeResponse(fixtures.spanish_menu_response.input);
+    expect(result).toEqual(fixtures.spanish_menu_response.expected);
+    expect(result.detected_language).toBe('es');
+    expect(result.mode).toBe('menu');
+    expect(result.menu_items).toHaveLength(4);
+    expect(result.menu_items[0].name).toBe('Ensalada Mixta');
+  });
+
+  it('omits detected_language when not present in response', () => {
+    const result = parseClaudeResponse(fixtures.english_label_no_language.input);
+    expect(result).toEqual(fixtures.english_label_no_language.expected);
+    expect(result.detected_language).toBeUndefined();
+  });
+});
+
+describe('CLAUDE_PROMPT multilingual support', () => {
+  it('instructs Claude to detect the language of OCR text', () => {
+    expect(CLAUDE_PROMPT).toContain('detected_language');
+  });
+
+  it('includes Spanish gluten-containing ingredient terms', () => {
+    expect(CLAUDE_PROMPT).toContain('harina de trigo');
+    expect(CLAUDE_PROMPT).toContain('cebada');
+    expect(CLAUDE_PROMPT).toContain('centeno');
+  });
+
+  it('instructs Claude to translate flagged ingredients', () => {
+    expect(CLAUDE_PROMPT).toMatch(/translat/i);
+  });
+
+  it('instructs Claude to keep explanations in English', () => {
+    expect(CLAUDE_PROMPT).toMatch(/english/i);
   });
 });
 

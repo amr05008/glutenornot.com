@@ -89,6 +89,7 @@ Required for API functionality:
 
 - **Be conservative with verdicts**: When uncertain, use "caution" rather than "safe"
 - **Flag all oats as "caution"**: Cross-contamination risk unless certified GF
+- **Multilingual analysis**: The Claude prompt detects non-English text (especially Spanish), translates flagged ingredients as "original (english)", and always returns explanations in English. The API response includes an optional `detected_language` field (ISO 639-1 code) for non-English text.
 - **Optimize for in-store use**: Speed, clarity, minimal taps
 - **Keep code simple**: This is an MVP, avoid over-engineering
 - **Run tests before committing**: `npm test` must pass before committing changes
