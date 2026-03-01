@@ -42,16 +42,17 @@ export function Toast({ message, visible, duration = 4000, onHide }: ToastProps)
   if (!visible) return null;
 
   return (
-    <Pressable
-      onPress={fadeOutAndHide}
-      accessibilityRole="alert"
-      accessibilityHint="Tap to dismiss"
-    >
-      <Animated.View style={[styles.container, { opacity }]}>
+    <Animated.View style={[styles.container, { opacity }]}>
+      <Pressable
+        onPress={fadeOutAndHide}
+        accessibilityRole="alert"
+        accessibilityHint="Tap to dismiss"
+        style={styles.content}
+      >
         <Text style={styles.text}>{message}</Text>
         <Text style={styles.dismissHint}>Tap to dismiss</Text>
-      </Animated.View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -61,6 +62,8 @@ const styles = StyleSheet.create({
     bottom: 140,
     left: 20,
     right: 20,
+  },
+  content: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     borderRadius: 12,
     paddingVertical: 14,

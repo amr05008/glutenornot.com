@@ -62,11 +62,14 @@ const mockAnalyzeImage = analyzeImage as jest.MockedFunction<typeof analyzeImage
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  jest.spyOn(console, 'log').mockImplementation();
+  jest.spyOn(console, 'warn').mockImplementation();
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
 });
 
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
 });
 
 describe('CameraScreen error flow', () => {
