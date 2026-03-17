@@ -1,6 +1,6 @@
 import { API_URL, BARCODE_API_URL, AnalysisResult } from '../constants/verdicts';
 
-export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found';
+export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found' | 'invalid_input';
 
 export class APIError extends Error {
   type: ErrorType;
@@ -147,6 +147,13 @@ export async function lookupBarcode(
           data.message || 'Rate limit exceeded. Please try again later.',
           'rate_limit',
           data.retryAfter
+        );
+      }
+
+      if (response.status === 400) {
+        throw new APIError(
+          data.message || 'Invalid barcode. Try scanning again.',
+          'invalid_input'
         );
       }
 

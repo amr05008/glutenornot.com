@@ -85,6 +85,12 @@ export default function CameraScreen() {
       return;
     }
 
+    // For invalid barcode input, show as toast so user can try again
+    if (error instanceof APIError && error.type === 'invalid_input') {
+      setOcrError(error.message);
+      return;
+    }
+
     // For barcode not_found, show as OCR error banner so user can try photo
     if (error instanceof APIError && error.type === 'not_found') {
       setOcrError(error.message);
