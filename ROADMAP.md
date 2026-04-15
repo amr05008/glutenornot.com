@@ -70,10 +70,11 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Add Sentry `beforeSend` filter for not_found as belt-and-suspenders (`mobile/app/_layout.tsx`)
 - [x] Add server-side barcode miss logging in `api/barcode.js` (Vercel logs)
 - [x] Rate-limit duplicate barcode lookups client-side (1 min TTL, `mobile/app/index.tsx`)
-- [ ] Add `SENTRY_AUTH_TOKEN` EAS secret for source map uploads (manual — see 1.5 notes)
-- [ ] Set up Sentry alerts: new error-level issues + warning-level spike (manual — Sentry dashboard)
-- [ ] Verify USDA/Nutritionix env vars in Vercel production (manual — Vercel dashboard)
-- [ ] Ship new app build to deploy not_found filter fix + above changes
+- [x] Add `SENTRY_AUTH_TOKEN` locally for source map uploads during prebuild (exported in `~/.zshrc`; source maps uploaded on 1.1.1 build 2026-04-14). Future: move to EAS secret when switching to EAS builds.
+- [ ] **TODO (post-1.1.1 release — manual browser tasks, deferred from 2026-04-14):**
+  - [ ] Set up Sentry alerts on `glutenornot-mobile`: (1) new error-level issues, (2) warning-level event spike (Sentry dashboard → Alerts)
+  - [ ] Verify Vercel production env vars: `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY` (Vercel dashboard → Project Settings → Environment Variables)
+- [x] Ship new app build to deploy not_found filter fix + above changes (v1.1.1 submitted 2026-04-14)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
 ### Product Database (Future — builds on barcode scanning)
