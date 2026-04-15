@@ -65,6 +65,17 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Claude analysis of retrieved ingredients
 - [x] Shared rate limiting across analyze + barcode endpoints (`api/_utils.js`)
 
+### Error Monitoring & Observability
+- [x] Investigate why GLUTENORNOT-MOBILE-2 fires despite not_found filter — filter added post-1.1.0, not yet shipped
+- [x] Add Sentry `beforeSend` filter for not_found as belt-and-suspenders (`mobile/app/_layout.tsx`)
+- [x] Add server-side barcode miss logging in `api/barcode.js` (Vercel logs)
+- [x] Rate-limit duplicate barcode lookups client-side (1 min TTL, `mobile/app/index.tsx`)
+- [ ] Add `SENTRY_AUTH_TOKEN` EAS secret for source map uploads (manual — see 1.5 notes)
+- [ ] Set up Sentry alerts: new error-level issues + warning-level spike (manual — Sentry dashboard)
+- [ ] Verify USDA/Nutritionix env vars in Vercel production (manual — Vercel dashboard)
+- [ ] Ship new app build to deploy not_found filter fix + above changes
+- [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
+
 ### Product Database (Future — builds on barcode scanning)
 - [ ] Cache barcode → verdict mappings for instant repeat lookups
 - [ ] Build database of verified safe/unsafe products

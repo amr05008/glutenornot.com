@@ -8,6 +8,11 @@ Sentry.init({
   enabled: !__DEV__,
   tracesSampleRate: 0,
   attachScreenshot: true,
+  beforeSend(event) {
+    // not_found is expected user flow (barcode not in database), not a real error
+    if (event.tags?.error_type === 'not_found') return null;
+    return event;
+  },
 });
 
 function RootLayout() {

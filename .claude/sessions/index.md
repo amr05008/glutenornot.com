@@ -27,3 +27,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-02-16 | [increase-slow-scan-threshold](./2026-02-16-increase-slow-scan-threshold.md) | Increase slow scan threshold from 10s to 30s |
 | 2026-02-16 | [fix-menu-mode-display](./2026-02-16-fix-menu-mode-display.md) | Fix menu items not displaying due to capitalized mode from Claude |
 | 2026-03-01 | [build-v1.1.0-release](./2026-03-01-build-v1.1.0-release.md) | Build and distribute v1.1.0 to App Store Connect |
+| 2026-04-14 | [sentry-audit-and-fixes](./2026-04-14-sentry-audit-and-fixes.md) | Sentry audit: root cause GLUTENORNOT-MOBILE-2, beforeSend filter, barcode miss logging, duplicate scan cache |

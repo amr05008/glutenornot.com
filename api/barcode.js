@@ -101,6 +101,7 @@ export default async function handler(req, res) {
     const product = await lookupProduct(cleanBarcode);
 
     if (!product) {
+      console.log('barcode_not_found', cleanBarcode);
       return res.status(404).json({
         error: 'Product not found',
         message: "Product not found in our database. Try scanning the ingredient label instead."

@@ -26,6 +26,7 @@ export default function CameraScreen() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const appState = useRef(AppState.currentState);
   const resumedFromBackground = useRef(false);
+  const recentNotFound = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -173,6 +174,12 @@ export default function CameraScreen() {
     const { data: barcodeData } = scanResult;
     if (!barcodeData) return;
 
+    // Skip API call for recently-failed barcodes to prevent frustration retry loops
+    if (recentNotFound.current.has(barcodeData)) {
+      setOcrError('Product not in database — scan the ingredient label instead');
+      return;
+    }
+
     // Immediately block further scans (synchronous)
     scanningRef.current = true;
 
@@ -192,6 +199,10 @@ export default function CameraScreen() {
 
       await navigateToResult(result);
     } catch (error) {
+      if (error instanceof APIError && error.type === 'not_found') {
+        recentNotFound.current.add(barcodeData);
+        setTimeout(() => recentNotFound.current.delete(barcodeData), 60000);
+      }
       handleError(error, 'barcode_scan');
     } finally {
       abortControllerRef.current = null;
