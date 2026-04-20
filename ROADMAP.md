@@ -51,7 +51,11 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Support for languages outside English
 - [x] Testing and upgrading the prompts to translate ingredients in other languages (Spanish to start)
+- [x] Add Dutch ingredient vocabulary, allergen phrases, and café-dish watchlist (Amsterdam trip)
+- [x] Add Catalan ingredient vocabulary, allergen phrases, and dish watchlist (Barcelona trip)
+- [x] Add "Traveler Context" rule — non-English menus get show-the-server phrase in caution notes
 - [ ] Add Portuguese ingredient vocabulary and allergen phrases
+- [ ] Add French / Italian / German glossary blocks
 - [ ] Add UI language indicator badge on result screens (optional, deferred)
 
 ### Scan History

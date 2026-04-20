@@ -29,3 +29,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-03-01 | [build-v1.1.0-release](./2026-03-01-build-v1.1.0-release.md) | Build and distribute v1.1.0 to App Store Connect |
 | 2026-04-14 | [sentry-audit-and-fixes](./2026-04-14-sentry-audit-and-fixes.md) | Sentry audit: root cause GLUTENORNOT-MOBILE-2, beforeSend filter, barcode miss logging, duplicate scan cache |
 | 2026-04-14 | [build-v1.1.1-release](./2026-04-14-build-v1.1.1-release.md) | Build and submit v1.1.1 production release to App Store |
+| 2026-04-20 | [expand-multilingual-prompt](./2026-04-20-expand-multilingual-prompt.md) | Added Dutch + Catalan vocabulary and traveler-context rule to the Claude prompt (Amsterdam/Barcelona prep) |
