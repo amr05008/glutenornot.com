@@ -79,6 +79,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
   - [ ] Set up Sentry alerts on `glutenornot-mobile`: (1) new error-level issues, (2) warning-level event spike (Sentry dashboard → Alerts)
   - [ ] Verify Vercel production env vars: `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY` (Vercel dashboard → Project Settings → Environment Variables)
 - [x] Ship new app build to deploy not_found filter fix + above changes (v1.1.1 submitted 2026-04-14)
+- [x] Suppress `ocr_failed` Sentry noise (wrapper + `beforeSend`) — ~95% of events, non-actionable photo-quality failures; MOBILE-2 resolved (2026-06-01)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
 ### Product Database (Future — builds on barcode scanning)

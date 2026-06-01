@@ -9,8 +9,11 @@ Sentry.init({
   tracesSampleRate: 0,
   attachScreenshot: true,
   beforeSend(event) {
-    // not_found is expected user flow (barcode not in database), not a real error
-    if (event.tags?.error_type === 'not_found') return null;
+    // Expected user flows, not real errors — filter at SDK level as belt-and-suspenders:
+    // - not_found: barcode not in database
+    // - ocr_failed: photo too blurry/off-angle to read; user is already prompted to refocus
+    const errorType = event.tags?.error_type;
+    if (errorType === 'not_found' || errorType === 'ocr_failed') return null;
     return event;
   },
 });
