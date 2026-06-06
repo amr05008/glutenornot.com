@@ -14,11 +14,10 @@ needs a build. **You're on the Xcode machine now — work through the steps belo
 - Suggested version bump: **1.1.1 → 1.2.0** (full visual redesign, no API changes).
 - The new app icon is already committed (`mobile/assets/icon.png`) and ships in the
   build automatically — no manual icon upload, Xcode flattens the alpha channel.
-- ⚠️ **App Store screenshots are NOT in this repo.** The 4 new 1290×2796 PNGs live in
-  `GlutenOrNot - V2 Designs/assets/appstore/` on the *original* machine (that folder is
-  gitignored). To refresh the store listing visuals you must copy them over
-  (AirDrop / cloud) or upload them from that machine's browser. The binary upload
-  itself does not need them.
+- The 4 new App Store screenshots are committed at **`mobile/store-assets/appstore/`**
+  (you have them after `git pull` — no file transfer needed). See the README there.
+- Web is already live — the redesign auto-deployed from `main` and is confirmed
+  serving at glutenornot.com.
 
 ---
 
@@ -115,10 +114,13 @@ In Xcode:
 ## 6. App Store Connect (browser — appstoreconnect.apple.com)
 
 1. App icon: nothing to do — it's baked into the uploaded build.
-2. **Screenshots**: refresh the 6.7"/6.9" set with the 4 new ones from
-   `GlutenOrNot - V2 Designs/assets/appstore/` (see the ⚠️ note at the top —
-   they're only on the original machine). The old screenshots show the teal design.
-3. Add **"What's New"** notes (e.g. "A fresh new look.").
+2. **Screenshots**: refresh the 6.7"/6.9" set with the 4 in
+   `mobile/store-assets/appstore/` (captions in the README there). The old
+   screenshots show the teal design.
+3. Add **"What's New"** notes. Suggested draft:
+   > A fresh new look. GlutenOrNot has been redesigned for speed and clarity — a
+   > bigger, bolder verdict, cleaner ingredient and menu breakdowns, and a sharper
+   > scanning experience. Same instant gluten checks, now easier to read at a glance.
 4. Attach the build to the **1.2.0** version and **Submit for Review**.
 
 ## 7. Post-release sanity (browser, optional)
