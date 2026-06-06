@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { Animated, StyleSheet, Text, Pressable } from 'react-native';
+import { theme } from '../constants/theme';
+import { sans } from '../constants/fonts';
 
 interface ToastProps {
   message: string;
@@ -64,19 +66,21 @@ const styles = StyleSheet.create({
     right: 20,
   },
   content: {
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: 12,
+    backgroundColor: theme.color.ink,
+    borderRadius: theme.radius.md,
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.space[5],
     alignItems: 'center',
   },
   text: {
+    fontFamily: sans('500'),
     color: '#fff',
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 20,
   },
   dismissHint: {
+    fontFamily: sans('400'),
     color: 'rgba(255, 255, 255, 0.5)',
     fontSize: 12,
     marginTop: 6,

@@ -4,20 +4,26 @@
   "description": "Scan ingredient labels to check if they're safe for celiac disease",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0D9488",
+  "background_color": "#FCFBF9",
+  "theme_color": "#FCFBF9",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/assets/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/assets/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/icons/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
+      "src": "/assets/icons/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],

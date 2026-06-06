@@ -1,6 +1,9 @@
+/* Reading state — dark capture surface, neutral spinner. Ported from A_Reading
+ * in the V2 design package. Keeps the slow-threshold message + cancel props. */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
-import { BRAND_COLORS } from '../constants/verdicts';
+import { theme } from '../constants/theme';
+import { sans } from '../constants/fonts';
 
 interface LoadingSpinnerProps {
   message?: string;
@@ -10,7 +13,7 @@ interface LoadingSpinnerProps {
 }
 
 export function LoadingSpinner({
-  message = 'Analyzing...',
+  message = 'Reading ingredients…',
   slowMessage,
   slowThresholdMs = 10000,
   onCancel,
@@ -25,20 +28,16 @@ export function LoadingSpinner({
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={BRAND_COLORS.primary} />
-      <Text style={styles.message}>
-        {isSlow && slowMessage ? slowMessage : message}
-      </Text>
+      <ActivityIndicator size="large" color="#fff" />
+      <Text style={styles.message}>{isSlow && slowMessage ? slowMessage : message}</Text>
       {onCancel && (
         <TouchableOpacity
-          style={[styles.cancelButton, isSlow && styles.cancelButtonProminent]}
+          style={styles.cancelButton}
           onPress={onCancel}
           accessibilityRole="button"
           accessibilityLabel="Cancel scan"
         >
-          <Text style={[styles.cancelText, isSlow && styles.cancelTextProminent]}>
-            Cancel
-          </Text>
+          <Text style={[styles.cancelText, isSlow && styles.cancelTextProminent]}>Cancel</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -50,30 +49,29 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.color.captureBg,
   },
   message: {
-    marginTop: 16,
-    fontSize: 18,
-    color: '#666',
+    marginTop: 22,
+    fontFamily: sans('500'),
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.82)',
     textAlign: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: theme.space[8],
+    lineHeight: 23,
   },
   cancelButton: {
-    marginTop: 24,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-  },
-  cancelButtonProminent: {
-    backgroundColor: BRAND_COLORS.primary,
-    borderRadius: 8,
+    position: 'absolute',
+    bottom: 54,
+    paddingVertical: theme.space[2],
+    paddingHorizontal: theme.space[6],
   },
   cancelText: {
-    fontSize: 16,
-    color: '#999',
+    fontFamily: sans('600'),
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.55)',
   },
   cancelTextProminent: {
     color: '#fff',
-    fontWeight: '600',
   },
 });

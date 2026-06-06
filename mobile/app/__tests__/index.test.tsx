@@ -20,6 +20,14 @@ jest.mock('expo-camera', () => {
   };
 });
 
+jest.mock('react-native-safe-area-context', () => {
+  const inset = { top: 0, right: 0, bottom: 0, left: 0 };
+  return {
+    SafeAreaProvider: ({ children }: any) => children,
+    useSafeAreaInsets: () => inset,
+  };
+});
+
 jest.mock('expo-image-manipulator', () => ({
   manipulateAsync: jest.fn().mockResolvedValue({
     base64: 'mock-base64-image-data',
@@ -56,8 +64,12 @@ jest.mock('../../services/storage', () => ({
 
 import CameraScreen from '../index';
 import { analyzeImage, APIError } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
 
 const mockAnalyzeImage = analyzeImage as jest.MockedFunction<typeof analyzeImage>;
+const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
+  typeof ImagePicker.launchImageLibraryAsync
+>;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -73,7 +85,7 @@ afterEach(() => {
 });
 
 describe('CameraScreen error flow', () => {
-  it('shows Toast with OCR error message after failed scan', async () => {
+  it('shows the "Couldn\'t read" state screen after a failed OCR scan', async () => {
     mockAnalyzeImage.mockRejectedValueOnce(
       new APIError("Couldn't read the text. Try getting the ingredients or menu in focus.", 'ocr_failed')
     );
@@ -85,93 +97,11 @@ describe('CameraScreen error flow', () => {
     });
 
     await waitFor(() => {
-      expect(getByText("Couldn't read the text. Try getting the ingredients or menu in focus.")).toBeTruthy();
+      expect(getByText("Couldn't read that")).toBeTruthy();
     });
   });
 
-  it('keeps capture button visible and enabled while Toast is showing', async () => {
-    mockAnalyzeImage.mockRejectedValueOnce(
-      new APIError("Couldn't read the text.", 'ocr_failed')
-    );
-
-    const { getByLabelText, getByText } = render(<CameraScreen />);
-
-    await act(async () => {
-      fireEvent.press(getByLabelText('Capture photo of ingredients'));
-    });
-
-    await waitFor(() => {
-      expect(getByText("Couldn't read the text.")).toBeTruthy();
-    });
-
-    const captureButton = getByLabelText('Capture photo of ingredients');
-    expect(captureButton).toBeTruthy();
-  });
-
-  it('dismisses Toast when tapped, leaving camera controls intact', async () => {
-    mockAnalyzeImage.mockRejectedValueOnce(
-      new APIError("Couldn't read the text.", 'ocr_failed')
-    );
-
-    const { getByLabelText, getByText, getByRole, queryByText } = render(<CameraScreen />);
-
-    await act(async () => {
-      fireEvent.press(getByLabelText('Capture photo of ingredients'));
-    });
-
-    await waitFor(() => {
-      expect(getByText("Couldn't read the text.")).toBeTruthy();
-    });
-
-    // Tap the Toast to dismiss
-    await act(async () => {
-      fireEvent.press(getByRole('alert'));
-    });
-
-    act(() => {
-      jest.advanceTimersByTime(250);
-    });
-
-    // Toast should be gone
-    expect(queryByText("Couldn't read the text.")).toBeNull();
-
-    // Capture button should still be there
-    expect(getByLabelText('Capture photo of ingredients')).toBeTruthy();
-  });
-
-  it('clears previous Toast when user takes another photo', async () => {
-    mockAnalyzeImage
-      .mockRejectedValueOnce(
-        new APIError("Couldn't read the text.", 'ocr_failed')
-      )
-      .mockResolvedValueOnce({
-        mode: 'label' as const,
-        verdict: 'safe' as const,
-        flagged_ingredients: [],
-        allergen_warnings: [],
-        explanation: 'No gluten found',
-        confidence: 'high' as const,
-      });
-
-    const { getByLabelText, getByText, queryByText } = render(<CameraScreen />);
-
-    await act(async () => {
-      fireEvent.press(getByLabelText('Capture photo of ingredients'));
-    });
-
-    await waitFor(() => {
-      expect(getByText("Couldn't read the text.")).toBeTruthy();
-    });
-
-    // Take another photo — Toast should clear
-    await act(async () => {
-      fireEvent.press(getByLabelText('Capture photo of ingredients'));
-    });
-
-    expect(queryByText("Couldn't read the text.")).toBeNull();
-  });
-
-  it('uses Toast (not Alert) for OCR errors', async () => {
+  it('uses the state screen (not Alert) for OCR errors', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert');
     mockAnalyzeImage.mockRejectedValueOnce(
       new APIError("Couldn't read the text.", 'ocr_failed')
@@ -184,10 +114,74 @@ describe('CameraScreen error flow', () => {
     });
 
     await waitFor(() => {
-      expect(getByText("Couldn't read the text.")).toBeTruthy();
+      expect(getByText("Couldn't read that")).toBeTruthy();
     });
 
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('"Try again" returns to the camera capture view', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+
+    const { getByLabelText, getByText, queryByText } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+
+    await waitFor(() => {
+      expect(getByText("Couldn't read that")).toBeTruthy();
+    });
+
+    // Dismiss the state screen
+    await act(async () => {
+      fireEvent.press(getByLabelText('Try again'));
+    });
+
+    // Couldn't-read screen gone, capture controls back
+    expect(queryByText("Couldn't read that")).toBeNull();
+    expect(getByLabelText('Capture photo of ingredients')).toBeTruthy();
+  });
+
+  it('shows the Offline state screen on a network error', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError('Network error. Please check your connection.', 'network')
+    );
+
+    const { getByLabelText, getByText } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+
+    await waitFor(() => {
+      expect(getByText("You're offline")).toBeTruthy();
+    });
+  });
+
+  it('"Choose a photo instead" opens the image picker', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+    mockLaunchLibrary.mockResolvedValueOnce({ canceled: true } as any);
+
+    const { getByLabelText, getByText } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+
+    await waitFor(() => {
+      expect(getByText("Couldn't read that")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Choose a photo instead'));
+    });
+
+    expect(mockLaunchLibrary).toHaveBeenCalled();
   });
 });

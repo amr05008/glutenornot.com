@@ -4,26 +4,37 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Privacy Policy for GlutenOrNot - a free tool to check ingredient labels for gluten">
-  <meta name="theme-color" content="#0D9488">
+  <meta name="theme-color" content="#FCFBF9">
 
   <title>Privacy Policy - GlutenOrNot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/assets/icons/icon.svg">
-  <link rel="apple-touch-icon" href="/assets/icons/icon.svg">
+  <link rel="icon" type="image/png" href="/assets/icons/icon-180.png">
+  <link rel="apple-touch-icon" href="/assets/icons/icon-180.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="/css/styles.css">
   <style>
     /* Privacy Policy specific styles */
+    .main {
+      align-items: center;
+      padding: var(--gon-space-6);
+    }
+
     .privacy-content {
       max-width: 680px;
       width: 100%;
-      padding: var(--spacing-lg);
     }
 
     .privacy-content h2 {
-      font-size: 1.5rem;
-      margin-top: var(--spacing-xl);
-      margin-bottom: var(--spacing-md);
-      color: var(--color-text);
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      margin-top: var(--gon-space-8);
+      margin-bottom: var(--gon-space-4);
+      color: var(--gon-ink);
     }
 
     .privacy-content h2:first-of-type {
@@ -31,68 +42,63 @@
     }
 
     .privacy-content h3 {
-      font-size: 1.125rem;
-      margin-top: var(--spacing-lg);
-      margin-bottom: var(--spacing-sm);
-      color: var(--color-text);
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: var(--gon-space-6);
+      margin-bottom: var(--gon-space-2);
+      color: var(--gon-ink);
     }
 
     .privacy-content p {
-      color: var(--color-text-secondary);
-      margin-bottom: var(--spacing-md);
+      color: var(--gon-sub);
+      margin-bottom: var(--gon-space-4);
       line-height: 1.7;
     }
 
     .privacy-content ul {
-      color: var(--color-text-secondary);
-      margin-left: var(--spacing-lg);
-      margin-bottom: var(--spacing-md);
+      color: var(--gon-sub);
+      margin-left: var(--gon-space-6);
+      margin-bottom: var(--gon-space-4);
     }
 
     .privacy-content li {
-      margin-bottom: var(--spacing-sm);
+      margin-bottom: var(--gon-space-2);
       line-height: 1.6;
     }
 
     .privacy-content a {
-      color: var(--color-primary);
-    }
-
-    .privacy-content a:hover {
-      color: var(--color-primary-dark);
+      color: var(--gon-ink);
     }
 
     .effective-date {
-      font-size: 0.875rem;
-      color: var(--color-text-secondary);
-      margin-bottom: var(--spacing-xl);
+      font-size: 13px;
+      color: var(--gon-faint);
+      margin-bottom: var(--gon-space-8);
     }
 
     .highlight-box {
-      background: var(--color-safe-bg);
-      border-left: 4px solid var(--color-primary);
-      padding: var(--spacing-md);
-      margin-bottom: var(--spacing-lg);
-      border-radius: 0 var(--border-radius) var(--border-radius) 0;
+      background: var(--gon-surface-muted);
+      border-left: 4px solid var(--gon-ink);
+      padding: var(--gon-space-4);
+      margin-bottom: var(--gon-space-6);
+      border-radius: 0 var(--gon-radius-md) var(--gon-radius-md) 0;
     }
 
     .highlight-box p {
       margin-bottom: 0;
-      color: var(--color-text);
-    }
-
-    .main {
-      justify-content: flex-start;
-      align-items: center;
+      color: var(--gon-ink);
     }
   </style>
 </head>
 <body>
   <div id="app">
-    <!-- Header -->
-    <header class="header">
-      <a href="/" style="text-decoration: none;">
-        <h1 class="logo">gluten<span class="logo-accent">or</span>not</h1>
+    <!-- Top bar -->
+    <header class="topbar">
+      <a class="brand" href="/" style="text-decoration: none;">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9V3h6"/><path d="M15 3H21v6"/><path d="M21 15V21h-6"/><path d="M9 21H3v-6"/>
+        </svg>
+        <span class="brand-text">Gluten<span class="brand-conj"> or </span>Not</span>
       </a>
     </header>
 

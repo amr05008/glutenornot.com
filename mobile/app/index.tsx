@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, AppState } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,15 +10,45 @@ import { reportError } from '../services/errorReporting';
 import { incrementLifetimeScanCount } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Toast } from '../components/Toast';
-import { AnalysisResult, BRAND_COLORS, FOOD_BARCODE_TYPES } from '../constants/verdicts';
+import { StateScreen } from '../components/StateScreen';
+import { Icon, Reticle } from '../components/Icon';
+import { AnalysisResult, FOOD_BARCODE_TYPES } from '../constants/verdicts';
+import { theme } from '../constants/theme';
+import { sans } from '../constants/fonts';
+
+type SystemState = 'offline' | 'error' | null;
+
+function Wordmark() {
+  return (
+    <View style={styles.wordmark}>
+      <Reticle size={18} color="#fff" stroke={2.1} gap={5} />
+      <Text style={styles.wordmarkText}>
+        Gluten<Text style={styles.wordmarkSub}> or </Text>Not
+      </Text>
+    </View>
+  );
+}
+
+function Corners() {
+  return (
+    <>
+      <View style={[styles.corner, styles.cornerTL]} />
+      <View style={[styles.corner, styles.cornerTR]} />
+      <View style={[styles.corner, styles.cornerBL]} />
+      <View style={[styles.corner, styles.cornerBR]} />
+    </>
+  );
+}
 
 export default function CameraScreen() {
+  const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [systemState, setSystemState] = useState<SystemState>(null);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Scanning ingredients...');
+  const [loadingMessage, setLoadingMessage] = useState('Reading ingredients…');
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
   const scanningRef = useRef(false);
@@ -81,8 +112,15 @@ export default function CameraScreen() {
 
     reportError(error, { context });
 
+    // Photo too blurry/small to read → dedicated "Couldn't read" state screen
     if (error instanceof APIError && error.type === 'ocr_failed') {
-      setOcrError(error.message);
+      setSystemState('error');
+      return;
+    }
+
+    // Lost connection → dedicated Offline state screen
+    if (error instanceof APIError && error.type === 'network') {
+      setSystemState('offline');
       return;
     }
 
@@ -92,12 +130,13 @@ export default function CameraScreen() {
       return;
     }
 
-    // For barcode not_found, show as OCR error banner so user can try photo
+    // For barcode not_found, show as toast banner so user can try photo
     if (error instanceof APIError && error.type === 'not_found') {
       setOcrError(error.message);
       return;
     }
 
+    // timeout / rate_limit / server_error keep the alert
     let message = 'Something went wrong. Please try again.';
     if (error instanceof APIError) {
       message = error.message;
@@ -108,35 +147,13 @@ export default function CameraScreen() {
     Alert.alert('Error', message);
   }, []);
 
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionTitle}>Camera Access Needed</Text>
-        <Text style={styles.permissionText}>
-          GlutenOrNot needs camera access to scan ingredient labels and barcodes.
-        </Text>
-        <TouchableOpacity
-          style={styles.permissionButton}
-          onPress={requestPermission}
-          accessibilityRole="button"
-          accessibilityLabel="Grant camera permission"
-        >
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   const processAndAnalyze = async (imageUri: string) => {
     setOcrError(null);
+    setSystemState(null);
 
     try {
       setIsAnalyzing(true);
-      setLoadingMessage('Scanning ingredients...');
+      setLoadingMessage('Reading ingredients…');
 
       // Resize and compress image - smaller for faster upload
       const manipulated = await ImageManipulator.manipulateAsync(
@@ -189,7 +206,7 @@ export default function CameraScreen() {
 
     try {
       setIsAnalyzing(true);
-      setLoadingMessage(`Looking up barcode ${barcodeData}...`);
+      setLoadingMessage(`Looking up barcode ${barcodeData}…`);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -253,6 +270,25 @@ export default function CameraScreen() {
     await processAndAnalyze(result.assets[0].uri);
   };
 
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
+
+  // Camera permission gate → designed system-state screen
+  if (!permission.granted) {
+    return (
+      <StateScreen
+        icon="camera"
+        title="Camera access"
+        body="GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored."
+        primary="Enable camera"
+        onPrimary={requestPermission}
+        secondary="Choose a photo instead"
+        onSecondary={handlePickImage}
+      />
+    );
+  }
+
   if (isAnalyzing) {
     return (
       <LoadingSpinner
@@ -260,6 +296,38 @@ export default function CameraScreen() {
         slowMessage="This is taking longer than usual. Cancel and try your scan again."
         slowThresholdMs={30000}
         onCancel={handleCancel}
+      />
+    );
+  }
+
+  // Offline / couldn't-read interrupts route back into the capture flow
+  if (systemState === 'offline') {
+    return (
+      <StateScreen
+        icon="offline"
+        title="You're offline"
+        body="Reconnect to the internet to scan labels and menus. Nothing you scan is stored on your device."
+        primary="Try again"
+        onPrimary={() => setSystemState(null)}
+      />
+    );
+  }
+
+  if (systemState === 'error') {
+    return (
+      <StateScreen
+        icon="alert"
+        iconColor={theme.verdict.caution.accent}
+        iconBg={theme.verdict.caution.surface}
+        title="Couldn't read that"
+        body="The text was too blurry or small to read. Hold steady and fill the frame with the label."
+        primary="Try again"
+        onPrimary={() => setSystemState(null)}
+        secondary="Choose a photo instead"
+        onSecondary={() => {
+          setSystemState(null);
+          handlePickImage();
+        }}
       />
     );
   }
@@ -279,8 +347,15 @@ export default function CameraScreen() {
 
       {/* Viewfinder overlay — outside CameraView to avoid children warning */}
       <View style={styles.overlay} pointerEvents="box-none">
-        <View style={styles.viewfinder} />
-        <Text style={styles.hint}>Point at ingredients, menu, or barcode</Text>
+        <View style={[styles.wordmarkWrap, { top: insets.top + theme.space[4] }]}>
+          <Wordmark />
+        </View>
+        <View style={styles.viewfinder}>
+          <Corners />
+        </View>
+        <Text style={[styles.hint, { bottom: insets.bottom + 132 }]}>
+          Point at a label, menu, or barcode
+        </Text>
       </View>
 
       {/* OCR error toast */}
@@ -291,7 +366,7 @@ export default function CameraScreen() {
       />
 
       {/* Controls: gallery picker + capture button */}
-      <View style={styles.controls}>
+      <View style={[styles.controls, { bottom: insets.bottom + theme.space[6] }]}>
         <TouchableOpacity
           style={styles.galleryButton}
           onPress={handlePickImage}
@@ -300,7 +375,7 @@ export default function CameraScreen() {
           accessibilityLabel="Upload photo from library"
           accessibilityHint="Pick a screenshot or photo to scan for gluten"
         >
-          <Text style={styles.galleryIcon}>{'\uD83D\uDDBC'}</Text>
+          <Icon name="image" size={24} color="#fff" stroke={1.7} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
@@ -321,7 +396,7 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: theme.color.captureBg,
   },
   camera: {
     flex: 1,
@@ -331,43 +406,97 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  wordmarkWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  wordmark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  wordmarkText: {
+    fontFamily: sans('700'),
+    fontSize: 16,
+    letterSpacing: -0.2,
+    color: '#fff',
+  },
+  wordmarkSub: {
+    fontFamily: sans('600'),
+    color: 'rgba(255,255,255,0.55)',
+  },
   viewfinder: {
-    width: '85%',
+    width: '74%',
     aspectRatio: 3 / 4,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 12,
+    marginTop: -16,
+  },
+  corner: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderColor: 'rgba(255,255,255,0.92)',
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 2.5,
+    borderLeftWidth: 2.5,
+    borderTopLeftRadius: 6,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 2.5,
+    borderRightWidth: 2.5,
+    borderTopRightRadius: 6,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 2.5,
+    borderLeftWidth: 2.5,
+    borderBottomLeftRadius: 6,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 2.5,
+    borderRightWidth: 2.5,
+    borderBottomRightRadius: 6,
   },
   hint: {
-    color: '#fff',
-    fontSize: 16,
-    marginTop: 16,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: sans('500'),
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 14.5,
   },
   controls: {
     position: 'absolute',
-    bottom: 40,
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 32,
+    gap: 40,
   },
   captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   captureButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#fff',
   },
   captureButtonDisabled: {
@@ -377,48 +506,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   galleryButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  galleryIcon: {
-    fontSize: 24,
   },
   galleryPlaceholder: {
-    width: 48,
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  permissionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  permissionText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  permissionButton: {
-    backgroundColor: BRAND_COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-  },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    width: 52,
   },
 });

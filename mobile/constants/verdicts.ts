@@ -1,4 +1,10 @@
-export type Verdict = 'safe' | 'caution' | 'unsafe';
+// Verdict type + verdict palette live in theme.ts (the design-token source of
+// truth). Re-export Verdict here so existing imports keep working.
+export type { Verdict } from './theme';
+export { verdictColors } from './theme';
+
+import type { Verdict } from './theme';
+
 export type Confidence = 'high' | 'medium' | 'low';
 export type AnalysisMode = 'label' | 'menu';
 
@@ -21,34 +27,20 @@ export interface AnalysisResult {
   barcode?: string;
 }
 
-// Brand colors for consistent theming
-export const BRAND_COLORS = {
-  primary: '#0D9488',
-  primaryDark: '#0F766E',
-  accent: '#5EEAD4',
-  text: '#0F172A',
-} as const;
+// Verdict display metadata. Colors come from verdictColors (theme.ts); `glyph`
+// is the GIcon name rendered in the verdict band's icon circle.
+export const VERDICT_META: Record<Verdict, { word: string; glyph: 'check' | 'alert' | 'cross' }> = {
+  safe:    { word: 'Safe',    glyph: 'check' },
+  caution: { word: 'Caution', glyph: 'alert' },
+  unsafe:  { word: 'Unsafe',  glyph: 'cross' },
+};
 
-export const VERDICT_CONFIG = {
-  safe: {
-    color: '#16A34A',
-    backgroundColor: '#DCFCE7',
-    label: 'Safe',
-    icon: '✓',
-  },
-  caution: {
-    color: '#F59E0B',
-    backgroundColor: '#FEF3C7',
-    label: 'Caution',
-    icon: '⚠',
-  },
-  unsafe: {
-    color: '#DC2626',
-    backgroundColor: '#FEE2E2',
-    label: 'Unsafe',
-    icon: '✗',
-  },
-} as const;
+// Confidence as a 3-segment meter level.
+export const CONFIDENCE_LEVEL: Record<Confidence, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
 
 export const API_URL = 'https://www.glutenornot.com/api/analyze';
 export const BARCODE_API_URL = 'https://www.glutenornot.com/api/barcode';

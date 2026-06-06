@@ -31,3 +31,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-04-14 | [build-v1.1.1-release](./2026-04-14-build-v1.1.1-release.md) | Build and submit v1.1.1 production release to App Store |
 | 2026-04-20 | [expand-multilingual-prompt](./2026-04-20-expand-multilingual-prompt.md) | Added Dutch + Catalan vocabulary and traveler-context rule to the Claude prompt (Amsterdam/Barcelona prep) |
 | 2026-06-01 | [fix-ocr-sentry-noise](./2026-06-01-fix-ocr-sentry-noise.md) | Suppress ocr_failed Sentry noise (wrapper + beforeSend); resolve MOBILE-2 |
+| 2026-06-06 | [implement-v2-redesign](./2026-06-06-implement-v2-redesign.md) | Implemented "Direction A · Clinic" V2 redesign across web + iOS (tokens, fonts, SVG marks, screens); presentation-only |

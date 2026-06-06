@@ -3,7 +3,9 @@
  * Handles caching and offline fallback
  */
 
-const CACHE_NAME = 'glutenornot-v2';
+// Bump on any change to precached assets so returning PWA users get the new
+// files instead of stale cache (e.g. the V2 redesign). v3: V2 "Clinic" redesign.
+const CACHE_NAME = 'glutenornot-v3';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [
@@ -14,7 +16,8 @@ const PRECACHE_FILES = [
   '/js/app.js',
   '/js/ui.js',
   '/js/camera.js',
-  '/js/api.js'
+  '/js/api.js',
+  '/js/config.js'
 ];
 
 /**

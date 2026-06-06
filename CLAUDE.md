@@ -16,21 +16,24 @@
 │   ├── index.html          # Single-page app
 │   ├── manifest.json       # PWA configuration
 │   ├── sw.js               # Service worker
-│   ├── css/styles.css      # Mobile-first styles
+│   ├── css/styles.css      # Design tokens (:root --gon-*) + V2 component styles
 │   ├── js/
 │   │   ├── app.js          # Main orchestration
 │   │   ├── camera.js       # Photo capture
 │   │   ├── api.js          # API client
-│   │   └── ui.js           # UI state management
+│   │   ├── config.js       # Verdict labels + glyph names
+│   │   └── ui.js           # UI state management (builds result markup + inline SVG marks)
 │   └── tests/              # Vitest tests
 ├── mobile/                 # React Native (Expo) iOS app
 │   ├── app/                # Expo Router screens
-│   │   ├── _layout.tsx     # Root layout
+│   │   ├── _layout.tsx     # Root layout (loads fonts, headerless)
 │   │   ├── index.tsx       # Camera capture screen
-│   │   └── result.tsx      # Result display screen
+│   │   └── result.tsx      # Result display screen (routes to Result/Menu card)
 │   ├── components/
-│   │   ├── ResultCard.tsx      # Verdict display (ingredient labels)
-│   │   ├── MenuResultCard.tsx  # Verdict display (restaurant menus)
+│   │   ├── ResultCard.tsx      # Verdict band + sheet (ingredient labels / barcodes)
+│   │   ├── MenuResultCard.tsx  # Tally + grouped dishes (restaurant menus)
+│   │   ├── StateScreen.tsx     # Full-screen system states (permission / offline / couldn't-read)
+│   │   ├── Icon.tsx            # SVG marks: Icon glyph set, Reticle, VerdictDots (react-native-svg)
 │   │   ├── Toast.tsx           # Auto-dismiss notification component
 │   │   └── LoadingSpinner.tsx
 │   ├── services/
@@ -38,7 +41,9 @@
 │   │   ├── errorReporting.ts # Sentry error reporting wrapper
 │   │   └── storage.ts      # AsyncStorage utilities (scan count, future: history)
 │   ├── constants/
-│   │   └── verdicts.ts     # Verdict colors, types (AnalysisResult, MenuItem), API URL
+│   │   ├── theme.ts        # Design tokens (verdictColors + theme: color/type/space/radius)
+│   │   ├── fonts.ts        # Font map for useFonts + sans()/mono() weight→family helpers
+│   │   └── verdicts.ts     # Types (AnalysisResult, MenuItem), VERDICT_META, API URLs
 │   ├── app.json            # Expo config (bundle ID, permissions)
 │   └── eas.json            # EAS Build config
 ├── api/                    # Shared Vercel serverless functions
@@ -101,6 +106,18 @@ Optional (for barcode lookup fallback sources):
 - **Optimize for in-store use**: Speed, clarity, minimal taps
 - **Keep code simple**: This is an MVP, avoid over-engineering
 - **Run tests before committing**: `npm test` must pass before committing changes
+
+## Design System ("Direction A · Clinic")
+
+The V2 redesign is token-driven — **don't hardcode hex/spacing/type**; reference the tokens.
+
+- **Source of truth**: `web/css/styles.css` `:root` (`--gon-*` custom properties) for web; `mobile/constants/theme.ts` (`theme` + `verdictColors`) for mobile. Both mirror the canonical `GlutenOrNot - V2 Designs/handoff/tokens.json`.
+- **The only saturated color is the verdict** (safe green / caution amber / unsafe red). All other chrome is neutral (ink/sub/faint/line/surfaces). There is no brand hue — the old teal is gone. Caution deliberately uses near-black text on amber and a darker amber (`accent`) for marks on white.
+- **Type**: Hanken Grotesk (UI) + JetBrains Mono (data/caps labels). Mobile loads them via `useFonts` in `_layout.tsx`; use `sans(weight)`/`mono(weight)` from `constants/fonts.ts` (RN needs explicit weighted family names). Web loads them via a Google Fonts `<link>`.
+- **Marks**: scan reticle (logo motif), 3-dot verdict scale, and a line-icon glyph set — `components/Icon.tsx` (mobile, react-native-svg) / inline SVG in `index.html` + `js/ui.js` (web). No emoji.
+- **Reference**: `GlutenOrNot - V2 Designs/handoff/HANDOFF.md` is the build spec; `.jsx` files there are the precise layout reference (reimplement natively, don't copy).
+- **Icon**: dark-reticle mark (white scan frame + 3-dot verdict scale on `#121211`). Web favicon/PWA → `web/assets/icons/icon-180.png` + `icon-1024.png`; mobile app/adaptive/splash → `mobile/assets/*.png` (1024 master from `GlutenOrNot - V2 Designs/assets/appicon/`). Splash/adaptive backgrounds are `#121211`.
+- **Follow-ups not yet done** (HANDOFF §7): upload the (alpha-flattened) `icon-1024` + the 4 App Store screenshots (`GlutenOrNot - V2 Designs/assets/appstore/`) to App Store Connect; a dedicated mark+wordmark splash asset (currently the app icon stands in); Recents/history and dark mode are undesigned.
 
 ## Mobile Roadmap
 
