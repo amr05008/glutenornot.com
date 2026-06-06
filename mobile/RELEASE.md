@@ -18,6 +18,11 @@ needs a build. **You're on the Xcode machine now — work through the steps belo
   (you have them after `git pull` — no file transfer needed). See the README there.
 - Web is already live — the redesign auto-deployed from `main` and is confirmed
   serving at glutenornot.com.
+- **This build is the first to send the `X-Client: ios` analytics header**
+  (PostHog scan-event logging, merged in #13). Until it ships, installed iOS apps
+  report `platform: unknown` in PostHog; this release is what makes iOS scans
+  attribute as `platform: ios`. No new env vars or per-app config — `npm test`
+  in step 1 covers the change. Verify attribution post-release in step 7.
 
 ---
 
@@ -128,6 +133,9 @@ In Xcode:
 - Confirm the live web app shows the redesign (hard-refresh; the service worker
   updates on the next visit). Spot-check a real scan.
 - Sentry `glutenornot-mobile`: watch for any new error-level issues after release.
+- PostHog: after a real scan from an **updated** install, confirm the `scan` event
+  now reports `platform: ios` (older installs keep showing `platform: unknown`
+  until users update — that's expected).
 
 ---
 
