@@ -40,3 +40,5 @@ PROJECT_IDEAS.md
 .env*.local
 
 # App Store assets (screenshots, previews)
+# V2 design source / handoff package — local reference only, not shipped
+GlutenOrNot - V2 Designs/
