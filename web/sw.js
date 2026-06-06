@@ -5,7 +5,8 @@
 
 // Bump on any change to precached assets so returning PWA users get the new
 // files instead of stale cache (e.g. the V2 redesign). v3: V2 "Clinic" redesign.
-const CACHE_NAME = 'glutenornot-v3';
+// v4: ship the api.js that sends the X-Client header (PostHog platform split).
+const CACHE_NAME = 'glutenornot-v4';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [
