@@ -14,6 +14,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
+import { trackScan, normalizeClient } from './_analytics.js';
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -119,6 +120,14 @@ export default async function handler(req, res) {
     // If we have no useful data at all, return a caution result directly
     if (!ingredientContext) {
       incrementRateLimit(clientIP);
+      await trackScan({
+        ip: clientIP,
+        platform: normalizeClient(req.headers['x-client']),
+        method: 'barcode',
+        mode: 'label',
+        verdict: 'caution',
+        dataSource: product.source,
+      });
       return res.status(200).json({
         mode: 'label',
         verdict: 'caution',
@@ -141,6 +150,15 @@ export default async function handler(req, res) {
     analysis.data_source = product.source;
 
     incrementRateLimit(clientIP);
+
+    await trackScan({
+      ip: clientIP,
+      platform: normalizeClient(req.headers['x-client']),
+      method: 'barcode',
+      mode: analysis.mode,
+      verdict: analysis.verdict,
+      dataSource: product.source,
+    });
 
     return res.status(200).json(analysis);
 

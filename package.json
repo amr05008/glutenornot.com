@@ -25,5 +25,8 @@
     "serve": "^14.2.0",
     "vercel": "^50.6.2",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "posthog-node": "^4.18.0"
   }
 }

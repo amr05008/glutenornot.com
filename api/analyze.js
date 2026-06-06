@@ -15,6 +15,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
+import { trackScan, normalizeClient } from './_analytics.js';
 
 /**
  * Claude prompt for ingredient analysis
@@ -243,6 +244,15 @@ export default async function handler(req, res) {
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
+
+    await trackScan({
+      ip: clientIP,
+      platform: normalizeClient(req.headers['x-client']),
+      method: 'ocr',
+      mode: analysis.mode,
+      verdict: analysis.verdict,
+      detectedLanguage: analysis.detected_language,
+    });
 
     return res.status(200).json(analysis);
 
