@@ -1,0 +1,90 @@
+/**
+ * Scan-event analytics (PostHog)
+ *
+ * Records one "scan" event per successful analysis so total scan volume —
+ * across both OCR/photo and barcode paths — is queryable since launch.
+ *
+ * Design constraints:
+ * - Never break or meaningfully slow a scan: env-guarded + try/catch, and the
+ *   PostHog SDK is lazy-imported so this module loads without the dependency.
+ * - No-op until POSTHOG_API_KEY is set, so dev/test/local runs send nothing.
+ * - Privacy: the distinct ID is a one-way hash of the client IP, never the raw IP.
+ */
+import { createHash } from 'node:crypto';
+
+const SCAN_EVENT = 'scan';
+
+/**
+ * Build the PostHog event properties for a scan, omitting absent optional fields.
+ * Pure — no I/O.
+ */
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform } = {}) {
+  const props = { method, verdict };
+  if (mode != null) props.mode = mode;
+  if (detectedLanguage != null) props.detected_language = detectedLanguage;
+  if (dataSource != null) props.data_source = dataSource;
+  if (platform != null) props.platform = platform;
+  return props;
+}
+
+/**
+ * Normalize the client-supplied `X-Client` header into a known platform.
+ * Header values are untrusted, so whitelist to ios/web and bucket everything
+ * else (missing header, old app versions, scripts) as "unknown".
+ * Pure — no I/O.
+ */
+function normalizeClient(raw) {
+  const v = String(raw || '').toLowerCase().trim();
+  return v === 'ios' || v === 'web' ? v : 'unknown';
+}
+
+/**
+ * Stable, privacy-preserving distinct ID derived from the client IP.
+ * Lets PostHog approximate unique devices without ever storing a raw IP.
+ * Pure — no I/O.
+ */
+function anonId(ip) {
+  if (!ip) return 'anonymous';
+  return createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
+}
+
+/**
+ * Fire-and-forget: record a scan event. Safe to await — any failure is swallowed
+ * (logged only) so analytics can never surface an error to the user.
+ *
+ * @param {object} input
+ * @param {string} [input.ip]               client IP, hashed into the distinct ID
+ * @param {'barcode'|'ocr'} input.method    how the scan was initiated
+ * @param {'label'|'menu'} [input.mode]     what the content turned out to be
+ * @param {'safe'|'caution'|'unsafe'} input.verdict
+ * @param {string} [input.detectedLanguage] ISO 639-1, OCR path only
+ * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix)
+ * @param {'ios'|'web'|'unknown'} [input.platform] originating client
+ */
+async function trackScan({ ip, ...fields } = {}) {
+  const apiKey = process.env.POSTHOG_API_KEY;
+  if (!apiKey) return; // not configured — no-op
+
+  try {
+    const { PostHog } = await import('posthog-node');
+    const client = new PostHog(apiKey, {
+      host: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
+      flushAt: 1,
+      flushInterval: 0,
+    });
+    client.capture({
+      distinctId: anonId(ip),
+      event: SCAN_EVENT,
+      properties: buildScanProperties(fields),
+    });
+    // Serverless: flush the batched event before the function freezes, but cap the
+    // wait — shutdown() defaults to a 30s timeout, and this runs on the user-facing
+    // scan response path. 2s is plenty for a single event; a degraded PostHog must
+    // never stall a scan.
+    await client.shutdown(2000);
+  } catch (err) {
+    console.error('trackScan failed:', err);
+  }
+}
+
+export { SCAN_EVENT, buildScanProperties, anonId, normalizeClient, trackScan };

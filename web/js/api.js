@@ -42,7 +42,8 @@ async function analyzeImage(base64Image) {
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Client': 'web'
       },
       body: JSON.stringify({ image: base64Image }),
       signal: controller.signal

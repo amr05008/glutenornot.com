@@ -36,6 +36,7 @@ export async function analyzeImage(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Client': 'ios',
       },
       body: JSON.stringify({ image: base64Image }),
       signal: controller.signal,
@@ -122,7 +123,7 @@ export async function lookupBarcode(
   try {
     const response = await fetch(BARCODE_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client': 'ios' },
       body: JSON.stringify({ barcode }),
       signal: controller.signal,
     });

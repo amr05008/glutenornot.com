@@ -98,6 +98,10 @@ Optional (for barcode lookup fallback sources):
 - `NUTRITIONIX_APP_ID`
 - `NUTRITIONIX_API_KEY`
 
+Optional (for scan-event analytics — `api/_analytics.js`):
+- `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()` is a no-op, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths).
+- `POSTHOG_HOST` (defaults to `https://us.i.posthog.com`; set to the EU host if your project is in EU cloud)
+
 ## Guidelines
 
 - **Be conservative with verdicts**: When uncertain, use "caution" rather than "safe"
