@@ -43,9 +43,10 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] **Menu item deep-dive**: Tap a menu item to ask the server about its likely ingredients (useful when menus don't list ingredients)
 
 ### Visual Polish
-- [ ] Improve screenshots for Apple/Android app store listings
+> Largely addressed by the V2 "Clinic" redesign (see Past 2.2). Remaining items below.
+- [x] Improve screenshots for Apple/Android app store listings — new V2 iOS set in `mobile/store-assets/appstore/` (Android still TODO)
 - [ ] Consider a subtle animation on load 
-- [ ] Add subtle shadows/depth to cards
+- [x] Add subtle shadows/depth to cards — verdict card uses `--gon-shadow-card`
 - [ ] Add micro-interactions (button feedback, transitions)
 - [ ] Consider a light/dark mode toggle
 
@@ -222,4 +223,23 @@ Each completed item should:
 - Verdict colors kept semantically distinct: Safe green (#16A34A), Caution amber (#F59E0B), Unsafe red (#DC2626)
 - Mobile uses centralized `BRAND_COLORS` constant for easy future updates
 - Session log: `.claude/sessions/2026-02-01-rebrand-teal-theme.md`
+- ⚠️ Superseded by 2.2 — the teal brand was removed in the V2 redesign.
+
+### 2.2 Design Refresh — "Direction A · Clinic" ✅
+**Status**: Web live; iOS pending build (2026-06-06)
+**Goal**: Replace the teal brand with a token-driven, type-led redesign where the verdict is the only saturated color
+
+- [x] Wire design tokens (web `--gon-*` in `styles.css`; mobile `constants/theme.ts`) — replaces the teal `BRAND_COLORS` palette from 2.1
+- [x] Add Hanken Grotesk + JetBrains Mono (mobile via `useFonts`, web via Google Fonts)
+- [x] Replace emoji glyphs with SVG marks: scan reticle, 3-dot verdict scale, line-icon set (`mobile/components/Icon.tsx`; inline SVG on web)
+- [x] Rebuild mobile screens + new full-screen Offline / Couldn't-read states; rebuild web upload-first layout + contained verdict card
+- [x] New dark-reticle app icon (web favicon/PWA + iOS app/splash/adaptive, bg `#121211`); bump service-worker cache v2→v3
+- [x] Commit new App Store screenshots to `mobile/store-assets/appstore/`
+- [ ] iOS build + submit — see `mobile/RELEASE.md`
+
+**Notes**:
+- Presentation-only — all API / OCR / barcode / analysis logic preserved.
+- Reverses the 2.1 teal rebrand: no brand hue, neutral chrome, verdict is the only color.
+- Tests: mobile jest 12/12, web vitest 65/65.
+- Session log: `.claude/sessions/2026-06-06-implement-v2-redesign.md`
 

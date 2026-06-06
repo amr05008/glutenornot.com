@@ -30,15 +30,16 @@ Note: `vercel dev` runs the serverless functions locally. For static-only servin
 
 ### Mobile App (iOS)
 
+The app uses native modules (camera, SVG, Sentry), so it needs a **development build** — Expo Go can't run it.
+
 ```bash
 cd mobile
 npm install
-npx expo start
+npx expo run:ios            # builds + runs a dev build in the iOS Simulator
+# npx expo run:ios --device # run on a physical device (needed for the live camera)
 ```
 
-Then:
-- **iOS Simulator**: Press `i` in the terminal
-- **Physical device**: Install "Expo Go" from App Store, scan the QR code
+Requires Xcode. For producing a release build + App Store submission, see [`mobile/RELEASE.md`](./mobile/RELEASE.md).
 
 Scanning requires:
 - `GOOGLE_CLOUD_VISION_API_KEY`
