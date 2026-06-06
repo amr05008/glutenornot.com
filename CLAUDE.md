@@ -48,6 +48,7 @@
 │   └── eas.json            # EAS Build config
 ├── api/                    # Shared Vercel serverless functions
 │   ├── _utils.js           # Shared rate limiting, verdict normalization, constants
+│   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # OCR + Claude analysis
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix)
 │   └── health.js           # Health check
