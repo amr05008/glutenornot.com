@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   parseClaudeResponse,
   buildIngredientContext,
+  assessGlutenSignal,
 } from '../../../api/barcode.js';
 import {
   checkRateLimit,
@@ -149,6 +150,76 @@ describe('buildIngredientContext', () => {
     };
     const context = buildIngredientContext(product);
     expect(context).not.toContain('Certifications');
+  });
+});
+
+describe('assessGlutenSignal', () => {
+  // Regression: KIND Healthy Grains Peanut Butter (barcode 602652171826).
+  // OFF tags `en:gluten` as an allergen (auto-derived from oats) AND `en:no-gluten`
+  // as a label, while the ingredients contain no wheat/barley/rye. The barcode path
+  // wrongly returned "Unsafe" by trusting the allergen tag.
+  const KIND = {
+    ingredients_text:
+      'whole grain blend (oats, brown rice, buckwheat, millet, amaranth, quinoa), dried cane syrup, soy crisp (soy protein isolate, tapioca starch, calcium carbonate), peanut butter, peanut oil, tapioca syrup, peanuts, peanut flour, brown rice syrup, salt, vitamin e (to maintain freshness),',
+    allergens_tags: ['en:gluten', 'en:peanuts', 'en:soybeans'],
+    labels_tags: ['en:no-gluten', 'en:non-gmo-project'],
+  };
+
+  it('flags a gluten allergen tag not corroborated by the ingredient list', () => {
+    const note = assessGlutenSignal(KIND);
+    expect(note).toBeTruthy();
+    expect(note).toMatch(/not corroborated/i);
+    expect(note).toMatch(/do not mark .*unsafe/i);
+  });
+
+  it('flags the gluten-free label vs gluten allergen contradiction', () => {
+    const note = assessGlutenSignal(KIND);
+    expect(note).toMatch(/gluten-free label/i);
+  });
+
+  it('returns null when a gluten allergen tag IS corroborated by ingredients', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'Enriched wheat flour, sugar, butter',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('returns null when there is no gluten allergen tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'oats, brown rice, salt',
+      allergens_tags: ['en:peanuts'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('does not flag when ingredient data is absent (tag cannot be disproven)', () => {
+    const note = assessGlutenSignal({
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+});
+
+describe('buildIngredientContext gluten reconciliation', () => {
+  it('appends the reliability caveat for the KIND regression product', () => {
+    const context = buildIngredientContext({
+      product_name: 'healthy grains granola Peanut Butter',
+      ingredients_text:
+        'whole grain blend (oats, brown rice, buckwheat, millet, amaranth, quinoa), peanut butter, salt',
+      allergens_tags: ['en:gluten', 'en:peanuts', 'en:soybeans'],
+      labels_tags: ['en:no-gluten'],
+    });
+    expect(context).toMatch(/not corroborated/i);
+  });
+
+  it('does not append a caveat for a genuine wheat product', () => {
+    const context = buildIngredientContext({
+      product_name: 'Wheat Crackers',
+      ingredients_text: 'Wheat flour, salt, yeast',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(context).not.toMatch(/not corroborated/i);
   });
 });
 

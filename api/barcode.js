@@ -46,11 +46,25 @@ Respond with JSON only, no additional text.
   "confidence": "high" | "medium" | "low"
 }
 
+### Data Source Reliability (READ FIRST)
+This data comes from Open Food Facts, a crowd-sourced database. Allergen and trace tags are
+frequently auto-derived from ingredients or contributed by users — they are NOT manufacturer
+"Contains:" declarations and are often wrong.
+- **The ingredient list is the source of truth.** Allergen tags may only CORROBORATE or ESCALATE a
+  verdict you already reach from the ingredients. They must never be the sole basis for "unsafe."
+- A "gluten" allergen tag is commonly auto-derived from oats. If the ingredients contain NO wheat,
+  barley, or rye (and no derivative), DO NOT return "unsafe" on the strength of a gluten tag alone —
+  judge by the actual ingredients (oats → caution).
+- If the data contradicts itself (e.g. a gluten allergen tag alongside a gluten-free label), treat
+  the conflict as a reason to lean **caution with low confidence**, not "unsafe."
+- A "DATA RELIABILITY:" note in the product data flags exactly these situations — follow it.
+
 ### Verdict Criteria
-- **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum)
+- **unsafe:** The **ingredients** contain wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum). A bare allergen tag with no matching ingredient is NOT sufficient for unsafe.
 - **caution:**
   - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
   - Has cross-contamination traces for gluten sources
+  - A gluten allergen tag is present but uncorroborated by, or contradicted by, the ingredients/labels
   - Ingredient data is incomplete or missing
 - **safe:** No gluten-containing ingredients, no ambiguous ingredients, no concerning allergen warnings
 
@@ -58,6 +72,7 @@ Respond with JSON only, no additional text.
 - Be conservative—when uncertain, use "caution"
 - Flag ALL oats as "caution" unless explicitly certified gluten-free
 - If ingredient data is missing or sparse, use "caution" with low confidence
+- Do not state a product is "labeled as containing gluten" unless the ingredients actually show a gluten grain — say the data is ambiguous instead
 - Keep explanations to 1-2 sentences
 - Use a warm, supportive tone`;
 
@@ -364,6 +379,55 @@ async function lookupNutritionix(barcode) {
   }
 }
 
+// Grains/derivatives that constitute an actual gluten source in an ingredient list.
+// Oats are deliberately excluded — they are a cross-contamination (caution) concern,
+// not proof of gluten, and are the usual reason a false `en:gluten` tag appears.
+const GLUTEN_GRAIN_PATTERN =
+  /\b(wheat|barley|rye|malt|triticale|spelt|kamut|khorasan|einkorn|emmer|durum|semolina|farina|seitan|bulgur|couscous|matzo|graham)\b/i;
+
+/**
+ * Assess whether a database `gluten` allergen tag is trustworthy.
+ *
+ * Open Food Facts allergen tags are crowd-sourced and frequently auto-derived from
+ * ingredients (e.g. `oats` → `en:gluten`), so a `gluten` tag is NOT equivalent to a
+ * manufacturer "Contains: gluten" declaration. Returns a caveat string to hand to
+ * Claude when the tag is uncorroborated or self-contradictory, or null when the tag
+ * is genuine (or absent, or unverifiable).
+ */
+function assessGlutenSignal(product) {
+  const allergenTags = product.allergens_tags || [];
+  const hasGlutenAllergen = allergenTags.some(
+    tag => tag === 'en:gluten' || tag === 'en:wheat' || tag.includes('gluten')
+  );
+  if (!hasGlutenAllergen) return null;
+
+  const ingredients = product.ingredients_text;
+  // No ingredient list → the tag cannot be disproven; let it stand.
+  if (!ingredients) return null;
+
+  // If the ingredients actually contain a gluten grain, the tag is genuine.
+  if (GLUTEN_GRAIN_PATTERN.test(ingredients)) return null;
+
+  const labelTags = product.labels_tags || [];
+  const hasGlutenFreeLabel = labelTags.some(
+    tag => tag === 'en:no-gluten' || tag.includes('gluten-free') || tag.includes('no-gluten')
+  );
+
+  let note =
+    "DATA RELIABILITY: The 'gluten' allergen tag is NOT corroborated by the ingredient list " +
+    '(no wheat, barley, or rye present). Open Food Facts often auto-derives a gluten tag from oats ' +
+    'or unverified crowd edits, so treat it as low-confidence metadata, not a manufacturer declaration. ' +
+    'DO NOT mark this product unsafe on the strength of that tag alone — base the verdict on the actual ingredients.';
+
+  if (hasGlutenFreeLabel) {
+    note +=
+      ' This product also carries a gluten-free label, which directly contradicts the gluten allergen tag; ' +
+      'treat the conflict as a reason to lean caution with low confidence rather than unsafe.';
+  }
+
+  return note;
+}
+
 /**
  * Build a text summary of ingredient data for Claude
  */
@@ -410,6 +474,12 @@ function buildIngredientContext(product) {
   // Only ingredients_text or allergens_tags are useful for analysis
   if (!product.ingredients_text && (!product.allergens_tags || product.allergens_tags.length === 0)) {
     return null;
+  }
+
+  // Flag unreliable / contradictory gluten metadata so Claude doesn't over-trust it.
+  const glutenSignalNote = assessGlutenSignal(product);
+  if (glutenSignalNote) {
+    parts.push(glutenSignalNote);
   }
 
   return parts.join('\n');
@@ -503,6 +573,7 @@ function parseClaudeResponse(content) {
 export {
   parseClaudeResponse,
   buildIngredientContext,
+  assessGlutenSignal,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
