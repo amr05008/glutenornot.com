@@ -58,31 +58,29 @@ export function ResultCard({ result, scanCount, onClose, onFeedback }: ResultCar
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: theme.space[10] }}>
-      {/* neutral top strip */}
-      <View style={[styles.topBar, { paddingTop: insets.top + theme.space[3] }]}>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={onClose}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        >
-          <Icon name="close" size={19} color={theme.color.ink} stroke={2} />
-        </TouchableOpacity>
-        <Text style={styles.productName} numberOfLines={2}>
-          {result.product_name || ''}
-        </Text>
-        <View style={styles.topBarSpacer} />
-      </View>
-
-      {/* LOUD verdict band */}
-      <View style={[styles.band, { backgroundColor: v.fill }]} accessibilityRole="header" accessibilityLabel={`Verdict: ${meta.word}`}>
+      {/* LOUD full-bleed verdict band — runs to the top of the sheet; the close
+          button floats over it so an absent product title leaves no white void. */}
+      <View
+        style={[styles.band, { backgroundColor: v.fill, paddingTop: insets.top + theme.space[10] }]}
+        accessibilityRole="header"
+        accessibilityLabel={`Verdict: ${meta.word}`}
+      >
         <View style={[styles.bandIcon, { borderColor: iconBorder }]}>
           <Icon name={meta.glyph} size={30} color={v.on} stroke={2.4} />
         </View>
         <Text style={[styles.bandEyebrow, { color: v.on }]}>VERDICT</Text>
         <Text style={[styles.bandWord, { color: v.on }]}>{meta.word}</Text>
       </View>
+
+      <TouchableOpacity
+        style={[styles.closeButton, { top: insets.top + theme.space[3], borderColor: iconBorder }]}
+        onPress={onClose}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Icon name="close" size={19} color={v.on} stroke={2} />
+      </TouchableOpacity>
 
       {/* white sheet */}
       <View style={styles.sheet}>
@@ -93,6 +91,10 @@ export function ResultCard({ result, scanCount, onClose, onFeedback }: ResultCar
             {isBarcode ? `BARCODE · ${result.barcode}` : 'PHOTO · LABEL'}
           </Text>
         </View>
+
+        {!!result.product_name && (
+          <Text style={styles.productName}>{result.product_name}</Text>
+        )}
 
         <Text style={styles.explanation}>{result.explanation}</Text>
 
@@ -161,39 +163,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.color.surface,
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.space[4],
-    paddingBottom: theme.space[3],
-    backgroundColor: theme.color.surface,
-  },
-  iconButton: {
+  closeButton: {
+    position: 'absolute',
+    left: theme.space[4],
     width: 38,
     height: 38,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.color.line,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  productName: {
-    flex: 1,
-    fontFamily: sans('700'),
-    fontSize: 11.5,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
-    color: theme.color.faint,
-    textAlign: 'center',
-    lineHeight: 15,
-    marginHorizontal: theme.space[2],
-  },
-  topBarSpacer: {
-    width: 38,
+    zIndex: 2,
   },
   band: {
-    paddingTop: theme.space[8] + 2,
     paddingHorizontal: theme.space[6],
     paddingBottom: theme.space[10],
     alignItems: 'center',
@@ -241,6 +222,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.4,
     color: theme.color.sub,
+  },
+  productName: {
+    fontFamily: sans('800'),
+    fontSize: 22,
+    letterSpacing: -0.4,
+    lineHeight: 27,
+    color: theme.color.ink,
+    marginBottom: theme.space[3],
   },
   explanation: {
     fontFamily: sans('400'),
