@@ -42,6 +42,39 @@ describe('buildScanProperties', () => {
     expect(props.platform).toBe('web');
   });
 
+  it('maps geo fields to PostHog $geoip_* property names', () => {
+    const props = buildScanProperties({
+      method: 'ocr',
+      verdict: 'safe',
+      country: 'US',
+      region: 'CA',
+      city: 'San Francisco',
+    });
+    expect(props.$geoip_country_code).toBe('US');
+    expect(props.$geoip_subdivision_1_code).toBe('CA');
+    expect(props.$geoip_city_name).toBe('San Francisco');
+  });
+
+  it('omits geo properties when not provided', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe' });
+    expect(props).not.toHaveProperty('$geoip_country_code');
+    expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
+    expect(props).not.toHaveProperty('$geoip_city_name');
+  });
+
+  it('omits geo properties that are null', () => {
+    const props = buildScanProperties({
+      method: 'ocr',
+      verdict: 'safe',
+      country: 'US',
+      region: null,
+      city: null,
+    });
+    expect(props.$geoip_country_code).toBe('US');
+    expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
+    expect(props).not.toHaveProperty('$geoip_city_name');
+  });
+
   it('omits optional fields that are null or undefined', () => {
     const props = buildScanProperties({
       method: 'ocr',

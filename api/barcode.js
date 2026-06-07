@@ -7,6 +7,7 @@ import {
   RATE_LIMIT,
   CLAUDE_MODEL,
   getClientIP,
+  getClientGeo,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
@@ -127,6 +128,7 @@ export default async function handler(req, res) {
         mode: 'label',
         verdict: 'caution',
         dataSource: product.source,
+        ...getClientGeo(req),
       });
       return res.status(200).json({
         mode: 'label',
@@ -158,6 +160,7 @@ export default async function handler(req, res) {
       mode: analysis.mode,
       verdict: analysis.verdict,
       dataSource: product.source,
+      ...getClientGeo(req),
     });
 
     return res.status(200).json(analysis);

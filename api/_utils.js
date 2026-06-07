@@ -25,6 +25,30 @@ function getClientIP(req) {
   return req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
 }
 
+/**
+ * Coarse, IP-derived geography from Vercel's edge headers. Vercel populates
+ * these on every request with no extra config, resolving them from the client
+ * IP at the edge — so we get location without ever handling the raw IP here.
+ * City is percent-encoded by Vercel (e.g. "San%20Francisco"); decode it.
+ * Returns null for any field the edge didn't resolve.
+ */
+function getClientGeo(req) {
+  const h = req.headers || {};
+  let city = h['x-vercel-ip-city'] || null;
+  if (city) {
+    try {
+      city = decodeURIComponent(city);
+    } catch {
+      // Not valid percent-encoding — keep the raw value rather than throw.
+    }
+  }
+  return {
+    country: h['x-vercel-ip-country'] || null,
+    region: h['x-vercel-ip-country-region'] || null,
+    city,
+  };
+}
+
 function checkRateLimit(ip) {
   const now = Date.now();
   const record = rateLimitMap.get(ip);
@@ -88,6 +112,7 @@ export {
   RATE_LIMIT_WINDOW,
   CLAUDE_MODEL,
   getClientIP,
+  getClientGeo,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,

@@ -18,12 +18,18 @@ const SCAN_EVENT = 'scan';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
   if (dataSource != null) props.data_source = dataSource;
   if (platform != null) props.platform = platform;
+  // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
+  // canonical $geoip_* names so the World Map insight and country/region
+  // breakdowns work natively without any extra mapping.
+  if (country != null) props.$geoip_country_code = country;
+  if (region != null) props.$geoip_subdivision_1_code = region;
+  if (city != null) props.$geoip_city_name = city;
   return props;
 }
 
@@ -60,6 +66,9 @@ function anonId(ip) {
  * @param {string} [input.detectedLanguage] ISO 639-1, OCR path only
  * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix)
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
+ * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
+ * @param {string} [input.region]           subdivision/region code (edge geo)
+ * @param {string} [input.city]             city name (edge geo)
  */
 async function trackScan({ ip, ...fields } = {}) {
   const apiKey = process.env.POSTHOG_API_KEY;
