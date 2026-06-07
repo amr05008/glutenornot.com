@@ -6,23 +6,24 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ⚡ Current pickup: shipping the V2 "Clinic" redesign
+## ✅ Last shipped: v1.2.0 — V2 "Clinic" redesign (2026-06-06)
 
-The V2 redesign is merged to `main` (web is already live). The iOS app still
-needs a build. **You're on the Xcode machine now — work through the steps below.**
+Submitted to App Store review on 2026-06-06 (build 1), the first iOS release of the
+V2 redesign and the first build from the **M3 Mac**. For the next release, bump from
+1.2.0 and follow the steps below (the `1.1.1 → 1.2.0` examples below are from this
+release — substitute your new version).
 
-- Suggested version bump: **1.1.1 → 1.2.0** (full visual redesign, no API changes).
-- The new app icon is already committed (`mobile/assets/icon.png`) and ships in the
-  build automatically — no manual icon upload, Xcode flattens the alpha channel.
-- The 4 new App Store screenshots are committed at **`mobile/store-assets/appstore/`**
-  (you have them after `git pull` — no file transfer needed). See the README there.
-- Web is already live — the redesign auto-deployed from `main` and is confirmed
-  serving at glutenornot.com.
-- **This build is the first to send the `X-Client: ios` analytics header**
-  (PostHog scan-event logging, merged in #13). Until it ships, installed iOS apps
-  report `platform: unknown` in PostHog; this release is what makes iOS scans
-  attribute as `platform: ios`. No new env vars or per-app config — `npm test`
-  in step 1 covers the change. Verify attribution post-release in step 7.
+Context still worth knowing:
+- The app icon is committed (`mobile/assets/icon.png`) and ships automatically —
+  no manual icon upload, Xcode flattens the alpha channel.
+- The App Store screenshots live at **`mobile/store-assets/appstore/`** (committed,
+  no file transfer needed). See the README there for captions.
+- v1.2.0 was the first build to send the `X-Client: ios` analytics header (PostHog
+  scan-event logging, #13). Installs from before 1.2.0 report `platform: unknown`;
+  1.2.0+ scans attribute as `platform: ios`. Verify post-release in step 7.
+
+> **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
+> hit several one-time setup issues the M1 never did.
 
 ---
 
@@ -30,11 +31,18 @@ needs a build. **You're on the Xcode machine now — work through the steps belo
 
 - Xcode installed + signed in with the Apple Developer team.
 - Node + the repo cloned; `cd mobile`.
-- **`SENTRY_AUTH_TOKEN` exported in your shell** — required so `prebuild` uploads
-  source maps. Check with `echo $SENTRY_AUTH_TOKEN`. If empty, get a token from
-  Sentry (Settings → Auth Tokens) and `export SENTRY_AUTH_TOKEN=...` (add to
-  `~/.zshrc` to persist). Without it the build still succeeds but ships without
-  source maps (Sentry stack traces stay minified).
+- **Sentry auth token for source-map upload.** ⚠️ For the **GUI Xcode archive** an
+  exported shell variable does **not** reach Xcode (it's launched via LaunchServices,
+  not your shell), so the reliable method is the properties file: add the token as
+  `auth.token=sntrys_…` to **`mobile/ios/sentry.properties`**. Use an **organization
+  auth token** with the **`org:ci`** scope (Sentry → Settings → Organization Tokens;
+  it's the modern all-in-one scope for build uploads — supersedes the legacy
+  `project:releases` + `org:read` personal-token combo). `sentry-cli` reads
+  `auth.token` from this file in both upload phases regardless of how Xcode launched.
+  Validate with `SENTRY_PROPERTIES=ios/sentry.properties npx sentry-cli info`.
+  Note: `ios/` is gitignored and **wiped by `prebuild` (step 4)**, so add the token
+  *after* prebuild. Without it the build still succeeds but ships without source maps
+  (Sentry stack traces stay minified).
 
 ## 1. Sync + install
 
@@ -144,3 +152,32 @@ In Xcode:
 - The `MARKETING_VERSION = 1.0` reset (step 4a) bites on **every** prebuild — don't skip it.
 - `eas.json` has build profiles, but the proven release path is the local Xcode
   archive above. (EAS production builds are an alternative, not required.)
+
+---
+
+## Troubleshooting (first build on a new machine)
+
+The first build on the M3 (Expo SDK 54 / RN 0.81 / Xcode 26) hit several one-time
+setup issues the M1 never did. All are environment, not code (`npm test` + `tsc` were
+clean throughout):
+
+- **CocoaPods not installed** — `expo run:ios` auto-installs it via Homebrew on first
+  run. One-time; just let it finish.
+- **`error: Internal inconsistency error: never received target ended message`** —
+  Xcode build-system race under heavy parallel compilation; fails on a *different
+  random Pod each run*. Fix once (persists in Xcode prefs):
+  `defaults write com.apple.dt.Xcode IDEBuildOperationMaxNumberOfConcurrentCompileTasks 2`
+- **Hermes script phase: `node: No such file or directory`** — `ios/.xcode.env.local`
+  pinned an absolute path to a since-deleted Node version. A clean `prebuild`
+  regenerates it with the current node; or edit it to
+  `export NODE_BINARY=$(command -v node)`.
+- **Link error: `Undefined symbols … facebook::react::Sealable / ShadowNode`** —
+  RN 0.81 ships React Native core as prebuilt binaries; an interrupted build leaves
+  them mismatched. Fix: `npx expo prebuild --platform ios --clean` +
+  `rm -rf ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*`, then rebuild.
+  (The `SwiftUICore.tbd` "not an allowed client" line above it is just a warning.)
+- **"Upload completed with warnings → Upload Symbols Failed" (step 5, benign).**
+  Xcode can't find dSYMs for the prebuilt `React`, `ReactNativeDependencies`, and
+  `hermes` frameworks. Expected for RN prebuilt — the upload still succeeds, click
+  **Done**. It doesn't affect Sentry symbolication (Sentry gets its symbols from the
+  step-0 token during the build, not from Apple).

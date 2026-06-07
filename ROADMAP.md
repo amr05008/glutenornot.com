@@ -226,7 +226,7 @@ Each completed item should:
 - ⚠️ Superseded by 2.2 — the teal brand was removed in the V2 redesign.
 
 ### 2.2 Design Refresh — "Direction A · Clinic" ✅
-**Status**: Web live; iOS pending build (2026-06-06)
+**Status**: Web live; iOS 1.2.0 submitted for App Store review (2026-06-06)
 **Goal**: Replace the teal brand with a token-driven, type-led redesign where the verdict is the only saturated color
 
 - [x] Wire design tokens (web `--gon-*` in `styles.css`; mobile `constants/theme.ts`) — replaces the teal `BRAND_COLORS` palette from 2.1
@@ -235,7 +235,7 @@ Each completed item should:
 - [x] Rebuild mobile screens + new full-screen Offline / Couldn't-read states; rebuild web upload-first layout + contained verdict card
 - [x] New dark-reticle app icon (web favicon/PWA + iOS app/splash/adaptive, bg `#121211`); bump service-worker cache v2→v3
 - [x] Commit new App Store screenshots to `mobile/store-assets/appstore/`
-- [ ] iOS build + submit — see `mobile/RELEASE.md`
+- [x] iOS build + submit — v1.2.0 submitted to App Store review 2026-06-06 (see `mobile/RELEASE.md`)
 
 **Notes**:
 - Presentation-only — all API / OCR / barcode / analysis logic preserved.

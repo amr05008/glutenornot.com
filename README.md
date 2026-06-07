@@ -95,7 +95,12 @@ glutenornot.com/
 2. Add environment variables
 3. Deploy
 
-### Mobile (TestFlight)
+### Mobile (App Store)
+
+The proven release path is a **local Xcode archive** — see [`mobile/RELEASE.md`](./mobile/RELEASE.md)
+for the full step-by-step (version bump → prebuild → archive → upload → submit).
+
+EAS is an alternative, not required:
 
 ```bash
 cd mobile
