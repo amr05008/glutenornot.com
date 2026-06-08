@@ -36,3 +36,4 @@ Quick lookup for Claude Code working sessions.
 | 2026-06-06 | [merge-posthog-analytics](./2026-06-06-merge-posthog-analytics.md) | Reviewed + merged PostHog scan-event analytics (PR #13); reconciled CLAUDE.md/README/RELEASE docs |
 | 2026-06-06 | [build-v1.2.0-release](./2026-06-06-build-v1.2.0-release.md) | Built + submitted iOS v1.2.0 (V2 redesign) to App Store review; first M3 build, cleared 4 build-env issues; updated runbook/ROADMAP/README |
 | 2026-06-07 | [fix-result-band-void](./2026-06-07-fix-result-band-void.md) | Full-bleed iOS verdict band + floating close X so titleless scans have no empty top void; needs new build to ship |
+| 2026-06-07 | [fix-barcode-gluten-tag-trust](./2026-06-07-fix-barcode-gluten-tag-trust.md) | Stop barcode scans returning false Unsafe on uncorroborated OFF gluten allergen tags (KIND 602652171826); added assessGlutenSignal + prompt reliability section; server-side, no new build |
