@@ -92,6 +92,12 @@ Edit `mobile/app.json`:
 "version": "1.2.0",   // was 1.1.1
 ```
 
+In the **same commit**, bump the matching `"version"` in `package.json` and
+`mobile/package.json` (and their lockfile root entries — easiest via
+`npm version 1.2.0 --no-git-tag-version --allow-same-version` run in each dir)
+so `app.json`, both `package.json`s, the lockfiles, and the step-7 git tag all
+agree. They were a single source of truth as of 1.2.0 — keep them in lockstep.
+
 ## 4. Prebuild (regenerates the gitignored native project)
 
 ```bash
