@@ -136,7 +136,31 @@ In Xcode:
    > scanning experience. Same instant gluten checks, now easier to read at a glance.
 4. Attach the build to the **1.2.0** version and **Submit for Review**.
 
-## 7. Post-release sanity (browser, optional)
+## 7. Tag the release (git)
+
+Every App Store submission gets a matching annotated git tag, so the exact
+shipped commit is reproducible (`git checkout vX.Y.Z`). The tag version mirrors
+`mobile/app.json`. Do this from `main` after the build you submitted is committed:
+
+```bash
+git checkout main && git pull
+git tag -a v1.2.0 -m "iOS 1.2.0 — <one-line summary>"   # substitute your version
+git push origin v1.2.0
+```
+
+Optional polish: turn the tag into a GitHub Release and paste the step-6
+"What's New" copy as the notes (free, since you already wrote it):
+
+```bash
+gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New text>"
+```
+
+> History: tags `v1.0.0`–`v1.2.0` were backfilled at their `app.json` bump
+> commits on 2026-06-11. Going forward, tag at submission time (this step).
+> Only the iOS app is tagged — web/API deploy continuously from `main` and have
+> no discrete versions.
+
+## 8. Post-release sanity (browser, optional)
 
 - Confirm the live web app shows the redesign (hard-refresh; the service worker
   updates on the next visit). Spot-check a real scan.
