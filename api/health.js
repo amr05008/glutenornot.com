@@ -20,8 +20,12 @@ import { CLAUDE_MODEL } from './_utils.js';
  * 404 not_found_error) is visible in the response, not just "unavailable".
  * Exported for testing.
  */
+const PING_TIMEOUT_MS = 5000;
+
 async function checkModel(apiKey) {
   const started = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -35,6 +39,7 @@ async function checkModel(apiKey) {
         max_tokens: 1,
         messages: [{ role: 'user', content: 'ping' }],
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -57,7 +62,12 @@ async function checkModel(apiKey) {
 
     return { status: 'ok', model: CLAUDE_MODEL, latencyMs: Date.now() - started };
   } catch (error) {
-    return { status: 'error', model: CLAUDE_MODEL, error: error.message || 'request failed' };
+    const detail = error?.name === 'AbortError'
+      ? `timeout after ${PING_TIMEOUT_MS}ms`
+      : (error.message || 'request failed');
+    return { status: 'error', model: CLAUDE_MODEL, error: detail };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

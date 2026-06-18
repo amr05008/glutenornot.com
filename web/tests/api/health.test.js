@@ -55,6 +55,15 @@ describe('checkModel', () => {
     expect(result.status).toBe('error');
     expect(result.error).toContain('ECONNRESET');
   });
+
+  it('reports a timeout (AbortError) as a clear timeout message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+      Object.assign(new Error('aborted'), { name: 'AbortError' }),
+    ));
+    const result = await checkModel('key');
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('timeout');
+  });
 });
 
 describe('health handler', () => {
@@ -123,6 +132,18 @@ describe('health handler', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.healthy).toBe(true);
     expect(res.body.services.analysis.status).toBe('ok');
+  });
+
+  it('deep check returns 503 when the model pings ok but the Vision key is missing', async () => {
+    process.env.HEALTH_CHECK_TOKEN = 'secret';
+    delete process.env.GOOGLE_CLOUD_VISION_API_KEY;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    const res = mockRes();
+    await handler({ method: 'GET', query: { deep: '1', token: 'secret' }, headers: {} }, res);
+    expect(res.statusCode).toBe(503);
+    expect(res.body.healthy).toBe(false);
+    expect(res.body.services.analysis.status).toBe('ok'); // model fine...
+    expect(res.body.services.ocr.status).toBe('missing_key'); // ...Vision is the culprit
   });
 
   it('deep check returns 503 when the model is retired (token via header)', async () => {
