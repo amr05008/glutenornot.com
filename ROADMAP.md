@@ -81,6 +81,8 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
   - [ ] Verify Vercel production env vars: `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY` (Vercel dashboard → Project Settings → Environment Variables)
 - [x] Ship new app build to deploy not_found filter fix + above changes (v1.1.1 submitted 2026-04-14)
 - [x] Suppress `ocr_failed` Sentry noise (wrapper + `beforeSend`) — ~95% of events, non-actionable photo-quality failures; MOBILE-2 resolved (2026-06-01)
+- [x] Fix 503 outage from retired Claude model (→ `claude-sonnet-4-6`); add deep health canary (`api/health.js` `?deep=1` + `HEALTH_CHECK_TOKEN`) + external uptime monitor so model/key outages alert within minutes (2026-06-18)
+- [x] Classify backend Claude failures (`callClaude`/`ClaudeError` in `api/_utils.js`): retry transient overloads, log real Anthropic `{kind,status,detail}`, surface retryable vs persistent to clients (PR #14, 2026-06-18)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
 ### Product Database (Future — builds on barcode scanning)
