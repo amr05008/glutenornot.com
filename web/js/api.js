@@ -116,9 +116,12 @@ async function handleErrorResponse(response) {
       );
 
     case 503:
+      // The backend distinguishes a transient "busy" (retryable) from a
+      // persistent outage via `message`/`retryable`; surface its message.
       throw new APIError(
         ErrorType.SERVER_ERROR,
-        'Our analysis service is temporarily unavailable. Please try again in a few minutes.'
+        errorData.message || 'Our analysis service is temporarily unavailable. Please try again in a few minutes.',
+        errorData.retryable ? 0 : null
       );
 
     default:

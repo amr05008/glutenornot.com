@@ -5,7 +5,9 @@
 
 import {
   RATE_LIMIT,
-  CLAUDE_MODEL,
+  callClaude,
+  claudeErrorResponse,
+  describeClaudeError,
   getClientIP,
   getClientGeo,
   checkRateLimit,
@@ -183,11 +185,10 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Barcode lookup error:', error);
 
-    if (error.message === 'CLAUDE_ERROR') {
-      return res.status(503).json({
-        error: 'Analysis service unavailable',
-        message: 'Our analysis service is temporarily unavailable. Please try again in a few minutes.'
-      });
+    if (error.name === 'ClaudeError') {
+      console.error('Claude analysis failed:', describeClaudeError(error));
+      const { status, body } = claudeErrorResponse(error);
+      return res.status(status).json(body);
     }
 
     return res.status(500).json({
@@ -489,40 +490,10 @@ function buildIngredientContext(product) {
  * Analyze ingredient context with Claude
  */
 async function analyzeWithClaude(ingredientContext) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('Anthropic API key not configured');
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: `${CLAUDE_PROMPT}\n\n### Product Data:\n${ingredientContext}`
-      }]
-    })
+  const content = await callClaude({
+    maxTokens: 1024,
+    content: `${CLAUDE_PROMPT}\n\n### Product Data:\n${ingredientContext}`,
   });
-
-  if (!response.ok) {
-    console.error('Claude API error:', response.status);
-    throw new Error('CLAUDE_ERROR');
-  }
-
-  const data = await response.json();
-  const content = data.content?.[0]?.text;
-
-  if (!content) {
-    throw new Error('CLAUDE_ERROR');
-  }
 
   return parseClaudeResponse(content);
 }

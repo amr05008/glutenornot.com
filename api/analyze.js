@@ -6,7 +6,9 @@
 import {
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
-  CLAUDE_MODEL,
+  callClaude,
+  claudeErrorResponse,
+  describeClaudeError,
   getClientIP,
   getClientGeo,
   checkRateLimit,
@@ -269,11 +271,10 @@ export default async function handler(req, res) {
       });
     }
 
-    if (error.message === 'CLAUDE_ERROR') {
-      return res.status(503).json({
-        error: 'Analysis service unavailable',
-        message: 'Our analysis service is temporarily unavailable. Please try again in a few minutes.'
-      });
+    if (error.name === 'ClaudeError') {
+      console.error('Claude analysis failed:', describeClaudeError(error));
+      const { status, body } = claudeErrorResponse(error);
+      return res.status(status).json(body);
     }
 
     return res.status(500).json({
@@ -413,40 +414,10 @@ function parseClaudeResponse(content) {
  * Analyze ingredients with Claude
  */
 async function analyzeWithClaude(ocrText) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('Anthropic API key not configured');
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 2048,
-      messages: [{
-        role: 'user',
-        content: `${CLAUDE_PROMPT}\n\n### OCR Text:\n${ocrText}`
-      }]
-    })
+  const content = await callClaude({
+    maxTokens: 2048,
+    content: `${CLAUDE_PROMPT}\n\n### OCR Text:\n${ocrText}`,
   });
-
-  if (!response.ok) {
-    console.error('Claude API error:', response.status);
-    throw new Error('CLAUDE_ERROR');
-  }
-
-  const data = await response.json();
-  const content = data.content?.[0]?.text;
-
-  if (!content) {
-    throw new Error('CLAUDE_ERROR');
-  }
 
   return parseClaudeResponse(content);
 }
