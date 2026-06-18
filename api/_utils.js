@@ -7,7 +7,7 @@ let rateLimitMap = new Map();
 const RATE_LIMIT = 50;
 const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in ms
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 function _setRateLimitMap(map) {
   rateLimitMap = map;
