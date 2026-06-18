@@ -20,7 +20,10 @@ import { CLAUDE_MODEL } from './_utils.js';
  * 404 not_found_error) is visible in the response, not just "unavailable".
  * Exported for testing.
  */
-const PING_TIMEOUT_MS = 5000;
+// Generous: a real ping cold-starting on Vercel (init + inference) can take
+// several seconds — that's normal, not an outage. This only bounds a true hang;
+// hard failures (retired model → 404, bad key → 401) come back instantly.
+const PING_TIMEOUT_MS = 20000;
 
 async function checkModel(apiKey) {
   const started = Date.now();
