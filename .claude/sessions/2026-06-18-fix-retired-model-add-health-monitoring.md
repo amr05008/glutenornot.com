@@ -41,3 +41,13 @@ The diagnosability gap above is already drafted in **PR #14 — "Classify Claude
   - Its `api/health.js` deep-check changes — main already has a better-tested deep canary wired to UptimeRobot→Discord. Do **not** regress that contract.
 - **Mechanics:** rebase the branch onto current `main`; conflict files are `api/_utils.js`, `api/analyze.js`, `api/barcode.js`, `api/health.js`. Reconcile the two test suites (`web/tests/api/claude.test.js` from #14 + main's `web/tests/api/health.test.js` — keep both, dedupe overlap). `npm test` must pass. Verify against prod (`?deep=1` still `status:ok`; trip a classified failure in logs if feasible). Run systematic-debugging + grill before shipping.
 - **Note:** a 404 (retired model) classifies as non-retryable in #14's scheme — correct; retry wouldn't have fixed today's outage, but the status logging would have made it instantly diagnosable, and the retry covers genuine overloads.
+
+### Resolution (same day, follow-up session)
+
+PR #14 rebased onto current `main` and reconciled. Now **`mergeable: clean`**, 1 commit, 6 files (+363/−80), all 123 tests pass.
+
+- **Conflicts resolved:** `api/_utils.js` — kept main's `CLAUDE_MODEL = 'claude-sonnet-4-6'`, added #14's `callClaude`/`ClaudeError`/`claudeErrorResponse`/`describeClaudeError`. `api/health.js` — took main's version verbatim (dropped #14's deep-check; main's canary contract untouched). `analyze.js`/`barcode.js`/`web/js/api.js` applied cleanly (main hadn't touched them).
+- **Tests reconciled:** no actual overlap — #14's `claude.test.js` tests the `_utils` functions, main's `health.test.js` tests `health.js`; both kept. Fixed #14's one stale assertion that hardcoded the retired model id — now asserts the `CLAUDE_MODEL` constant so it tracks the configured model (won't rot on the next swap).
+- **Grill caught two gaps, both fixed:** (1) `web/sw.js` cache not bumped though precached `api.js` changed → v4→v5; (2) commit message + PR title/body still said "add deep health check" (no longer true) → rewritten to "Classify Claude API failures and report real upstream status".
+- **Production baseline before merge:** `/api/health` → `healthy:true`; deep mode correctly gated (401 without token). The new `{kind,status,detail}` failure logging can only be exercised post-merge/deploy.
+- **Branch force-pushed** (`--force-with-lease`). Ready to merge — not yet merged.
