@@ -25,3 +25,19 @@ The app's only Claude model, `claude-sonnet-4-20250514`, hit its scheduled Anthr
 - **Backend diagnosability gap (not yet fixed):** `analyze.js`/`barcode.js` still collapse upstream failures into a generic `CLAUDE_ERROR` and only `console.error` to Vercel logs — root cause needed a manual repro. The deep health check now surfaces the model's status, but reporting the real upstream status from the serverless functions to Sentry is a worthwhile follow-up.
 - UptimeRobot free tier has no custom-header support, so the monitor passes the token via `?token=` in the URL (logged in UptimeRobot/Vercel/Discord; low-value token — can rotate via `openssl rand -hex 16` → update Vercel `HEALTH_CHECK_TOKEN` + redeploy + monitor URL).
 - Verified end to end: 8/8 healthy deep pings, real DOWN/UP alerts delivered to Discord `#glutenornot`, GLUTENORNOT-MOBILE-2 resolved and quiet since the fix (Last Seen frozen at 01:06Z).
+
+## Follow-up handoff (next session): land backend error classification via PR #14
+
+The diagnosability gap above is already drafted in **PR #14 — "Classify Claude API failures and add deep health check"** (branch `claude/error-investigation-ti4yxg`), opened during this same incident from a different (wrong) hypothesis: it assumed a transient Anthropic overload; the real cause was the model retirement, already fixed on `main`. The PR is currently **CONFLICTING** with `main` because today's commits touch the same files.
+
+**Goal:** land its classification/retry/logging; drop its now-redundant health check.
+
+- **Keep from PR #14** (not on main, valuable):
+  - Shared `callClaude()` with exponential-backoff retry on transient failures (429 / 529 / 5xx / network).
+  - Typed `ClaudeError` classifying `overloaded` / `auth` / `credit` / `bad_request` / `empty`.
+  - `claudeErrorResponse()` → retryable `ANALYSIS_BUSY` vs non-retryable `ANALYSIS_UNAVAILABLE`, **logging the real Anthropic status `{kind, status, detail}`** (this closes the gap that made today's root cause need a manual repro).
+  - Client surfacing in `web/js/api.js` (mobile picks up `data.message` already).
+- **Drop from PR #14** (superseded by what shipped to main today):
+  - Its `api/health.js` deep-check changes — main already has a better-tested deep canary wired to UptimeRobot→Discord. Do **not** regress that contract.
+- **Mechanics:** rebase the branch onto current `main`; conflict files are `api/_utils.js`, `api/analyze.js`, `api/barcode.js`, `api/health.js`. Reconcile the two test suites (`web/tests/api/claude.test.js` from #14 + main's `web/tests/api/health.test.js` — keep both, dedupe overlap). `npm test` must pass. Verify against prod (`?deep=1` still `status:ok`; trip a classified failure in logs if feasible). Run systematic-debugging + grill before shipping.
+- **Note:** a 404 (retired model) classifies as non-retryable in #14's scheme — correct; retry wouldn't have fixed today's outage, but the status logging would have made it instantly diagnosable, and the retry covers genuine overloads.
