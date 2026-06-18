@@ -103,6 +103,9 @@ Optional (for scan-event analytics — `api/_analytics.js`):
 - `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()` is a no-op, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths).
 - `POSTHOG_HOST` (defaults to `https://us.i.posthog.com`; set to the EU host if your project is in EU cloud)
 
+Optional (for proactive outage detection — `api/health.js`):
+- `HEALTH_CHECK_TOKEN` (any random secret). When unset, the deep health check is disabled and `/api/health` reports key presence only. When set, `GET /api/health?deep=1` with a matching `x-health-token` header (or `?token=`) pings the live Claude model (`max_tokens:1`) and returns 503 with the upstream status if the model is retired/unreachable or the key is invalid. An external uptime monitor hits this on an interval so an analysis outage alerts us instead of going unnoticed (this is how we'd have caught the `claude-sonnet-4-20250514` retirement). Generate with `openssl rand -hex 16`.
+
 ## Guidelines
 
 - **Be conservative with verdicts**: When uncertain, use "caution" rather than "safe"

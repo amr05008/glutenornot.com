@@ -1,7 +1,65 @@
 /**
  * Health Check Endpoint
- * Returns status of dependent services
+ * Returns status of dependent services.
+ *
+ * Two modes:
+ *  - Shallow (default): reports whether the required API keys are configured.
+ *  - Deep (?deep=1, gated by HEALTH_CHECK_TOKEN): actually pings the Claude
+ *    model so a retired/unreachable model or an invalid key is caught
+ *    proactively — not just key presence. This is what an external uptime
+ *    monitor should hit on an interval so an analysis outage pages us instead
+ *    of going unnoticed.
  */
+
+import { CLAUDE_MODEL } from './_utils.js';
+
+/**
+ * Minimal, cheap liveness ping against the configured Claude model.
+ * max_tokens:1 keeps the cost to a few tokens per call. On failure it captures
+ * the upstream HTTP status + error type so the cause (e.g. a retired model →
+ * 404 not_found_error) is visible in the response, not just "unavailable".
+ * Exported for testing.
+ */
+async function checkModel(apiKey) {
+  const started = Date.now();
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'ping' }],
+      }),
+    });
+
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const err = await response.json();
+        if (err?.error?.type) {
+          detail = `${err.error.type}: ${err.error.message || ''}`.trim();
+        }
+      } catch {
+        // Non-JSON error body — keep the HTTP status as the detail.
+      }
+      return {
+        status: 'error',
+        model: CLAUDE_MODEL,
+        upstreamStatus: response.status,
+        error: detail,
+      };
+    }
+
+    return { status: 'ok', model: CLAUDE_MODEL, latencyMs: Date.now() - started };
+  } catch (error) {
+    return { status: 'error', model: CLAUDE_MODEL, error: error.message || 'request failed' };
+  }
+}
 
 export default async function handler(req, res) {
   // Only allow GET
@@ -9,26 +67,50 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const hasVisionKey = !!process.env.GOOGLE_CLOUD_VISION_API_KEY;
+  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+
   const health = {
     healthy: true,
     timestamp: new Date().toISOString(),
     services: {
-      ocr: { status: 'unknown' },
-      analysis: { status: 'unknown' }
-    }
+      ocr: { status: hasVisionKey ? 'configured' : 'missing_key' },
+      analysis: { status: hasAnthropicKey ? 'configured' : 'missing_key' },
+    },
   };
 
-  // Check if API keys are configured
-  const hasVisionKey = !!process.env.GOOGLE_CLOUD_VISION_API_KEY;
-  const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+  const deepRequested = req.query?.deep === '1' || req.query?.deep === 'true';
 
-  health.services.ocr.status = hasVisionKey ? 'configured' : 'missing_key';
-  health.services.analysis.status = hasAnthropicKey ? 'configured' : 'missing_key';
+  if (!deepRequested) {
+    // Shallow check (unchanged): key presence only.
+    health.healthy = hasVisionKey && hasAnthropicKey;
+    return res.status(health.healthy ? 200 : 503).json(health);
+  }
 
-  // Overall health is true only if both keys are configured
-  health.healthy = hasVisionKey && hasAnthropicKey;
+  // Deep check: gated by a secret so public callers can't burn our token budget.
+  const expected = process.env.HEALTH_CHECK_TOKEN;
+  const provided = req.headers?.['x-health-token'] || req.query?.token;
 
-  const statusCode = health.healthy ? 200 : 503;
+  if (!expected) {
+    // Disabled by default until the secret is configured (mirrors analytics no-op).
+    health.services.analysis.deep = 'disabled';
+    health.healthy = hasVisionKey && hasAnthropicKey;
+    return res.status(health.healthy ? 200 : 503).json(health);
+  }
 
-  return res.status(statusCode).json(health);
+  if (provided !== expected) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing health token' });
+  }
+
+  if (!hasAnthropicKey) {
+    health.healthy = false;
+    return res.status(503).json(health);
+  }
+
+  health.services.analysis = await checkModel(process.env.ANTHROPIC_API_KEY);
+  health.healthy = health.services.analysis.status === 'ok' && hasVisionKey;
+
+  return res.status(health.healthy ? 200 : 503).json(health);
 }
+
+export { checkModel };
