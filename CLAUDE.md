@@ -75,6 +75,11 @@ npx expo start --ios        # iOS simulator
 ```
 
 ### iOS Build (Local via Xcode)
+
+> **Shipping a release?** Follow **`mobile/RELEASE.md`** — it is the complete runbook
+> (version lockstep, post-prebuild patches, Sentry token, smoke test, tag, close-out).
+> The commands below are only the bare build loop for local development.
+
 ```bash
 cd mobile
 npx expo prebuild --platform ios --clean   # Generate native project
