@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import handler, { checkModel } from '../../../api/health.js';
+import { CLAUDE_MODEL } from '../../../api/_utils.js';
 
 function mockRes() {
   return {
@@ -22,7 +23,7 @@ describe('checkModel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
     const result = await checkModel('key');
     expect(result.status).toBe('ok');
-    expect(result.model).toBe('claude-sonnet-4-6');
+    expect(result.model).toBe(CLAUDE_MODEL);
     expect(typeof result.latencyMs).toBe('number');
   });
 
@@ -30,7 +31,7 @@ describe('checkModel', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
-      json: async () => ({ error: { type: 'not_found_error', message: 'model: claude-sonnet-4-6' } }),
+      json: async () => ({ error: { type: 'not_found_error', message: `model: ${CLAUDE_MODEL}` } }),
     }));
     const result = await checkModel('key');
     expect(result.status).toBe('error');
