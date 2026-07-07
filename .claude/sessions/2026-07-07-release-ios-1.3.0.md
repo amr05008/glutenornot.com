@@ -20,4 +20,5 @@ Cut iOS 1.3.0 following mobile/RELEASE.md: preflight (tsc + 40 jest green), 4-fi
 Post-release watch (next few days):
 - Sentry `glutenornot-mobile`: new error-level issues after rollout
 - PostHog: `scan` events from `app_version 1.3.0` installs; `scan_failed` reasons now that failure tracking is live; whether the caution split (`had_ingredient_data`) changes the picture
-- App Store privacy label was to be changed at submission ("Data Not Collected" → "Data Not Linked to You") — confirm done and check the ROADMAP item
+- App Store privacy label changed at submission ("Data Not Collected" → "Data Not Linked to You") — confirmed by Aaron, ROADMAP item checked
+- **7-day rollout watch armed** (2026-07-07): daily digest to the #glutenornot Discord channel at ~9:03am ET through 2026-07-14 — PostHog scans/failures/caution-split, Sentry check, health probe. Webhook = `DISCORD_WEBHOOK_URL` in the repo's gitignored `.env`. Job is session-scoped to the cos-m1 tmux session (auto-expires day 7); if that session dies, re-arm it.

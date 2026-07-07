@@ -7,7 +7,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ## Planning (In priority order)
 ### iOS app
-- [ ] release latest version with fixes from what broke in v1.0. **OWNER = Roy**
+- [x] release latest version with fixes from what broke in v1.0. **OWNER = Roy** — long superseded (v1.1.x → v1.2.0 → v1.3.0 all shipped; latest submitted 2026-07-07)
 
 ### Android App
 - [ ] Build and release initial Android app on google play store **OWNER = Batch**

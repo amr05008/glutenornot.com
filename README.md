@@ -11,6 +11,8 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 - **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
+- **Scan history**: Recent scans saved on-device (iOS) — no account, clearable anytime
+- **Multilingual**: Analyzes labels and menus in any language (dedicated Spanish, Dutch, Catalan, and French support)
 - **Offline support**: Works as a PWA with offline fallback
 - **Privacy-focused**: No accounts required, no images stored
 - **Mobile app**: iOS app via React Native/Expo
