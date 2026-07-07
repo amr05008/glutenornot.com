@@ -6,12 +6,12 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.2.0 — V2 "Clinic" redesign (2026-06-06)
+## ✅ Last shipped: v1.3.0 — Recents scan history (2026-07-07)
 
-Submitted to App Store review on 2026-06-06 (build 1), the first iOS release of the
-V2 redesign and the first build from the **M3 Mac**. For the next release, bump from
-1.2.0 and follow the steps below (the `1.1.1 → 1.2.0` examples below are from this
-release — substitute your new version).
+Submitted to App Store review on 2026-07-07 (build 1): Recents scan history
+(local-only, cap 50), the in-app rating prompt (expo-store-review), and the June
+full-bleed result-band fix. Version examples below still read `1.2.0` — substitute
+your new version.
 
 Context still worth knowing:
 - The app icon is committed (`mobile/assets/icon.png`) and ships automatically —
@@ -20,7 +20,10 @@ Context still worth knowing:
   no file transfer needed). See the README there for captions.
 - v1.2.0 was the first build to send the `X-Client: ios` analytics header (PostHog
   scan-event logging, #13). Installs from before 1.2.0 report `platform: unknown`;
-  1.2.0+ scans attribute as `platform: ios`. Verify post-release in step 7.
+  1.2.0+ scans attribute as `platform: ios`.
+- v1.3.0's submission also changed the App Store **privacy label** ("Data Not
+  Collected" → "Data Not Linked to You": Usage Data + Coarse Location) to match the
+  rewritten privacy policy — keep the two in sync in future releases.
 
 > **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
 > hit several one-time setup issues the M1 never did.
@@ -43,6 +46,10 @@ Context still worth knowing:
   Note: `ios/` is gitignored and **wiped by `prebuild` (step 4)**, so add the token
   *after* prebuild. Without it the build still succeeds but ships without source maps
   (Sentry stack traces stay minified).
+  **As of 1.3.0 the token also lives permanently in `~/.sentryclirc`** (`[auth]`
+  `token=…`, perms 600) — sentry-cli reads that global file from Xcode build phases
+  too, so source maps survive even if the sentry.properties step is forgotten. The
+  properties-file step above is kept as belt-and-suspenders.
 
 ## 1. Sync + install
 
@@ -57,7 +64,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — should be 12/12
+npm test             # jest — all green (40 tests as of 1.3.0)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -68,6 +75,9 @@ work** — you need a dev build:
 ```bash
 npx expo run:ios            # builds + runs a dev build in the iOS simulator
 # npx expo run:ios --device # use a physical device for the live camera + barcode
+# npx expo run:ios --configuration Release   # self-contained JS bundle, no Metro —
+#   closest to what ships, and the right variant when an agent drives the build
+#   (the plain dev build needs Metro attached to load JS)
 ```
 
 Verify in the **simulator**:
@@ -78,6 +88,8 @@ Verify in the **simulator**:
 - [ ] Pick a photo via the library button → **Reading** → **Result**: full-bleed
       verdict band + white sheet (source chip, flagged rows, confidence meter).
 - [ ] A menu photo → **tally + grouped dishes**.
+- [ ] **Recents** (1.3.0+): clock button right of the shutter → history list; tap a row
+      reopens the saved result; **Clear** empties with a confirm.
 - [ ] Airplane mode → **Offline** screen; a blurry/unreadable photo → **Couldn't read** screen.
 
 Verify on a **physical device** (camera doesn't exist in the simulator):
