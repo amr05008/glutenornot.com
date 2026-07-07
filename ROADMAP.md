@@ -12,8 +12,8 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 ### Android App
 - [ ] Build and release initial Android app on google play store **OWNER = Batch**
 
-### In app star rating prompt 
- - [ ]  add the native iOS rating prompt to the app (after a successful scan, for example). It's the highest-conversion way to collect ratings since users don't leave the app. Can maybe use SKStoreReviewController / requestReview API — Expo has expo-store-review for this.
+### In app star rating prompt ✅
+ - [x] Native iOS rating prompt via `expo-store-review` (2026-07-06): fires on the result screen 2s after a successful scan, once lifetime scans ≥ 3, at most once per install (`mobile/services/review.ts`); all failures swallowed so it can never break a result. **Ships with the next iOS build.**
 
 ### Restaurant Menu Scanner Enhancement
 #### Phase 1 — Backend-only (no app update required) ✅
@@ -55,8 +55,9 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Add Dutch ingredient vocabulary, allergen phrases, and café-dish watchlist (Amsterdam trip)
 - [x] Add Catalan ingredient vocabulary, allergen phrases, and dish watchlist (Barcelona trip)
 - [x] Add "Traveler Context" rule — non-English menus get show-the-server phrase in caution notes
+- [x] Add French glossary block — ingredients, allergen phrases, dish watchlist (2026-07-06; prioritized by PostHog: `fr` detections + Canada traffic)
 - [ ] Add Portuguese ingredient vocabulary and allergen phrases
-- [ ] Add French / Italian / German glossary blocks
+- [ ] Add Italian / German glossary blocks
 - [ ] Add UI language indicator badge on result screens (optional, deferred)
 
 ### Scan History

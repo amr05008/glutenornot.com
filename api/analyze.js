@@ -87,6 +87,23 @@ The OCR text may be in any language — commonly Spanish, Catalan, Dutch, French
 - pa amb tomàquet (bread with tomato — bread-based), coca (flatbread), bunyols (fritters)
 - croquetes, canelons (wheat pasta), fideuà (wheat noodles — unlike paella, which uses rice)
 
+**Common French gluten-containing ingredients:**
+- blé / froment (wheat), orge (barley), seigle (rye), avoine (oats — treat as caution), épeautre (spelt)
+- farine de blé / farine (wheat flour / flour), amidon de blé (wheat starch), gluten de blé (wheat gluten)
+- malt / extrait de malt (malt / malt extract), semoule (semolina), son de blé (wheat bran)
+- chapelure (breadcrumbs), levure de bière (brewer's yeast), couscous
+
+**Common French allergen phrases:**
+- "Contient du gluten" = Contains gluten
+- "Peut contenir des traces de blé" = May contain traces of wheat
+- "Fabriqué dans un atelier utilisant du blé" = Made in a facility that uses wheat
+- "Sans gluten" = Gluten-free (still verify ingredients)
+
+**Common French restaurant dishes that contain gluten** (flag as unsafe unless GF substitution is offered):
+- croissant / viennoiseries, baguette / pain (bread), quiche, croque-monsieur / croque-madame
+- crêpes (wheat batter — galettes de sarrasin are buckwheat and often safe, but ask if the batter is pure buckwheat)
+- anything "pané(e)" (breaded) or "en croûte" (in pastry), gratins (béchamel usually contains flour), tartes / pâtisseries, profiteroles / éclairs
+
 ### Output Format
 Respond with JSON only, no additional text.
 
@@ -119,7 +136,7 @@ Note: Omit \`detected_language\` only when the text is in English.
 ### For Ingredient Labels
 
 #### Verdict Criteria
-- **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum) — or their equivalents in any language (e.g., Spanish: harina de trigo, cebada, centeno, malta, sémola, espelta; Dutch: tarwe, gerst, rogge, mout, griesmeel, spelt, tarwegluten, tarwezetmeel; Catalan: blat, ordi, sègol, malt, sèmola, espelta, midó de blat)
+- **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum) — or their equivalents in any language (e.g., Spanish: harina de trigo, cebada, centeno, malta, sémola, espelta; Dutch: tarwe, gerst, rogge, mout, griesmeel, spelt, tarwegluten, tarwezetmeel; Catalan: blat, ordi, sègol, malt, sèmola, espelta, midó de blat; French: blé, farine de blé, orge, seigle, malt, semoule, épeautre, amidon de blé)
 - **caution:**
   - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
   - Has "may contain" warnings for gluten sources (in any language, e.g., "puede contener trazas de trigo")

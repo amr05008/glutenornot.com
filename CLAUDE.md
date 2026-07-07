@@ -39,7 +39,8 @@
 │   ├── services/
 │   │   ├── api.ts          # API client (calls production backend)
 │   │   ├── errorReporting.ts # Sentry error reporting wrapper
-│   │   └── storage.ts      # AsyncStorage utilities (scan count, future: history)
+│   │   ├── review.ts       # In-app App Store rating prompt (expo-store-review, once per install)
+│   │   └── storage.ts      # AsyncStorage utilities (scan count, review-prompted flag, future: history)
 │   ├── constants/
 │   │   ├── theme.ts        # Design tokens (verdictColors + theme: color/type/space/radius)
 │   │   ├── fonts.ts        # Font map for useFonts + sans()/mono() weight→family helpers
@@ -115,7 +116,7 @@ Optional (for proactive outage detection — `api/health.js`):
 
 - **Be conservative with verdicts**: When uncertain, use "caution" rather than "safe"
 - **Flag all oats as "caution"**: Cross-contamination risk unless certified GF
-- **Multilingual analysis**: The Claude prompt detects non-English text and returns an optional `detected_language` field (ISO 639-1). Flagged ingredients are translated in-place as "original (english)" and explanations/notes are always in English. Dedicated vocabulary + allergen-phrase blocks exist for **Spanish, Dutch, and Catalan**; other languages are handled generically by Claude. For non-English menus the prompt injects a "Traveler Context" rule that leans caution on ambiguous items and adds a show-the-server phrase (e.g. *"Bevat dit gluten?"*) in every caution item's `notes`.
+- **Multilingual analysis**: The Claude prompt detects non-English text and returns an optional `detected_language` field (ISO 639-1). Flagged ingredients are translated in-place as "original (english)" and explanations/notes are always in English. Dedicated vocabulary + allergen-phrase blocks exist for **Spanish, Dutch, Catalan, and French**; other languages are handled generically by Claude. For non-English menus the prompt injects a "Traveler Context" rule that leans caution on ambiguous items and adds a show-the-server phrase (e.g. *"Bevat dit gluten?"*) in every caution item's `notes`.
 - **Optimize for in-store use**: Speed, clarity, minimal taps
 - **Keep code simple**: This is an MVP, avoid over-engineering
 - **Run tests before committing**: `npm test` must pass before committing changes

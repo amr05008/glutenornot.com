@@ -128,6 +128,24 @@ describe('CLAUDE_PROMPT multilingual support', () => {
     expect(CLAUDE_PROMPT).toContain('centeno');
   });
 
+  it('includes French gluten-containing ingredient terms', () => {
+    expect(CLAUDE_PROMPT).toContain('farine de blé');
+    expect(CLAUDE_PROMPT).toContain('orge');
+    expect(CLAUDE_PROMPT).toContain('seigle');
+    expect(CLAUDE_PROMPT).toContain('épeautre');
+  });
+
+  it('includes French allergen phrases', () => {
+    expect(CLAUDE_PROMPT).toContain('Contient du gluten');
+    expect(CLAUDE_PROMPT).toContain('Peut contenir des traces de blé');
+    expect(CLAUDE_PROMPT).toContain('Sans gluten');
+  });
+
+  it('includes French restaurant dish watchlist', () => {
+    expect(CLAUDE_PROMPT).toContain('croque-monsieur');
+    expect(CLAUDE_PROMPT).toContain('pané');
+  });
+
   it('instructs Claude to translate flagged ingredients', () => {
     expect(CLAUDE_PROMPT).toMatch(/translat/i);
   });
