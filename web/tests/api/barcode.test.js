@@ -1,9 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import {
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Replace the analytics senders with spies so handler tests can assert on what
+// gets tracked without ever talking to PostHog. Everything else stays real.
+vi.mock('../../../api/_analytics.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, trackScan: vi.fn(), trackScanFailure: vi.fn() };
+});
+
+import handler, {
   parseClaudeResponse,
   buildIngredientContext,
   assessGlutenSignal,
+  lookupOpenFoodFacts,
+  lookupUSDA,
+  lookupNutritionix,
 } from '../../../api/barcode.js';
+import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import {
   checkRateLimit,
   incrementRateLimit,
@@ -223,6 +235,65 @@ describe('buildIngredientContext gluten reconciliation', () => {
   });
 });
 
+// GLUTENORNOT-MOBILE-7: the mobile client aborts barcode lookups at 30s, but the
+// server put no timeout on the external product-database fetches — one slow
+// Open Food Facts response could blow the whole budget. Every external lookup
+// must carry an abort signal and treat a timeout as a miss, not a crash.
+describe('lookup timeouts', () => {
+  function restore(key, value) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lookupOpenFoodFacts passes an abort signal to fetch', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 1, product: { product_name: 'X', ingredients_text: 'water' } }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    await lookupOpenFoodFacts('12345678');
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('lookupOpenFoodFacts returns null (a miss) when every variant times out', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+      Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+    ));
+    await expect(lookupOpenFoodFacts('12345678')).resolves.toBeNull();
+  });
+
+  it('lookupUSDA passes an abort signal to fetch', async () => {
+    const saved = process.env.USDA_API_KEY;
+    process.env.USDA_API_KEY = 'test-key';
+    try {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ foods: [] }) });
+      vi.stubGlobal('fetch', fetchSpy);
+      await lookupUSDA('12345678');
+      expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      restore('USDA_API_KEY', saved);
+    }
+  });
+
+  it('lookupNutritionix passes an abort signal to fetch', async () => {
+    const savedId = process.env.NUTRITIONIX_APP_ID;
+    const savedKey = process.env.NUTRITIONIX_API_KEY;
+    process.env.NUTRITIONIX_APP_ID = 'test-id';
+    process.env.NUTRITIONIX_API_KEY = 'test-key';
+    try {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ foods: [] }) });
+      vi.stubGlobal('fetch', fetchSpy);
+      await lookupNutritionix('12345678');
+      expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      restore('NUTRITIONIX_APP_ID', savedId);
+      restore('NUTRITIONIX_API_KEY', savedKey);
+    }
+  });
+});
+
 describe('rate limiting (barcode)', () => {
   beforeEach(() => {
     _setRateLimitMap(new Map());
@@ -243,6 +314,124 @@ describe('rate limiting (barcode)', () => {
     incrementRateLimit('1.2.3.4');
     const map = _getRateLimitMap();
     expect(map.get('1.2.3.4').count).toBe(1);
+  });
+});
+
+describe('barcode handler analytics', () => {
+  function mockRes() {
+    return {
+      statusCode: null,
+      body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+      setHeader() {},
+    };
+  }
+
+  function restore(key, value) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  const OFF_MISS = { ok: true, json: async () => ({ status: 0 }) };
+
+  let savedEnv;
+  beforeEach(() => {
+    _setRateLimitMap(new Map());
+    vi.clearAllMocks();
+    savedEnv = {
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      usda: process.env.USDA_API_KEY,
+      nutritionixId: process.env.NUTRITIONIX_APP_ID,
+      nutritionixKey: process.env.NUTRITIONIX_API_KEY,
+    };
+    // Keep the waterfall to Open Food Facts only so one fetch stub covers a miss.
+    delete process.env.USDA_API_KEY;
+    delete process.env.NUTRITIONIX_APP_ID;
+    delete process.env.NUTRITIONIX_API_KEY;
+  });
+  afterEach(() => {
+    restore('ANTHROPIC_API_KEY', savedEnv.anthropic);
+    restore('USDA_API_KEY', savedEnv.usda);
+    restore('NUTRITIONIX_APP_ID', savedEnv.nutritionixId);
+    restore('NUTRITIONIX_API_KEY', savedEnv.nutritionixKey);
+    vi.unstubAllGlobals();
+  });
+
+  it('tracks a not_found failure when no database knows the barcode', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OFF_MISS));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: { 'x-client': 'ios' } }, res);
+    expect(res.statusCode).toBe(404);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'barcode', reason: 'not_found', platform: 'ios' })
+    );
+    expect(trackScan).not.toHaveBeenCalled();
+  });
+
+  it('tracks a rate_limited failure when the daily limit is hit', async () => {
+    _getRateLimitMap().set('unknown', { count: 50, windowStart: Date.now() });
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(429);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'barcode', reason: 'rate_limited' })
+    );
+  });
+
+  it('tracks a claude_error failure when analysis fails', async () => {
+    delete process.env.ANTHROPIC_API_KEY; // callClaude throws a persistent ClaudeError
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 1, product: { product_name: 'Crackers', ingredients_text: 'wheat flour' } }),
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(503);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'barcode', reason: 'claude_error' })
+    );
+  });
+
+  it('tracks the no-ingredient-data caution with confidence low and had_ingredient_data false', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 1, product: { product_name: 'Mystery Snack' } }),
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.verdict).toBe('caution');
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ confidence: 'low', hadIngredientData: false })
+    );
+  });
+
+  it('tracks a successful analysis with Claude confidence and had_ingredient_data true', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      verdict: 'safe',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'All clear.',
+      confidence: 'high',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ status: 1, product: { product_name: 'Rice Cakes', ingredients_text: 'rice, salt' } }),
+      };
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ confidence: 'high', hadIngredientData: true })
+    );
+    expect(trackScanFailure).not.toHaveBeenCalled();
   });
 });
 

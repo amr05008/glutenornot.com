@@ -78,11 +78,15 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Add `SENTRY_AUTH_TOKEN` locally for source map uploads during prebuild (exported in `~/.zshrc`; source maps uploaded on 1.1.1 build 2026-04-14). Future: move to EAS secret when switching to EAS builds.
 - [ ] **TODO (post-1.1.1 release — manual browser tasks, deferred from 2026-04-14):**
   - [ ] Set up Sentry alerts on `glutenornot-mobile`: (1) new error-level issues, (2) warning-level event spike (Sentry dashboard → Alerts)
-  - [ ] Verify Vercel production env vars: `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY` (Vercel dashboard → Project Settings → Environment Variables)
+  - [ ] Verify Vercel production env vars: `USDA_API_KEY`, `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY` — now visible in `GET /api/health` → `services.barcode_fallbacks` (no dashboard needed; check after next deploy)
 - [x] Ship new app build to deploy not_found filter fix + above changes (v1.1.1 submitted 2026-04-14)
 - [x] Suppress `ocr_failed` Sentry noise (wrapper + `beforeSend`) — ~95% of events, non-actionable photo-quality failures; MOBILE-2 resolved (2026-06-01)
 - [x] Fix 503 outage from retired Claude model (→ `claude-sonnet-4-6`); add deep health canary (`api/health.js` `?deep=1` + `HEALTH_CHECK_TOKEN`) + external uptime monitor so model/key outages alert within minutes (2026-06-18)
 - [x] Classify backend Claude failures (`callClaude`/`ClaudeError` in `api/_utils.js`): retry transient overloads, log real Anthropic `{kind,status,detail}`, surface retryable vs persistent to clients (PR #14, 2026-06-18)
+- [x] Add 5s per-source timeouts to barcode lookups (OFF/USDA/Nutritionix) so a slow upstream reads as a miss instead of a client timeout — fixes GLUTENORNOT-MOBILE-7 (2026-07-06)
+- [x] Track `scan_failed` PostHog event (reason: not_found | ocr_failed | rate_limited | claude_error | server_error) so scan success rate is measurable (2026-07-06)
+- [x] Add `confidence` + `had_ingredient_data` properties to the `scan` event to split barcode cautions into "no OFF data" vs real judgement calls (2026-07-06)
+- [x] Report USDA/Nutritionix key presence in `/api/health` (`services.barcode_fallbacks`, visibility-only — never flips `healthy`) (2026-07-06)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
 ### Product Database (Future — builds on barcode scanning)

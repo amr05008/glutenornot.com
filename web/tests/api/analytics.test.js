@@ -1,5 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { buildScanProperties, anonId, normalizeClient, trackScan, SCAN_EVENT } from '../../../api/_analytics.js';
+import {
+  buildScanProperties,
+  buildScanFailureProperties,
+  anonId,
+  normalizeClient,
+  trackScan,
+  trackScanFailure,
+  SCAN_EVENT,
+  SCAN_FAILED_EVENT,
+} from '../../../api/_analytics.js';
 
 describe('SCAN_EVENT', () => {
   it('is the stable event name "scan"', () => {
@@ -86,6 +95,79 @@ describe('buildScanProperties', () => {
     expect(props).not.toHaveProperty('mode');
     expect(props).not.toHaveProperty('detected_language');
     expect(props).not.toHaveProperty('data_source');
+  });
+});
+
+describe('buildScanProperties (quality fields)', () => {
+  it('includes confidence when provided', () => {
+    const props = buildScanProperties({ method: 'barcode', verdict: 'caution', confidence: 'low' });
+    expect(props.confidence).toBe('low');
+  });
+
+  it('records had_ingredient_data, including an explicit false', () => {
+    const withData = buildScanProperties({ method: 'barcode', verdict: 'safe', hadIngredientData: true });
+    expect(withData.had_ingredient_data).toBe(true);
+
+    const withoutData = buildScanProperties({ method: 'barcode', verdict: 'caution', hadIngredientData: false });
+    expect(withoutData.had_ingredient_data).toBe(false);
+  });
+
+  it('omits quality fields when not provided', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe' });
+    expect(props).not.toHaveProperty('confidence');
+    expect(props).not.toHaveProperty('had_ingredient_data');
+  });
+});
+
+describe('SCAN_FAILED_EVENT', () => {
+  it('is the stable event name "scan_failed"', () => {
+    expect(SCAN_FAILED_EVENT).toBe('scan_failed');
+  });
+});
+
+describe('buildScanFailureProperties', () => {
+  it('includes method and reason', () => {
+    const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found' });
+    expect(props.method).toBe('barcode');
+    expect(props.reason).toBe('not_found');
+  });
+
+  it('includes platform and maps geo fields to $geoip_* names', () => {
+    const props = buildScanFailureProperties({
+      method: 'ocr',
+      reason: 'ocr_failed',
+      platform: 'ios',
+      country: 'US',
+      region: 'VA',
+      city: 'Virginia Beach',
+    });
+    expect(props.platform).toBe('ios');
+    expect(props.$geoip_country_code).toBe('US');
+    expect(props.$geoip_subdivision_1_code).toBe('VA');
+    expect(props.$geoip_city_name).toBe('Virginia Beach');
+  });
+
+  it('omits optional fields that are not provided', () => {
+    const props = buildScanFailureProperties({ method: 'barcode', reason: 'rate_limited' });
+    expect(props).not.toHaveProperty('platform');
+    expect(props).not.toHaveProperty('$geoip_country_code');
+    expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
+    expect(props).not.toHaveProperty('$geoip_city_name');
+  });
+});
+
+describe('trackScanFailure (unconfigured)', () => {
+  const original = process.env.POSTHOG_API_KEY;
+  afterEach(() => {
+    if (original === undefined) delete process.env.POSTHOG_API_KEY;
+    else process.env.POSTHOG_API_KEY = original;
+  });
+
+  it('no-ops without throwing when POSTHOG_API_KEY is unset', async () => {
+    delete process.env.POSTHOG_API_KEY;
+    await expect(
+      trackScanFailure({ ip: '203.0.113.7', method: 'barcode', reason: 'not_found' })
+    ).resolves.toBeUndefined();
   });
 });
 

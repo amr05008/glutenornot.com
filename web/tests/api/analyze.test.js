@@ -1,5 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import {
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Replace the analytics senders with spies so handler tests can assert on what
+// gets tracked without ever talking to PostHog. Everything else stays real.
+vi.mock('../../../api/_analytics.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, trackScan: vi.fn(), trackScanFailure: vi.fn() };
+});
+
+import handler, {
   normalizeMode,
   parseClaudeResponse,
   checkRateLimit,
@@ -11,6 +19,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap
 } from '../../../api/analyze.js';
+import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import fixtures from '../fixtures/claude-responses.json';
 
 describe('parseClaudeResponse', () => {
@@ -250,6 +259,109 @@ describe('incrementRateLimit', () => {
     expect(record.count).toBe(1);
     expect(record.windowStart).toBeGreaterThanOrEqual(before);
     expect(record.windowStart).toBeLessThanOrEqual(after);
+  });
+});
+
+describe('analyze handler analytics', () => {
+  function mockRes() {
+    return {
+      statusCode: null,
+      body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+      setHeader() {},
+    };
+  }
+
+  function restore(key, value) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  const OCR_TEXT = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'rice, salt' }] }] }) };
+  const OCR_EMPTY = { ok: true, json: async () => ({ responses: [{}] }) };
+
+  let savedEnv;
+  beforeEach(() => {
+    _setRateLimitMap(new Map());
+    vi.clearAllMocks();
+    savedEnv = {
+      vision: process.env.GOOGLE_CLOUD_VISION_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+    };
+    process.env.GOOGLE_CLOUD_VISION_API_KEY = 'vision-key';
+  });
+  afterEach(() => {
+    restore('GOOGLE_CLOUD_VISION_API_KEY', savedEnv.vision);
+    restore('ANTHROPIC_API_KEY', savedEnv.anthropic);
+    vi.unstubAllGlobals();
+  });
+
+  it('tracks a rate_limited failure when the daily limit is hit', async () => {
+    _getRateLimitMap().set('unknown', { count: 50, windowStart: Date.now() });
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+    expect(res.statusCode).toBe(429);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'rate_limited' })
+    );
+  });
+
+  it('tracks an ocr_failed failure when the photo has no readable text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'base64data' }, headers: { 'x-client': 'ios' } }, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.code).toBe('OCR_FAILED');
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'ocr_failed', platform: 'ios' })
+    );
+    expect(trackScan).not.toHaveBeenCalled();
+  });
+
+  it('tracks a claude_error failure when analysis fails', async () => {
+    delete process.env.ANTHROPIC_API_KEY; // callClaude throws a persistent ClaudeError
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_TEXT));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+    expect(res.statusCode).toBe(503);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'claude_error' })
+    );
+  });
+
+  it('tracks a server_error failure when OCR itself errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+    expect(res.statusCode).toBe(500);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'server_error' })
+    );
+  });
+
+  it('tracks a successful scan with Claude confidence', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      verdict: 'safe',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'All clear.',
+      confidence: 'high',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+      }
+      return OCR_TEXT;
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', confidence: 'high' })
+    );
+    expect(trackScanFailure).not.toHaveBeenCalled();
   });
 });
 

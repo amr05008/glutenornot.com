@@ -17,11 +17,17 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, normalizeClient } from './_analytics.js';
+import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 const NUTRITIONIX_API = 'https://trackapi.nutritionix.com/v2/search/item';
+
+// GLUTENORNOT-MOBILE-7: the mobile client aborts barcode requests at 30s, and a
+// lookup can chain up to 3 OFF variants + USDA + Nutritionix + a Claude call.
+// Each external database fetch gets its own budget so one slow upstream reads
+// as a miss (fall through to the next source) instead of a client-side timeout.
+const EXTERNAL_FETCH_TIMEOUT_MS = 5000;
 
 /**
  * Claude prompt for barcode-based ingredient analysis
@@ -87,10 +93,13 @@ export default async function handler(req, res) {
   }
 
   const clientIP = getClientIP(req);
+  const platform = normalizeClient(req.headers['x-client']);
+  const geo = getClientGeo(req);
   const rateLimitResult = checkRateLimit(clientIP);
 
   if (!rateLimitResult.allowed) {
     res.setHeader('Retry-After', Math.ceil(rateLimitResult.resetIn / 1000));
+    await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'rate_limited', ...geo });
     return res.status(429).json({
       error: 'Rate limit exceeded',
       message: `You've reached today's scan limit (${RATE_LIMIT}). Resets in ${formatTimeRemaining(rateLimitResult.resetIn)}.`
@@ -121,6 +130,7 @@ export default async function handler(req, res) {
 
     if (!product) {
       console.log('barcode_not_found', cleanBarcode);
+      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'not_found', ...geo });
       return res.status(404).json({
         error: 'Product not found',
         message: "Product not found in our database. Try scanning the ingredient label instead."
@@ -140,12 +150,14 @@ export default async function handler(req, res) {
       incrementRateLimit(clientIP);
       await trackScan({
         ip: clientIP,
-        platform: normalizeClient(req.headers['x-client']),
+        platform,
         method: 'barcode',
         mode: 'label',
         verdict: 'caution',
+        confidence: 'low',
+        hadIngredientData: false,
         dataSource: product.source,
-        ...getClientGeo(req),
+        ...geo,
       });
       return res.status(200).json({
         mode: 'label',
@@ -172,12 +184,14 @@ export default async function handler(req, res) {
 
     await trackScan({
       ip: clientIP,
-      platform: normalizeClient(req.headers['x-client']),
+      platform,
       method: 'barcode',
       mode: analysis.mode,
       verdict: analysis.verdict,
+      confidence: analysis.confidence,
+      hadIngredientData: true,
       dataSource: product.source,
-      ...getClientGeo(req),
+      ...geo,
     });
 
     return res.status(200).json(analysis);
@@ -187,10 +201,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
+      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'claude_error', ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
+    await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'server_error', ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'
@@ -255,6 +271,7 @@ async function lookupOpenFoodFacts(barcode) {
         headers: {
           'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
         },
+        signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -298,6 +315,7 @@ async function lookupUSDA(barcode) {
       headers: {
         'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
       },
+      signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -347,6 +365,7 @@ async function lookupNutritionix(barcode) {
         'x-app-key': process.env.NUTRITIONIX_API_KEY,
         'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
       },
+      signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -545,6 +564,9 @@ export {
   parseClaudeResponse,
   buildIngredientContext,
   assessGlutenSignal,
+  lookupOpenFoodFacts,
+  lookupUSDA,
+  lookupNutritionix,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,

@@ -108,6 +108,68 @@ describe('health handler', () => {
     expect(res.body.healthy).toBe(false);
   });
 
+  it('reports barcode fallback key presence without affecting health', async () => {
+    const saved = {
+      usda: process.env.USDA_API_KEY,
+      nutritionixId: process.env.NUTRITIONIX_APP_ID,
+      nutritionixKey: process.env.NUTRITIONIX_API_KEY,
+    };
+    delete process.env.USDA_API_KEY;
+    delete process.env.NUTRITIONIX_APP_ID;
+    delete process.env.NUTRITIONIX_API_KEY;
+    try {
+      const res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      // Fallback sources are optional: report them, but never page over them.
+      expect(res.statusCode).toBe(200);
+      expect(res.body.healthy).toBe(true);
+      expect(res.body.services.barcode_fallbacks.usda).toBe('missing_key');
+      expect(res.body.services.barcode_fallbacks.nutritionix).toBe('missing_key');
+    } finally {
+      restore('USDA_API_KEY', saved.usda);
+      restore('NUTRITIONIX_APP_ID', saved.nutritionixId);
+      restore('NUTRITIONIX_API_KEY', saved.nutritionixKey);
+    }
+  });
+
+  it('reports barcode fallback keys as configured when present', async () => {
+    const saved = {
+      usda: process.env.USDA_API_KEY,
+      nutritionixId: process.env.NUTRITIONIX_APP_ID,
+      nutritionixKey: process.env.NUTRITIONIX_API_KEY,
+    };
+    process.env.USDA_API_KEY = 'usda-key';
+    process.env.NUTRITIONIX_APP_ID = 'nx-id';
+    process.env.NUTRITIONIX_API_KEY = 'nx-key';
+    try {
+      const res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      expect(res.body.services.barcode_fallbacks.usda).toBe('configured');
+      expect(res.body.services.barcode_fallbacks.nutritionix).toBe('configured');
+    } finally {
+      restore('USDA_API_KEY', saved.usda);
+      restore('NUTRITIONIX_APP_ID', saved.nutritionixId);
+      restore('NUTRITIONIX_API_KEY', saved.nutritionixKey);
+    }
+  });
+
+  it('reports nutritionix as missing_key when only one of its two keys is set', async () => {
+    const saved = {
+      nutritionixId: process.env.NUTRITIONIX_APP_ID,
+      nutritionixKey: process.env.NUTRITIONIX_API_KEY,
+    };
+    process.env.NUTRITIONIX_APP_ID = 'nx-id';
+    delete process.env.NUTRITIONIX_API_KEY;
+    try {
+      const res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      expect(res.body.services.barcode_fallbacks.nutritionix).toBe('missing_key');
+    } finally {
+      restore('NUTRITIONIX_APP_ID', saved.nutritionixId);
+      restore('NUTRITIONIX_API_KEY', saved.nutritionixKey);
+    }
+  });
+
   it('deep check stays disabled until HEALTH_CHECK_TOKEN is set', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);

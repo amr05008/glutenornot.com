@@ -13,20 +13,41 @@
 import { createHash } from 'node:crypto';
 
 const SCAN_EVENT = 'scan';
+// Failures get their own event (not a property on `scan`) so every existing
+// insight counting `scan` keeps meaning "successful scans".
+const SCAN_FAILED_EVENT = 'scan_failed';
 
 /**
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city, confidence, hadIngredientData } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
   if (dataSource != null) props.data_source = dataSource;
   if (platform != null) props.platform = platform;
+  if (confidence != null) props.confidence = confidence;
+  // Barcode path only: splits caution verdicts into "the database had no
+  // ingredient data" vs a real judgement call on actual ingredients.
+  if (hadIngredientData != null) props.had_ingredient_data = hadIngredientData;
   // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
   // canonical $geoip_* names so the World Map insight and country/region
   // breakdowns work natively without any extra mapping.
+  if (country != null) props.$geoip_country_code = country;
+  if (region != null) props.$geoip_subdivision_1_code = region;
+  if (city != null) props.$geoip_city_name = city;
+  return props;
+}
+
+/**
+ * Build the PostHog event properties for a failed scan attempt.
+ * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error | server_error.
+ * Pure — no I/O.
+ */
+function buildScanFailureProperties({ method, reason, platform, country, region, city } = {}) {
+  const props = { method, reason };
+  if (platform != null) props.platform = platform;
   if (country != null) props.$geoip_country_code = country;
   if (region != null) props.$geoip_subdivision_1_code = region;
   if (city != null) props.$geoip_city_name = city;
@@ -71,6 +92,28 @@ function anonId(ip) {
  * @param {string} [input.city]             city name (edge geo)
  */
 async function trackScan({ ip, ...fields } = {}) {
+  return captureEvent(SCAN_EVENT, ip, buildScanProperties(fields));
+}
+
+/**
+ * Fire-and-forget: record a failed scan attempt so scan success rate is
+ * queryable (successes alone can't show how often users walk away empty-handed).
+ * Same safety contract as {@link trackScan}.
+ *
+ * @param {object} input
+ * @param {string} [input.ip]               client IP, hashed into the distinct ID
+ * @param {'barcode'|'ocr'} input.method    how the scan was initiated
+ * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'} input.reason
+ * @param {'ios'|'web'|'unknown'} [input.platform] originating client
+ * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
+ * @param {string} [input.region]           subdivision/region code (edge geo)
+ * @param {string} [input.city]             city name (edge geo)
+ */
+async function trackScanFailure({ ip, ...fields } = {}) {
+  return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));
+}
+
+async function captureEvent(event, ip, properties) {
   const apiKey = process.env.POSTHOG_API_KEY;
   if (!apiKey) return; // not configured — no-op
 
@@ -83,8 +126,8 @@ async function trackScan({ ip, ...fields } = {}) {
     });
     client.capture({
       distinctId: anonId(ip),
-      event: SCAN_EVENT,
-      properties: buildScanProperties(fields),
+      event,
+      properties,
     });
     // Serverless: flush the batched event before the function freezes, but cap the
     // wait — shutdown() defaults to a 30s timeout, and this runs on the user-facing
@@ -92,8 +135,17 @@ async function trackScan({ ip, ...fields } = {}) {
     // never stall a scan.
     await client.shutdown(2000);
   } catch (err) {
-    console.error('trackScan failed:', err);
+    console.error(`${event} tracking failed:`, err);
   }
 }
 
-export { SCAN_EVENT, buildScanProperties, anonId, normalizeClient, trackScan };
+export {
+  SCAN_EVENT,
+  SCAN_FAILED_EVENT,
+  buildScanProperties,
+  buildScanFailureProperties,
+  anonId,
+  normalizeClient,
+  trackScan,
+  trackScanFailure,
+};

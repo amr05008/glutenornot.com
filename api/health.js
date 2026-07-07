@@ -82,6 +82,8 @@ export default async function handler(req, res) {
 
   const hasVisionKey = !!process.env.GOOGLE_CLOUD_VISION_API_KEY;
   const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+  const hasUsdaKey = !!process.env.USDA_API_KEY;
+  const hasNutritionixKeys = !!(process.env.NUTRITIONIX_APP_ID && process.env.NUTRITIONIX_API_KEY);
 
   const health = {
     healthy: true,
@@ -89,6 +91,13 @@ export default async function handler(req, res) {
     services: {
       ocr: { status: hasVisionKey ? 'configured' : 'missing_key' },
       analysis: { status: hasAnthropicKey ? 'configured' : 'missing_key' },
+      // Optional barcode-lookup fallback sources (Open Food Facts needs no key).
+      // Reported for visibility only — they never affect `healthy`, so a missing
+      // fallback key can't page the uptime monitor.
+      barcode_fallbacks: {
+        usda: hasUsdaKey ? 'configured' : 'missing_key',
+        nutritionix: hasNutritionixKeys ? 'configured' : 'missing_key',
+      },
     },
   };
 
