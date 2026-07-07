@@ -20,7 +20,8 @@ export type IconName =
   | 'barcode'
   | 'message'
   | 'offline'
-  | 'refresh';
+  | 'refresh'
+  | 'history';
 
 interface IconProps {
   name: IconName;
@@ -75,6 +76,12 @@ const PATHS: Record<IconName, (p: { color: string; stroke: number }) => React.Re
       <Path d="M20 4v4h-4" />
       <Path d="M20 12a8 8 0 0 1-13.7 5.6L4 16" />
       <Path d="M4 20v-4h4" />
+    </>
+  ),
+  history: () => (
+    <>
+      <Circle cx={12} cy={12} r={9} />
+      <Path d="M12 7.5V12l3 2" />
     </>
   ),
 };

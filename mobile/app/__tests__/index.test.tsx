@@ -60,10 +60,12 @@ jest.mock('../../services/errorReporting', () => ({
 }));
 jest.mock('../../services/storage', () => ({
   incrementLifetimeScanCount: jest.fn().mockResolvedValue(1),
+  addRecentScan: jest.fn().mockResolvedValue(undefined),
 }));
 
 import CameraScreen from '../index';
 import { analyzeImage, APIError } from '../../services/api';
+import { addRecentScan } from '../../services/storage';
 import * as ImagePicker from 'expo-image-picker';
 
 const mockAnalyzeImage = analyzeImage as jest.MockedFunction<typeof analyzeImage>;
@@ -82,6 +84,42 @@ beforeEach(() => {
 afterEach(() => {
   jest.useRealTimers();
   jest.restoreAllMocks();
+});
+
+describe('CameraScreen recents integration', () => {
+  const SAFE_RESULT = {
+    mode: 'label',
+    verdict: 'safe',
+    flagged_ingredients: [],
+    allergen_warnings: [],
+    explanation: 'All clear.',
+    confidence: 'high',
+  };
+
+  it('saves a successful scan to recent history', async () => {
+    mockAnalyzeImage.mockResolvedValueOnce(SAFE_RESULT as any);
+
+    const { getByLabelText } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalled();
+    });
+    expect(addRecentScan).toHaveBeenCalledWith(SAFE_RESULT);
+  });
+
+  it('has a Recents button that opens the history screen', async () => {
+    const { getByLabelText } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('View recent scans'));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/recents');
+  });
 });
 
 describe('CameraScreen error flow', () => {

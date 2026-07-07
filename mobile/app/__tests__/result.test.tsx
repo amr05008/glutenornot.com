@@ -85,6 +85,17 @@ describe('ResultScreen review prompt', () => {
     expect(mockMaybeRequestReview).not.toHaveBeenCalled();
   });
 
+  it('does not ask when the result was reopened from history (stale moment, not a fresh scan)', () => {
+    mockParams = { result: SAFE_RESULT, scanCount: '10', fromHistory: '1' };
+    render(<ResultScreen />);
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(mockMaybeRequestReview).not.toHaveBeenCalled();
+  });
+
   it('does not ask if the screen closes before the delay elapses', () => {
     mockParams = { result: SAFE_RESULT, scanCount: '3' };
     const { unmount } = render(<ResultScreen />);

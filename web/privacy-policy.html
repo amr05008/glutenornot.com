@@ -106,7 +106,7 @@
     <main class="main">
       <div class="privacy-content">
         <h2>Privacy Policy</h2>
-        <p class="effective-date">Effective Date: February 1, 2026</p>
+        <p class="effective-date">Effective Date: July 6, 2026</p>
 
         <div class="highlight-box">
           <p><strong>The short version:</strong> GlutenOrNot is designed with privacy first. We don't collect personal data, don't require accounts, and don't store your photos. Your scans stay on your device.</p>
@@ -122,18 +122,21 @@
         <ul>
           <li>No user accounts, emails, or personal identifiers</li>
           <li>No device IDs or advertising identifiers</li>
-          <li>No location data</li>
-          <li>No analytics or usage tracking beyond basic aggregate statistics</li>
-          <li>No scan history on our servers</li>
+          <li>No precise location — we never access GPS; anonymous analytics include only an approximate region derived from your IP address (see below)</li>
+          <li>No advertising or cross-site tracking of any kind</li>
+          <li>No record of what you scanned on our servers — ingredient text and images are discarded after processing</li>
           <li>No images are stored — photos are processed and immediately discarded</li>
         </ul>
 
+        <h3>Anonymous Analytics</h3>
+        <p>To understand whether the app is working — how many scans happen, and how often lookups fail — we record one small, anonymous event per scan. Each event contains: the verdict (safe / caution / unsafe), the scan type (photo or barcode), the detected language, and an approximate region (city level, derived from your IP address — the IP itself is never stored, only a one-way hash used to approximate unique-device counts). These events contain no ingredient text, no product names, no photos, and no personal identifiers, and they cannot be linked back to you. They are processed by PostHog (see Third-Party Services below).</p>
+
         <h3>Information Stored Locally on Your Device</h3>
-        <p>The app stores a simple scan counter on your device to show you how many labels you've scanned. This counter:</p>
+        <p>The app stores a small amount of data on your device: a simple scan counter (how many labels you've scanned), a flag remembering whether we've asked you to rate the app, and, in the iOS app, your recent scan results (the verdict and analysis for your last 50 scans, so you can look them up again — never the photos themselves). This data:</p>
         <ul>
           <li>Never leaves your device</li>
           <li>Is not linked to any personal information</li>
-          <li>Can be cleared by uninstalling the app or clearing app data</li>
+          <li>Can be cleared in the app (Recents → Clear) or by uninstalling the app or clearing app data</li>
         </ul>
 
         <h3>Information Processed (But Not Stored)</h3>
@@ -155,6 +158,12 @@
         <h3>Anthropic Claude API</h3>
         <p>We use Anthropic's Claude to analyze extracted ingredient text. Only the text from your label is sent to Anthropic — not the original image or any personal information. For more information, see <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</p>
 
+        <h3>PostHog (Analytics)</h3>
+        <p>We use PostHog to process the anonymous per-scan analytics events described above (verdict, scan type, detected language, approximate region — no ingredient text, photos, or personal identifiers). For more information, see <a href="https://posthog.com/privacy" target="_blank" rel="noopener">PostHog's privacy policy</a>.</p>
+
+        <h3>Sentry (Mobile App Only)</h3>
+        <p>Our iOS app uses Sentry for crash reporting. If the app hits an error, technical details are sent to Sentry so we can fix the bug — device model, OS version, the error message, and a screenshot of the app at the moment of the error. For more information, see <a href="https://sentry.io/privacy/" target="_blank" rel="noopener">Sentry's privacy policy</a>.</p>
+
         <h3>Expo (Mobile App Only)</h3>
         <p>Our iOS app is built with Expo, which provides standard app update functionality. Expo may collect basic crash reports and app update information. For more information, see <a href="https://expo.dev/privacy" target="_blank" rel="noopener">Expo's privacy policy</a>.</p>
 
@@ -163,7 +172,7 @@
 
         <h2>Data Retention</h2>
         <p>We do not retain your data. Images are processed in real-time and immediately discarded. We have no database of user scans or personal information.</p>
-        <p>The only data that persists is your local scan counter, which is stored on your device and never transmitted to us.</p>
+        <p>The only data that persists is your local scan counter and your recent scan results, both stored on your device and never transmitted to us.</p>
 
         <h2>Data Security</h2>
         <p>All data transmitted between your device and our servers is encrypted using HTTPS. We do not store sensitive data, which minimizes security risks.</p>
@@ -172,7 +181,7 @@
         <p>GlutenOrNot is not directed at children under 13 years of age. We do not knowingly collect personal information from children. Since we don't collect personal information from any users, this naturally extends to children as well.</p>
 
         <h2>Your Rights</h2>
-        <p>Since we don't collect or store personal data, there is no personal information for us to access, correct, or delete. Your scan counter is stored locally on your device and can be cleared by uninstalling the app or clearing app data.</p>
+        <p>Since we don't collect or store personal data, there is no personal information for us to access, correct, or delete. Your scan counter and recent scan results are stored locally on your device and can be cleared in the app (Recents → Clear) or by uninstalling the app or clearing app data.</p>
 
         <h2>Changes to This Policy</h2>
         <p>We may update this Privacy Policy from time to time. If we make material changes, we will update the "Effective Date" at the top of this page. We encourage you to review this policy periodically.</p>

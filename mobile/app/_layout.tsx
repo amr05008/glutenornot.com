@@ -40,6 +40,7 @@ function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="recents" />
         <Stack.Screen name="result" options={{ presentation: 'modal' }} />
       </Stack>
     </>

@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { analyzeImage, lookupBarcode, APIError } from '../services/api';
 import { reportError } from '../services/errorReporting';
-import { incrementLifetimeScanCount } from '../services/storage';
+import { incrementLifetimeScanCount, addRecentScan } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Toast } from '../components/Toast';
 import { StateScreen } from '../components/StateScreen';
@@ -97,6 +97,7 @@ export default function CameraScreen() {
 
   const navigateToResult = useCallback(async (result: AnalysisResult) => {
     const scanCount = await incrementLifetimeScanCount();
+    await addRecentScan(result); // never throws — history can't break a scan
     resumedFromBackground.current = false;
     router.push({
       pathname: '/result',
@@ -306,7 +307,7 @@ export default function CameraScreen() {
       <StateScreen
         icon="offline"
         title="You're offline"
-        body="Reconnect to the internet to scan labels and menus. Nothing you scan is stored on your device."
+        body="Scanning needs an internet connection to analyze ingredients. Reconnect and try again."
         primary="Try again"
         onPrimary={() => setSystemState(null)}
       />
@@ -387,7 +388,16 @@ export default function CameraScreen() {
         >
           <View style={[styles.captureButtonInner, !cameraReady && styles.captureButtonInnerDisabled]} />
         </TouchableOpacity>
-        <View style={styles.galleryPlaceholder} />
+        <TouchableOpacity
+          style={styles.galleryButton}
+          onPress={() => router.push('/recents')}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="View recent scans"
+          accessibilityHint="Shows your scan history, stored on this device"
+        >
+          <Icon name="history" size={24} color="#fff" stroke={1.7} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -512,8 +522,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  galleryPlaceholder: {
-    width: 52,
   },
 });

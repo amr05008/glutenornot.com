@@ -15,6 +15,11 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 ### In app star rating prompt ✅
  - [x] Native iOS rating prompt via `expo-store-review` (2026-07-06): fires on the result screen 2s after a successful scan, once lifetime scans ≥ 3, at most once per install (`mobile/services/review.ts`); all failures swallowed so it can never break a result. **Ships with the next iOS build.**
 
+### Privacy claims accuracy
+> Surfaced 2026-07-06 while building Recents: the per-scan PostHog events (since 2026-05-31; hashed IP, verdict, city-level geo) sit uneasily under the current claims.
+- [ ] Update the App Store privacy label from "Data Not Collected" → "Data Not Linked to You" (Usage Data, Coarse Location) — App Store Connect, do with the next release
+- [x] Reword the privacy policy to describe the anonymous per-scan events accurately — new "Anonymous Analytics" section + PostHog and Sentry added to Third-Party Services, "No location data" bullet corrected to "no precise location" (2026-07-06, caught by /grill: don't re-date a policy while it contains a known-false line)
+
 ### Restaurant Menu Scanner Enhancement
 #### Phase 1 — Backend-only (no app update required) ✅
 - [x] Update Claude prompt in `api/analyze.js` to auto-detect menus vs. ingredient labels
@@ -61,9 +66,9 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Add UI language indicator badge on result screens (optional, deferred)
 
 ### Scan History
-- [ ] Store recent scans in localStorage
-- [ ] Show history in a simple list
-- [ ] Allow "scan again" from history
+- [x] **iOS**: Recents screen — last 50 scans in AsyncStorage, tap reopens the saved result, Clear All, history button on the camera controls; privacy policy updated to cover local storage (2026-07-06, ships with next iOS build)
+- [ ] **Web**: Store recent scans in localStorage + show history in a simple list
+- [ ] Allow "scan again" from history (web)
 
 ### Barcode Scanning ✅
 - [x] Barcode scanning via expo-camera (EAN-13, EAN-8, UPC-A, UPC-E)

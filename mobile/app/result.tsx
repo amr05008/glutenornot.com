@@ -10,15 +10,20 @@ import { theme } from '../constants/theme';
 import { sans } from '../constants/fonts';
 
 export default function ResultScreen() {
-  const { result, scanCount } = useLocalSearchParams<{ result: string; scanCount: string }>();
+  const { result, scanCount, fromHistory } = useLocalSearchParams<{
+    result: string;
+    scanCount: string;
+    fromHistory?: string;
+  }>();
   const router = useRouter();
   const count = scanCount ? parseInt(scanCount, 10) : 0;
 
-  // A verdict on screen is the app's happiest moment — ask for a rating here,
-  // after a beat so the sheet never preempts reading the result. Must run
-  // before the early returns below (hooks rules), so it re-checks validity.
+  // A FRESH verdict on screen is the app's happiest moment — ask for a rating
+  // here, after a beat so the sheet never preempts reading the result.
+  // Reopens from Recents don't count. Must run before the early returns below
+  // (hooks rules), so it re-checks validity.
   useEffect(() => {
-    if (!result) return;
+    if (!result || fromHistory === '1') return;
     try {
       JSON.parse(result);
     } catch {

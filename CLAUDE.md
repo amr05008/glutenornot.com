@@ -28,6 +28,7 @@
 │   ├── app/                # Expo Router screens
 │   │   ├── _layout.tsx     # Root layout (loads fonts, headerless)
 │   │   ├── index.tsx       # Camera capture screen
+│   │   ├── recents.tsx     # Scan history list (local-only, taps reopen saved results)
 │   │   └── result.tsx      # Result display screen (routes to Result/Menu card)
 │   ├── components/
 │   │   ├── ResultCard.tsx      # Verdict band + sheet (ingredient labels / barcodes)
@@ -40,7 +41,7 @@
 │   │   ├── api.ts          # API client (calls production backend)
 │   │   ├── errorReporting.ts # Sentry error reporting wrapper
 │   │   ├── review.ts       # In-app App Store rating prompt (expo-store-review, once per install)
-│   │   └── storage.ts      # AsyncStorage utilities (scan count, review-prompted flag, future: history)
+│   │   └── storage.ts      # AsyncStorage utilities (scan count, review-prompted flag, recent scans)
 │   ├── constants/
 │   │   ├── theme.ts        # Design tokens (verdictColors + theme: color/type/space/radius)
 │   │   ├── fonts.ts        # Font map for useFonts + sans()/mono() weight→family helpers
@@ -131,14 +132,14 @@ The V2 redesign is token-driven — **don't hardcode hex/spacing/type**; referen
 - **Marks**: scan reticle (logo motif), 3-dot verdict scale, and a line-icon glyph set — `components/Icon.tsx` (mobile, react-native-svg) / inline SVG in `index.html` + `js/ui.js` (web). No emoji.
 - **Reference**: `GlutenOrNot - V2 Designs/handoff/HANDOFF.md` is the build spec; `.jsx` files there are the precise layout reference (reimplement natively, don't copy).
 - **Icon**: dark-reticle mark (white scan frame + 3-dot verdict scale on `#121211`). Web favicon/PWA → `web/assets/icons/icon-180.png` + `icon-1024.png`; mobile app/adaptive/splash → `mobile/assets/*.png` (1024 master from `GlutenOrNot - V2 Designs/assets/appicon/`). Splash/adaptive backgrounds are `#121211`.
-- **Follow-ups not yet done** (HANDOFF §7): upload the (alpha-flattened) `icon-1024` + the 4 App Store screenshots (`GlutenOrNot - V2 Designs/assets/appstore/`) to App Store Connect; a dedicated mark+wordmark splash asset (currently the app icon stands in); Recents/history and dark mode are undesigned.
+- **Follow-ups not yet done** (HANDOFF §7): upload the (alpha-flattened) `icon-1024` + the 4 App Store screenshots (`GlutenOrNot - V2 Designs/assets/appstore/`) to App Store Connect; a dedicated mark+wordmark splash asset (currently the app icon stands in); dark mode is undesigned (Recents was built 2026-07-06 in the Clinic style without a formal design).
 
 ## Mobile Roadmap
 
 **Note**: `mobile/services/storage.ts` provides AsyncStorage utilities. Use this for any local persistence (history, favorites, etc.).
 
 ### High Priority
-- [ ] **Recents screen**: Show scan history (extend `storage.ts`, no account needed)
+- [x] **Recents screen**: Local scan history (`app/recents.tsx`, last 50 in AsyncStorage, tap reopens the saved result, Clear All; no account). Ships with the next iOS build.
 - [x] **Barcode scanning**: Integrated barcode scanner alongside OCR (auto-detects barcodes via camera)
 - [x] **Mode toggle**: Not needed — camera auto-detects barcodes and ingredient labels simultaneously
 
