@@ -17,7 +17,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Privacy claims accuracy
 > Surfaced 2026-07-06 while building Recents: the per-scan PostHog events (since 2026-05-31; hashed IP, verdict, city-level geo) sit uneasily under the current claims.
-- [ ] Update the App Store privacy label from "Data Not Collected" → "Data Not Linked to You" (Usage Data, Coarse Location) — App Store Connect, do with the next release
+- [x] Update the App Store privacy label from "Data Not Collected" → "Data Not Linked to You" (Usage Data, Coarse Location) — done with the v1.3.0 submission (2026-07-07)
 - [x] Reword the privacy policy to describe the anonymous per-scan events accurately — new "Anonymous Analytics" section + PostHog and Sentry added to Third-Party Services, "No location data" bullet corrected to "no precise location" (2026-07-06, caught by /grill: don't re-date a policy while it contains a known-false line)
 
 ### Restaurant Menu Scanner Enhancement
