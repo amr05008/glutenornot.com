@@ -79,7 +79,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] **TODO (post-1.1.1 release — manual browser tasks, deferred from 2026-04-14):**
   - [ ] Set up Sentry alerts on `glutenornot-mobile`: (1) new error-level issues, (2) warning-level event spike (Sentry dashboard → Alerts)
   - [x] Verify Vercel production env vars — **verified missing** via `GET /api/health` → `services.barcode_fallbacks` (2026-07-06): neither USDA nor Nutritionix keys are set in prod, so the barcode waterfall has been Open Food Facts-only since launch
-  - [ ] Add `USDA_API_KEY` (free: https://fdc.nal.usda.gov/api-key-signup/) and optionally `NUTRITIONIX_APP_ID`/`NUTRITIONIX_API_KEY` to Vercel prod to activate the fallback sources; re-check `/api/health` after
+  - [x] Add `USDA_API_KEY` to Vercel prod — done 2026-07-06; `/api/health` shows `usda: configured` and the key validated against the USDA API. Nutritionix left unset (optional third-tier fallback; add `NUTRITIONIX_APP_ID`/`NUTRITIONIX_API_KEY` if ever wanted)
 - [x] Ship new app build to deploy not_found filter fix + above changes (v1.1.1 submitted 2026-04-14)
 - [x] Suppress `ocr_failed` Sentry noise (wrapper + `beforeSend`) — ~95% of events, non-actionable photo-quality failures; MOBILE-2 resolved (2026-06-01)
 - [x] Fix 503 outage from retired Claude model (→ `claude-sonnet-4-6`); add deep health canary (`api/health.js` `?deep=1` + `HEALTH_CHECK_TOKEN`) + external uptime monitor so model/key outages alert within minutes (2026-06-18)
