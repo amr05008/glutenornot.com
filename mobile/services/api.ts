@@ -1,3 +1,4 @@
+import * as Network from 'expo-network';
 import { API_URL, BARCODE_API_URL, AnalysisResult } from '../constants/verdicts';
 
 export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found' | 'invalid_input';
@@ -14,12 +15,36 @@ export class APIError extends Error {
   }
 }
 
+// Connectivity-framed user messages. A failed scan is almost always the
+// network, not the app — say so, so it doesn't read as "the app is broken."
+const OFFLINE_MESSAGE = 'You appear to be offline. Check your connection and try again.';
+const NETWORK_MESSAGE = "Connection problem — your scan didn't go through. Check your signal and try again.";
+const TIMEOUT_MESSAGE = "Weak connection — your scan didn't go through. Check your signal and try again.";
+
+// Pre-flight connectivity check: turns a 30–60s wait for a request that can
+// never land into instant, clear feedback. Never let the probe itself block a
+// scan — on any uncertainty (probe error, or unknown reachability) fall through
+// and let the real request be the source of truth.
+async function ensureConnected(): Promise<void> {
+  let state: Network.NetworkState;
+  try {
+    state = await Network.getNetworkStateAsync();
+  } catch {
+    return; // Probe failed — don't block; let the actual request decide.
+  }
+  if (state.isConnected === false || state.isInternetReachable === false) {
+    throw new APIError(OFFLINE_MESSAGE, 'network');
+  }
+}
+
 const TIMEOUT_MS = 60000; // 60 seconds - OCR + Claude can take a while
 
 export async function analyzeImage(
   base64Image: string,
   externalSignal?: AbortSignal,
 ): Promise<AnalysisResult> {
+  await ensureConnected();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -85,14 +110,14 @@ export async function analyzeImage(
           throw error; // User cancelled — preserve AbortError for caller
         }
         throw new APIError(
-          'Request timed out. Please check your connection and try again.',
+          TIMEOUT_MESSAGE,
           'timeout'
         );
       }
 
       if (error.message.includes('Network') || error.message.includes('fetch')) {
         throw new APIError(
-          'Network error. Please check your connection.',
+          NETWORK_MESSAGE,
           'network'
         );
       }
@@ -111,6 +136,8 @@ export async function lookupBarcode(
   barcode: string,
   externalSignal?: AbortSignal,
 ): Promise<AnalysisResult> {
+  await ensureConnected();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BARCODE_TIMEOUT_MS);
 
@@ -174,10 +201,10 @@ export async function lookupBarcode(
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         if (externalSignal?.aborted) throw error;
-        throw new APIError('Request timed out. Please try again.', 'timeout');
+        throw new APIError(TIMEOUT_MESSAGE, 'timeout');
       }
       if (error.message.includes('Network') || error.message.includes('fetch')) {
-        throw new APIError('Network error. Please check your connection.', 'network');
+        throw new APIError(NETWORK_MESSAGE, 'network');
       }
     }
 
