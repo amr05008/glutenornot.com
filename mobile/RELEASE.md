@@ -25,6 +25,17 @@ Context still worth knowing:
   Collected" → "Data Not Linked to You": Usage Data + Coarse Location) to match the
   rewritten privacy policy — keep the two in sync in future releases.
 
+## ⏳ Pending on main (not yet shipped)
+
+- **PR #15 (2026-07-11)**: pre-flight connectivity check + connectivity-framed error
+  copy. Adds a **native dependency (`expo-network`)** — the first release after 1.3.0
+  must be a full build (prebuild picks the module up automatically; no config plugin).
+- ⚠️ **Do NOT publish an `eas update` while the version is still 1.3.0.**
+  `runtimeVersion.policy` is `appVersion`, so an update published at 1.3.0 would reach
+  existing 1.3.0 binaries that *lack* the `expo-network` native module — the bundle
+  imports it at load, and scans would break for every updated user. Bump the version
+  (step 3) before any build **or** update publish.
+
 > **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
 > hit several one-time setup issues the M1 never did.
 
@@ -64,7 +75,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (40 tests as of 1.3.0)
+npm test             # jest — all green (45 tests as of PR #15)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -90,7 +101,9 @@ Verify in the **simulator**:
 - [ ] A menu photo → **tally + grouped dishes**.
 - [ ] **Recents** (1.3.0+): clock button right of the shutter → history list; tap a row
       reopens the saved result; **Clear** empties with a confirm.
-- [ ] Airplane mode → **Offline** screen; a blurry/unreadable photo → **Couldn't read** screen.
+- [ ] Airplane mode → **Offline** screen (post-1.3.0: appears **instantly** via the
+      pre-flight check, not after a request hang); a blurry/unreadable photo →
+      **Couldn't read** screen.
 
 Verify on a **physical device** (camera doesn't exist in the simulator):
 - [ ] Live camera feed + the **shutter** capture path.
