@@ -94,6 +94,10 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Track `scan_failed` PostHog event (reason: not_found | ocr_failed | rate_limited | claude_error | server_error) so scan success rate is measurable (2026-07-06)
 - [x] Add `confidence` + `had_ingredient_data` properties to the `scan` event to split barcode cautions into "no OFF data" vs real judgement calls (2026-07-06)
 - [x] Report USDA/Nutritionix key presence in `/api/health` (`services.barcode_fallbacks`, visibility-only — never flips `healthy`) (2026-07-06)
+- [x] Handle poor connectivity on the client: pre-flight `expo-network` check on both scan paths (fail fast + connectivity-framed "offline / weak connection" copy) so a dropped or flaky connection stops reading as an app failure — the client-side complement to the backend per-source timeouts above. Root-caused from a 2026-07-11 report (client timeout + device IP change mid-session; backend healthy) (PR #15, 2026-07-11)
+- [ ] Auto-retry with backoff (1–2 attempts) on `network`/`timeout` so a slow-but-alive connection still lands without a user retry (deferred from PR #15)
+- [ ] Fire a **client-side** `scan_failed` (reason: `timeout`/`network`) — today a client timeout logs only a Sentry `warning` and the server logs a *success*, so connectivity failures are nearly invisible in PostHog (this made the 2026-07-11 incident hard to triage) (deferred from PR #15)
+- [ ] Reconcile "server completed but client timed out": idempotency key + short server-side result cache so a retry returns the already-computed verdict instead of re-running Claude (avoids the wasted analysis call; low urgency at current scale) (deferred from PR #15)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
 ### Product Database (Future — builds on barcode scanning)
