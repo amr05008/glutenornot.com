@@ -14,6 +14,7 @@ import handler, {
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
+  lookupUpcItemDb,
 } from '../../../api/barcode.js';
 import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import {
@@ -277,6 +278,23 @@ describe('lookup timeouts', () => {
     }
   });
 
+  it('lookupUpcItemDb passes an abort signal to fetch', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Snack', brand: 'BrandCo' }] }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    await lookupUpcItemDb('12345678');
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('lookupUpcItemDb returns null (a miss) on timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+      Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+    ));
+    await expect(lookupUpcItemDb('12345678')).resolves.toBeNull();
+  });
+
   it('lookupNutritionix passes an abort signal to fetch', async () => {
     const savedId = process.env.NUTRITIONIX_APP_ID;
     const savedKey = process.env.NUTRITIONIX_API_KEY;
@@ -291,6 +309,79 @@ describe('lookup timeouts', () => {
       restore('NUTRITIONIX_APP_ID', savedId);
       restore('NUTRITIONIX_API_KEY', savedKey);
     }
+  });
+});
+
+// Nutritionix discontinued its free tier (Syndigo, $499/mo minimum), so UPCitemdb's
+// keyless trial tier is the third waterfall source. It returns title/brand but no
+// ingredients — hits flow through the existing no-ingredient-data caution path.
+describe('lookupUpcItemDb', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns product name, brand, and source on a hit', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Corn Chips', brand: 'BrandCo' }] }),
+    }));
+    const result = await lookupUpcItemDb('12345678');
+    expect(result).toEqual({
+      source: 'upcitemdb',
+      product_name: 'Corn Chips',
+      brand: 'BrandCo',
+    });
+  });
+
+  it('extracts ingredients_text when the description carries an explicit INGREDIENTS statement', async () => {
+    // Observed live: grocery items often embed the full ingredient statement in
+    // `description`, e.g. "INGREDIENTS: / WHOLE GRAIN OATS, SUGAR, ...".
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          title: 'Honey Nut Cheerios',
+          brand: 'General Mills',
+          description: 'INGREDIENTS: / WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('016000275270');
+    expect(result.ingredients_text).toBe('WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.');
+  });
+
+  it('does not treat a marketing description as ingredients', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          title: 'Corn Chips',
+          brand: 'BrandCo',
+          description: 'A delicious crunchy snack the whole family will love.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('12345678');
+    expect(result.ingredients_text).toBeUndefined();
+  });
+
+  it('returns null when the database has no match', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'OK', total: 0, items: [] }),
+    }));
+    await expect(lookupUpcItemDb('12345678')).resolves.toBeNull();
+  });
+
+  it('returns null (a miss, not a crash) on a non-ok response like 429', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ code: 'EXCEED_LIMIT' }),
+    }));
+    await expect(lookupUpcItemDb('12345678')).resolves.toBeNull();
   });
 });
 
@@ -358,15 +449,37 @@ describe('barcode handler analytics', () => {
     vi.unstubAllGlobals();
   });
 
-  it('tracks a not_found failure when no database knows the barcode', async () => {
+  it('tracks a not_found failure with the barcode when no database knows it', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OFF_MISS));
     const res = mockRes();
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: { 'x-client': 'ios' } }, res);
     expect(res.statusCode).toBe(404);
     expect(trackScanFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'barcode', reason: 'not_found', platform: 'ios' })
+      expect.objectContaining({ method: 'barcode', reason: 'not_found', platform: 'ios', barcode: '12345678' })
     );
     expect(trackScan).not.toHaveBeenCalled();
+  });
+
+  it('falls through to UPCitemdb when Open Food Facts misses', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('upcitemdb')) {
+        return {
+          ok: true,
+          json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Corn Chips', brand: 'BrandCo' }] }),
+        };
+      }
+      return OFF_MISS;
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.verdict).toBe('caution');
+    expect(res.body.data_source).toBe('upcitemdb');
+    expect(res.body.product_name).toBe('BrandCo - Corn Chips');
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ dataSource: 'upcitemdb', hadIngredientData: false })
+    );
+    expect(trackScanFailure).not.toHaveBeenCalled();
   });
 
   it('tracks a rate_limited failure when the daily limit is hit', async () => {

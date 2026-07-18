@@ -45,9 +45,12 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
  * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error | server_error.
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, country, region, city } = {}) {
+function buildScanFailureProperties({ method, reason, platform, country, region, city, barcode } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
+  // not_found only: which barcode missed every database — distinguishes real
+  // coverage gaps (a UPC worth adding a source for) from scan noise.
+  if (barcode != null) props.barcode = barcode;
   if (country != null) props.$geoip_country_code = country;
   if (region != null) props.$geoip_subdivision_1_code = region;
   if (city != null) props.$geoip_city_name = city;
@@ -108,6 +111,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
+ * @param {string} [input.barcode]          not_found only: the barcode no database knew
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));

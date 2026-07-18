@@ -22,9 +22,11 @@ import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 const NUTRITIONIX_API = 'https://trackapi.nutritionix.com/v2/search/item';
+// Keyless trial tier: 100 lookups/day, no signup. /prod/v1 requires a paid key.
+const UPCITEMDB_API = 'https://api.upcitemdb.com/prod/trial/lookup';
 
 // GLUTENORNOT-MOBILE-7: the mobile client aborts barcode requests at 30s, and a
-// lookup can chain up to 3 OFF variants + USDA + Nutritionix + a Claude call.
+// lookup can chain up to 3 OFF variants + USDA + UPCitemdb + a Claude call.
 // Each external database fetch gets its own budget so one slow upstream reads
 // as a miss (fall through to the next source) instead of a client-side timeout.
 const EXTERNAL_FETCH_TIMEOUT_MS = 5000;
@@ -130,7 +132,9 @@ export default async function handler(req, res) {
 
     if (!product) {
       console.log('barcode_not_found', cleanBarcode);
-      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'not_found', ...geo });
+      // Include the barcode so PostHog can answer "are the misses real products
+      // or scan noise?" — the basis for any future coverage investment.
+      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'not_found', barcode: cleanBarcode, ...geo });
       return res.status(404).json({
         error: 'Product not found',
         message: "Product not found in our database. Try scanning the ingredient label instead."
@@ -216,9 +220,11 @@ export default async function handler(req, res) {
 
 /**
  * Look up a product using waterfall approach:
- * 1. Open Food Facts (free, no key)
- * 2. USDA FoodData Central (free, no key)
- * 3. Nutritionix (free tier, requires key)
+ * 1. Open Food Facts (free, no key — the only source with ingredient data for most products)
+ * 2. USDA FoodData Central (free, requires key)
+ * 3. Nutritionix (requires key — free tier discontinued by Syndigo, kept for
+ *    anyone who configures a paid key)
+ * 4. UPCitemdb (keyless trial tier — name/brand only, no ingredients)
  */
 async function lookupProduct(barcode) {
   // Try Open Food Facts first
@@ -244,6 +250,15 @@ async function lookupProduct(barcode) {
       console.log('Found product in Nutritionix');
       return nutritionixResult;
     }
+  }
+
+  // Last resort: UPCitemdb identifies the product by name only, which still
+  // beats a dead-end not_found — the no-ingredient-data caution response tells
+  // the user what was scanned and nudges them to the ingredient label.
+  const upcItemDbResult = await lookupUpcItemDb(barcode);
+  if (upcItemDbResult) {
+    console.log('Found product in UPCitemdb');
+    return upcItemDbResult;
   }
 
   return null;
@@ -395,6 +410,61 @@ async function lookupNutritionix(barcode) {
     };
   } catch (error) {
     console.error('Nutritionix lookup error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Look up a product in UPCitemdb (keyless trial tier, 100 lookups/day).
+ * Returns name/brand only — never ingredient data — so a hit flows through the
+ * handler's no-ingredient-data caution path, which nudges the user to scan the
+ * ingredient label for a definitive verdict.
+ */
+async function lookupUpcItemDb(barcode) {
+  try {
+    const url = `${UPCITEMDB_API}?upc=${barcode}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
+      },
+      signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      // 429 = trial tier's daily/burst limit — treat as a miss, not a crash
+      console.error('UPCitemdb API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.code !== 'OK' || !data.items || data.items.length === 0) {
+      return null;
+    }
+
+    const item = data.items[0];
+    if (!item.title) {
+      return null;
+    }
+
+    const result = {
+      source: 'upcitemdb',
+      product_name: item.title,
+      brand: item.brand,
+    };
+
+    // Grocery items often embed the manufacturer ingredient statement in
+    // `description` ("INGREDIENTS: / WHOLE GRAIN OATS, ..."). Only trust text
+    // behind an explicit INGREDIENTS label — everything else is marketing copy.
+    const ingredientsMatch = item.description?.match(/ingredients\s*:\s*\/?\s*(.+)/is);
+    if (ingredientsMatch) {
+      result.ingredients_text = ingredientsMatch[1].trim();
+    }
+
+    return result;
+  } catch (error) {
+    console.error('UPCitemdb lookup error:', error.message);
     return null;
   }
 }
@@ -567,6 +637,7 @@ export {
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
+  lookupUpcItemDb,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,

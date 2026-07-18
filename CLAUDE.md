@@ -53,7 +53,7 @@
 │   ├── _utils.js           # Shared rate limiting, verdict normalization, Claude client + error classification, constants
 │   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # OCR + Claude analysis
-│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix)
+│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
@@ -104,11 +104,12 @@ Required for API functionality:
 
 Optional (for barcode lookup fallback sources):
 - `USDA_API_KEY` (free at https://fdc.nal.usda.gov/api-key-signup/)
-- `NUTRITIONIX_APP_ID`
-- `NUTRITIONIX_API_KEY`
+- `NUTRITIONIX_APP_ID` / `NUTRITIONIX_API_KEY` (paid only — Syndigo discontinued the free tier in favor of $499+/mo plans; the code keeps the hook but don't plan on it)
+
+The final fallback, UPCitemdb, is keyless (free trial tier, 100 lookups/day) — nothing to configure. It returns name/brand (and, for many grocery items, an ingredient statement embedded in its description field, which the lookup extracts).
 
 Optional (for scan-event analytics — `api/_analytics.js`):
-- `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()`/`trackScanFailure()` are no-ops, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths, with `confidence` and — barcode only — `had_ingredient_data` properties) and one `scan_failed` event per failed attempt (`reason`: not_found | ocr_failed | rate_limited | claude_error | server_error). Keep `scan` success-only — existing dashboard insights count it as successful scans.
+- `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()`/`trackScanFailure()` are no-ops, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths, with `confidence` and — barcode only — `had_ingredient_data` properties) and one `scan_failed` event per failed attempt (`reason`: not_found | ocr_failed | rate_limited | claude_error | server_error; not_found also carries the missed `barcode` so coverage gaps are measurable). Keep `scan` success-only — existing dashboard insights count it as successful scans.
 - `POSTHOG_HOST` (defaults to `https://us.i.posthog.com`; set to the EU host if your project is in EU cloud)
 
 Optional (for proactive outage detection — `api/health.js`):

@@ -125,6 +125,8 @@ describe('health handler', () => {
       expect(res.body.healthy).toBe(true);
       expect(res.body.services.barcode_fallbacks.usda).toBe('missing_key');
       expect(res.body.services.barcode_fallbacks.nutritionix).toBe('missing_key');
+      // UPCitemdb's trial tier needs no key, so it is always available.
+      expect(res.body.services.barcode_fallbacks.upcitemdb).toBe('available');
     } finally {
       restore('USDA_API_KEY', saved.usda);
       restore('NUTRITIONIX_APP_ID', saved.nutritionixId);

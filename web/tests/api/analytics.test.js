@@ -153,6 +153,12 @@ describe('buildScanFailureProperties', () => {
     expect(props).not.toHaveProperty('$geoip_country_code');
     expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
     expect(props).not.toHaveProperty('$geoip_city_name');
+    expect(props).not.toHaveProperty('barcode');
+  });
+
+  it('includes the barcode when provided so coverage gaps are measurable', () => {
+    const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found', barcode: '012345678905' });
+    expect(props.barcode).toBe('012345678905');
   });
 });
 
