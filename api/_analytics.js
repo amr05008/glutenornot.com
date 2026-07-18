@@ -53,9 +53,10 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
 function buildScanFailureProperties({ method, reason, platform, country, region, city, imageKb, ocrChars } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
-  // OCR path only: capture metrics (counts, never content) — ocr_chars ≈ 0 on
-  // ocr_failed distinguishes "no text found" (aiming) from blur/light problems
-  // when read together with image_kb.
+  // OCR path only: capture metrics (counts, never content). NB: ocr_chars is 0
+  // on every ocr_failed BY CONSTRUCTION (the event fires only when Vision found
+  // no text) — the aiming-vs-blur discriminator is image_kb compared against
+  // the successful-scan distribution, not ocr_chars on failures.
   if (imageKb != null) props.image_kb = imageKb;
   if (ocrChars != null) props.ocr_chars = ocrChars;
   // Deliberately NO barcode property: the privacy policy promises "no record
@@ -125,7 +126,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
- * @param {number} [input.ocrChars]         OCR path only: chars extracted (≈0 on ocr_failed = aiming, not blur)
+ * @param {number} [input.ocrChars]         OCR path only: chars extracted (always 0 on ocr_failed by construction; omitted when failure precedes OCR)
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));

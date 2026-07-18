@@ -18,15 +18,24 @@ the data says whether blur is even the dominant failure mode.
 | Success metric | ocr_failed <15% + low-confidence OCR share down, ~4 weeks post-1.4.0, excluding failure-only tester/reviewer traffic (e.g. Cupertino cluster) | — | Decide "did it work" before shipping, not after |
 
 **The 1.4.1 fork (decided by data, not now):**
-- `ocr_chars ≈ 0` dominates failures → aiming problem → build framing guidance (overlay copy/animation), skip blur detection.
-- Low `image_kb` correlates with failures → blur/light problem → ship the size-threshold warning, tuned from the observed distribution.
+NB: `ocr_chars` is 0 on every `ocr_failed` **by construction** (the event only fires
+when Vision returns no text) — it carries no signal there. The discriminator is
+`image_kb`, compared across events:
+- `ocr_failed` `image_kb` distribution ≈ successful scans' → images look normal but
+  Vision finds nothing → aiming/framing problem → build framing guidance, skip blur detection.
+- `ocr_failed` `image_kb` shifted clearly low vs successes → blur/dark captures →
+  ship the size-threshold warning, threshold read off the observed distributions.
+- Also read `ocr_chars` + `image_kb` on **low-confidence successes** (partial reads are
+  the blur signature that still "succeeds"), and `ocr_chars` on `claude_error` (OCR had worked).
 - Neither separates → escalate to skia pixel analysis (or accept the rate).
 
 ## Execution steps (build order)
 
 ### Phase 1 — server instrumentation (this week, Vercel deploy, no build)
-1. `api/analyze.js`: attach `image_kb` (payload size) to `scan` and `scan_failed` events;
-   on OCR completion attach `ocr_chars` (length of text Vision returned, 0 when none).
+1. `api/analyze.js`: attach `image_kb` (payload size) to `scan` and OCR `scan_failed`
+   events (except `rate_limited`, which fires before the body is parsed); on OCR
+   completion attach `ocr_chars` (length of text Vision returned; omitted when the
+   failure precedes OCR, e.g. a Vision API error).
    `api/_analytics.js`: accept/emit the new properties (omit-when-absent pattern).
 2. TDD via `web/tests/api/analyze.test.js` + `analytics.test.js`.
 3. Privacy check (per `privacy-claims-check` memory): byte counts and char counts are

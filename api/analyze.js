@@ -251,7 +251,8 @@ export default async function handler(req, res) {
   try {
     const { image } = req.body;
 
-    if (!image) {
+    // Type check too: a non-string would make imageKb NaN and ship junk to Vision
+    if (!image || typeof image !== 'string') {
       return res.status(400).json({
         error: 'Missing image',
         message: 'No image provided'
