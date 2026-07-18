@@ -48,6 +48,10 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
 function buildScanFailureProperties({ method, reason, platform, country, region, city } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
+  // Deliberately NO barcode property: the privacy policy promises "no record
+  // of what you scanned" and no product names in analytics, and a UPC resolves
+  // to a product name. Missed barcodes are visible only in ephemeral Vercel
+  // runtime logs (see the not_found console.log in barcode.js).
   if (country != null) props.$geoip_country_code = country;
   if (region != null) props.$geoip_subdivision_1_code = region;
   if (city != null) props.$geoip_city_name = city;
@@ -85,7 +89,7 @@ function anonId(ip) {
  * @param {'label'|'menu'} [input.mode]     what the content turned out to be
  * @param {'safe'|'caution'|'unsafe'} input.verdict
  * @param {string} [input.detectedLanguage] ISO 639-1, OCR path only
- * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix)
+ * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix|upcitemdb)
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)

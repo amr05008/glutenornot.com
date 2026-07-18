@@ -97,6 +97,8 @@ export default async function handler(req, res) {
       barcode_fallbacks: {
         usda: hasUsdaKey ? 'configured' : 'missing_key',
         nutritionix: hasNutritionixKeys ? 'configured' : 'missing_key',
+        // UPCitemdb's trial tier is keyless — always available, nothing to configure.
+        upcitemdb: 'available',
       },
     },
   };

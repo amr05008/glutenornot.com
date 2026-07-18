@@ -22,18 +22,25 @@ import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
 const NUTRITIONIX_API = 'https://trackapi.nutritionix.com/v2/search/item';
+// Keyless trial tier: 100 lookups/day, no signup. /prod/v1 requires a paid key.
+const UPCITEMDB_API = 'https://api.upcitemdb.com/prod/trial/lookup';
 
 // GLUTENORNOT-MOBILE-7: the mobile client aborts barcode requests at 30s, and a
-// lookup can chain up to 3 OFF variants + USDA + Nutritionix + a Claude call.
+// lookup can chain up to 6 fetches (3 OFF variants + USDA + Nutritionix +
+// UPCitemdb) + a Claude call — 30s of fetch budget in the all-slow worst case.
 // Each external database fetch gets its own budget so one slow upstream reads
 // as a miss (fall through to the next source) instead of a client-side timeout.
+// In prod as configured (no Nutritionix keys) the worst case is 5 fetches/25s;
+// an all-upstreams-slow event is the only way to blow the client budget.
+// TODO(roadmap): add an overall waterfall deadline (~20s) instead of relying
+// on per-fetch budgets summing under the client abort.
 const EXTERNAL_FETCH_TIMEOUT_MS = 5000;
 
 /**
  * Claude prompt for barcode-based ingredient analysis
  */
 const CLAUDE_PROMPT = `### Role
-You are a celiac disease ingredient analyzer. You will receive ingredient information from a food product database lookup (Open Food Facts).
+You are a celiac disease ingredient analyzer. You will receive ingredient information from a product database lookup (Open Food Facts, USDA, or a retail UPC database).
 
 ### Input
 You will receive:
@@ -55,7 +62,7 @@ Respond with JSON only, no additional text.
 }
 
 ### Data Source Reliability (READ FIRST)
-This data comes from Open Food Facts, a crowd-sourced database. Allergen and trace tags are
+This data comes from crowd-sourced or third-party databases. Allergen and trace tags are
 frequently auto-derived from ingredients or contributed by users — they are NOT manufacturer
 "Contains:" declarations and are often wrong.
 - **The ingredient list is the source of truth.** Allergen tags may only CORROBORATE or ESCALATE a
@@ -129,6 +136,8 @@ export default async function handler(req, res) {
     const product = await lookupProduct(cleanBarcode);
 
     if (!product) {
+      // Ephemeral Vercel-log breadcrumb only — the barcode must NOT go to
+      // PostHog (privacy policy: "no record of what you scanned").
       console.log('barcode_not_found', cleanBarcode);
       await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'not_found', ...geo });
       return res.status(404).json({
@@ -216,9 +225,12 @@ export default async function handler(req, res) {
 
 /**
  * Look up a product using waterfall approach:
- * 1. Open Food Facts (free, no key)
- * 2. USDA FoodData Central (free, no key)
- * 3. Nutritionix (free tier, requires key)
+ * 1. Open Food Facts (free, no key — the only source with ingredient data for most products)
+ * 2. USDA FoodData Central (free, requires key)
+ * 3. Nutritionix (requires key — free tier discontinued by Syndigo, kept for
+ *    anyone who configures a paid key)
+ * 4. UPCitemdb (keyless trial tier — name/brand, sometimes an ingredient
+ *    statement scraped from the retail listing's description)
  */
 async function lookupProduct(barcode) {
   // Try Open Food Facts first
@@ -244,6 +256,16 @@ async function lookupProduct(barcode) {
       console.log('Found product in Nutritionix');
       return nutritionixResult;
     }
+  }
+
+  // Last resort: UPCitemdb identifies the product (and sometimes carries a
+  // retail-scraped ingredient statement), which still beats a dead-end
+  // not_found — name-only hits get the caution response that tells the user
+  // what was scanned and nudges them to the ingredient label.
+  const upcItemDbResult = await lookupUpcItemDb(barcode);
+  if (upcItemDbResult) {
+    console.log('Found product in UPCitemdb');
+    return upcItemDbResult;
   }
 
   return null;
@@ -399,6 +421,82 @@ async function lookupNutritionix(barcode) {
   }
 }
 
+/**
+ * Look up a product in UPCitemdb (keyless trial tier, 100 lookups/day).
+ * Returns name/brand, and — for many grocery items — a manufacturer ingredient
+ * statement embedded in the `description` field. With ingredients, the hit gets
+ * a full Claude analysis (with a retail-listing reliability caveat, see
+ * buildIngredientContext); without, it flows through the handler's
+ * no-ingredient-data caution path, which nudges the user to scan the label.
+ */
+async function lookupUpcItemDb(barcode) {
+  // UPCitemdb zero-pads short codes into the UPC-A/EAN-13 numbering space, but
+  // EAN-8 (and any sub-12-digit code) is a DIFFERENT space — observed live: a
+  // valid EAN-8 food barcode resolved to an unrelated non-food product. Skip
+  // rather than risk showing the wrong product as a confident database hit.
+  if (barcode.length < 12) {
+    return null;
+  }
+
+  try {
+    const url = `${UPCITEMDB_API}?upc=${barcode}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'GlutenOrNot/1.0 (https://glutenornot.com)',
+      },
+      signal: AbortSignal.timeout(EXTERNAL_FETCH_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      // 429 = trial tier's daily/burst limit — treat as a miss, not a crash
+      console.error('UPCitemdb API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.code !== 'OK' || !data.items || data.items.length === 0) {
+      return null;
+    }
+
+    const item = data.items[0];
+    if (!item || !item.title) {
+      return null;
+    }
+
+    // The returned code must equal the query modulo leading zeros (UPC-A ↔
+    // EAN-13 padding is the same product; anything else is a different item).
+    // Mirrors the gtinUpc check in lookupUSDA.
+    const stripZeros = (s) => String(s || '').replace(/^0+/, '');
+    const returnedCodes = [item.upc, item.ean].filter(Boolean).map(stripZeros);
+    if (!returnedCodes.includes(stripZeros(barcode))) {
+      return null;
+    }
+
+    const result = {
+      source: 'upcitemdb',
+      product_name: item.title,
+      brand: item.brand,
+    };
+
+    // Grocery items often embed the manufacturer ingredient statement in
+    // `description` ("INGREDIENTS: / WHOLE GRAIN OATS, ..."). Guard against
+    // marketing copy: require the uppercase INGREDIENTS label (live samples
+    // are all uppercase; "finest ingredients: ..." prose is not) and a
+    // comma in the capture (real statements are comma-separated lists).
+    const ingredientsMatch = item.description?.match(/INGREDIENTS\s*:\s*\/?\s*(.+)/s);
+    if (ingredientsMatch && ingredientsMatch[1].includes(',')) {
+      result.ingredients_text = ingredientsMatch[1].trim();
+    }
+
+    return result;
+  } catch (error) {
+    console.error('UPCitemdb lookup error:', error.message);
+    return null;
+  }
+}
+
 // Grains/derivatives that constitute an actual gluten source in an ingredient list.
 // Oats are deliberately excluded — they are a cross-contamination (caution) concern,
 // not proof of gluten, and are the usual reason a false `en:gluten` tag appears.
@@ -502,6 +600,18 @@ function buildIngredientContext(product) {
     parts.push(glutenSignalNote);
   }
 
+  // UPCitemdb "ingredients" are scraped from retail listings, not supplied by
+  // the manufacturer or a food database — they can be years stale, truncated,
+  // or from a reformulated product. Never let them produce a confident "safe."
+  if (product.source === 'upcitemdb' && product.ingredients_text) {
+    parts.push(
+      'DATA RELIABILITY: This ingredient statement was scraped from a retail product listing, ' +
+      'not provided by the manufacturer or a food database. It may be outdated, truncated, or ' +
+      'from a reformulated version of the product. Do NOT return "safe" with high confidence ' +
+      'from this data — cap confidence at "medium", and lean caution on anything ambiguous.'
+    );
+  }
+
   return parts.join('\n');
 }
 
@@ -567,6 +677,7 @@ export {
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
+  lookupUpcItemDb,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,

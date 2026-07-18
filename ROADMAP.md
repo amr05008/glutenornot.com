@@ -72,7 +72,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 
 ### Barcode Scanning ✅
 - [x] Barcode scanning via expo-camera (EAN-13, EAN-8, UPC-A, UPC-E)
-- [x] Waterfall product lookup: Open Food Facts → USDA → Nutritionix
+- [x] Waterfall product lookup: Open Food Facts → USDA → Nutritionix → UPCitemdb (added 2026-07-18 after Nutritionix killed its free tier; keyless trial, 100/day, extracts retail-listing ingredient statements with a reliability caveat, ≥12-digit codes only + returned-code match guard)
 - [x] Claude analysis of retrieved ingredients
 - [x] Shared rate limiting across analyze + barcode endpoints (`api/_utils.js`)
 
@@ -97,6 +97,8 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Handle poor connectivity on the client: pre-flight `expo-network` check on both scan paths (fail fast + connectivity-framed "offline / weak connection" copy) so a dropped or flaky connection stops reading as an app failure — the client-side complement to the backend per-source timeouts above. Root-caused from a 2026-07-11 report (client timeout + device IP change mid-session; backend healthy) (PR #15, 2026-07-11)
 - [ ] Auto-retry with backoff (1–2 attempts) on `network`/`timeout` so a slow-but-alive connection still lands without a user retry (deferred from PR #15)
 - [ ] Fire a **client-side** `scan_failed` (reason: `timeout`/`network`) — today a client timeout logs only a Sentry `warning` and the server logs a *success*, so connectivity failures are nearly invisible in PostHog (this made the 2026-07-11 incident hard to triage) (deferred from PR #15)
+- [ ] Overall barcode-waterfall deadline (~20s elapsed → stop trying sources) — with UPCitemdb the worst case is now 6 fetches × 5s = 30s before Claude, exactly the client abort budget; per-fetch budgets alone no longer guarantee headroom (deferred from PR #16)
+- [ ] NOTE (privacy, from /grill on PR #16): `scan_failed` must never carry the scanned barcode — the privacy policy promises "no record of what you scanned" and a UPC resolves to a product name. Missed barcodes live only in ephemeral Vercel logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second.
 - [ ] Reconcile "server completed but client timed out": idempotency key + short server-side result cache so a retry returns the already-computed verdict instead of re-running Claude (avoids the wasted analysis call; low urgency at current scale) (deferred from PR #15)
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
