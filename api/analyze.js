@@ -241,6 +241,13 @@ export default async function handler(req, res) {
     });
   }
 
+  // Capture metrics for scan analytics (counts only, never content) — hoisted so
+  // the catch block can attach whatever was known when the failure happened.
+  // See plans/ocr-capture-assist-2026-07-18.md: image_kb + ocr_chars decide
+  // whether OCR failures are an aiming problem or a blur/light problem.
+  let imageKb;
+  let ocrChars;
+
   try {
     const { image } = req.body;
 
@@ -251,11 +258,15 @@ export default async function handler(req, res) {
       });
     }
 
+    // Decoded size of the base64 upload (4 base64 chars ≈ 3 bytes)
+    imageKb = Math.round((image.length * 3) / 4 / 1024);
+
     // Step 1: OCR with Google Cloud Vision
     const ocrText = await performOCR(image);
+    ocrChars = ocrText ? ocrText.trim().length : 0;
 
     if (!ocrText || ocrText.trim().length === 0) {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', ...geo });
+      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -277,6 +288,8 @@ export default async function handler(req, res) {
       verdict: analysis.verdict,
       confidence: analysis.confidence,
       detectedLanguage: analysis.detected_language,
+      imageKb,
+      ocrChars,
       ...geo,
     });
 
@@ -286,7 +299,7 @@ export default async function handler(req, res) {
     console.error('Analysis error:', error);
 
     if (error.message === 'OCR_EMPTY') {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', ...geo });
+      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -296,12 +309,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'claude_error', ...geo });
+      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'server_error', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'

@@ -125,6 +125,20 @@ describe('SCAN_FAILED_EVENT', () => {
   });
 });
 
+describe('buildScanProperties capture instrumentation', () => {
+  it('maps imageKb and ocrChars to snake_case properties when provided', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'caution', imageKb: 120, ocrChars: 250 });
+    expect(props.image_kb).toBe(120);
+    expect(props.ocr_chars).toBe(250);
+  });
+
+  it('omits image_kb and ocr_chars when not provided (barcode path)', () => {
+    const props = buildScanProperties({ method: 'barcode', verdict: 'safe' });
+    expect(props).not.toHaveProperty('image_kb');
+    expect(props).not.toHaveProperty('ocr_chars');
+  });
+});
+
 describe('buildScanFailureProperties', () => {
   it('includes method and reason', () => {
     const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found' });
@@ -153,6 +167,18 @@ describe('buildScanFailureProperties', () => {
     expect(props).not.toHaveProperty('$geoip_country_code');
     expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
     expect(props).not.toHaveProperty('$geoip_city_name');
+  });
+
+  it('maps imageKb and ocrChars to snake_case properties when provided', () => {
+    const props = buildScanFailureProperties({ method: 'ocr', reason: 'ocr_failed', imageKb: 42, ocrChars: 0 });
+    expect(props.image_kb).toBe(42);
+    expect(props.ocr_chars).toBe(0);
+  });
+
+  it('omits image_kb and ocr_chars when not provided', () => {
+    const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found' });
+    expect(props).not.toHaveProperty('image_kb');
+    expect(props).not.toHaveProperty('ocr_chars');
   });
 
   it('never records the barcode, even if a caller passes one (privacy: no record of what you scanned)', () => {
