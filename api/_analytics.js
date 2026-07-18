@@ -45,12 +45,13 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
  * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error | server_error.
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, country, region, city, barcode } = {}) {
+function buildScanFailureProperties({ method, reason, platform, country, region, city } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
-  // not_found only: which barcode missed every database — distinguishes real
-  // coverage gaps (a UPC worth adding a source for) from scan noise.
-  if (barcode != null) props.barcode = barcode;
+  // Deliberately NO barcode property: the privacy policy promises "no record
+  // of what you scanned" and no product names in analytics, and a UPC resolves
+  // to a product name. Missed barcodes are visible only in ephemeral Vercel
+  // runtime logs (see the not_found console.log in barcode.js).
   if (country != null) props.$geoip_country_code = country;
   if (region != null) props.$geoip_subdivision_1_code = region;
   if (city != null) props.$geoip_city_name = city;
@@ -88,7 +89,7 @@ function anonId(ip) {
  * @param {'label'|'menu'} [input.mode]     what the content turned out to be
  * @param {'safe'|'caution'|'unsafe'} input.verdict
  * @param {string} [input.detectedLanguage] ISO 639-1, OCR path only
- * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix)
+ * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix|upcitemdb)
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
@@ -111,7 +112,6 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
- * @param {string} [input.barcode]          not_found only: the barcode no database knew
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));

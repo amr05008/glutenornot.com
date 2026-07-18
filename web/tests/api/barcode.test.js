@@ -214,6 +214,27 @@ describe('assessGlutenSignal', () => {
   });
 });
 
+describe('buildIngredientContext data reliability (UPCitemdb)', () => {
+  it('appends a retail-listing reliability caveat for upcitemdb-sourced ingredients', () => {
+    const context = buildIngredientContext({
+      source: 'upcitemdb',
+      product_name: 'Honey Nut Cheerios',
+      ingredients_text: 'WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.',
+    });
+    expect(context).toMatch(/DATA RELIABILITY/);
+    expect(context).toMatch(/retail product listing/i);
+  });
+
+  it('does not add the retail-listing caveat for Open Food Facts data', () => {
+    const context = buildIngredientContext({
+      source: 'openfoodfacts',
+      product_name: 'Rice Cakes',
+      ingredients_text: 'rice, salt',
+    });
+    expect(context).not.toMatch(/retail product listing/i);
+  });
+});
+
 describe('buildIngredientContext gluten reconciliation', () => {
   it('appends the reliability caveat for the KIND regression product', () => {
     const context = buildIngredientContext({
@@ -284,7 +305,7 @@ describe('lookup timeouts', () => {
       json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Snack', brand: 'BrandCo' }] }),
     });
     vi.stubGlobal('fetch', fetchSpy);
-    await lookupUpcItemDb('12345678');
+    await lookupUpcItemDb('012345678905');
     expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -292,7 +313,7 @@ describe('lookup timeouts', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
       Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
     ));
-    await expect(lookupUpcItemDb('12345678')).resolves.toBeNull();
+    await expect(lookupUpcItemDb('012345678905')).resolves.toBeNull();
   });
 
   it('lookupNutritionix passes an abort signal to fetch', async () => {
@@ -313,22 +334,72 @@ describe('lookup timeouts', () => {
 });
 
 // Nutritionix discontinued its free tier (Syndigo, $499/mo minimum), so UPCitemdb's
-// keyless trial tier is the third waterfall source. It returns title/brand but no
-// ingredients — hits flow through the existing no-ingredient-data caution path.
+// keyless trial tier is the last waterfall source. It returns title/brand, plus —
+// for many grocery items — a manufacturer ingredient statement embedded in its
+// description field. With ingredients a hit gets a full (reliability-caveated)
+// Claude analysis; without, it flows through the no-ingredient-data caution path.
 describe('lookupUpcItemDb', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('returns product name, brand, and source on a hit', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Corn Chips', brand: 'BrandCo' }] }),
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{ ean: '0012345678905', title: 'Corn Chips', brand: 'BrandCo' }],
+      }),
     }));
-    const result = await lookupUpcItemDb('12345678');
+    const result = await lookupUpcItemDb('012345678905');
     expect(result).toEqual({
       source: 'upcitemdb',
       product_name: 'Corn Chips',
       brand: 'BrandCo',
     });
+  });
+
+  it('skips the lookup entirely for EAN-8 barcodes (different numbering space)', async () => {
+    // Observed live: UPCitemdb zero-pads short codes into the UPC-A/EAN-13
+    // space, so a valid EAN-8 resolves to an unrelated product (a query for
+    // 96385074 returned "1000x Bucks Roblox").
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(lookupUpcItemDb('96385074')).resolves.toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a hit whose returned code does not match the queried barcode', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{ ean: '0033149496577', title: 'Some Other Product', brand: 'WrongCo' }],
+      }),
+    }));
+    await expect(lookupUpcItemDb('012345678905')).resolves.toBeNull();
+  });
+
+  it('accepts UPC-A ↔ EAN-13 leading-zero padding as the same product', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{ ean: '0016000275270', title: 'Honey Nut Cheerios', brand: 'General Mills' }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('016000275270');
+    expect(result).not.toBeNull();
+    expect(result.product_name).toBe('Honey Nut Cheerios');
+  });
+
+  it('returns null when the items array contains a null entry', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ code: 'OK', total: 1, items: [null] }),
+    }));
+    await expect(lookupUpcItemDb('012345678905')).resolves.toBeNull();
   });
 
   it('extracts ingredients_text when the description carries an explicit INGREDIENTS statement', async () => {
@@ -340,6 +411,7 @@ describe('lookupUpcItemDb', () => {
         code: 'OK',
         total: 1,
         items: [{
+          ean: '0016000275270',
           title: 'Honey Nut Cheerios',
           brand: 'General Mills',
           description: 'INGREDIENTS: / WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.',
@@ -357,13 +429,52 @@ describe('lookupUpcItemDb', () => {
         code: 'OK',
         total: 1,
         items: [{
+          ean: '0012345678905',
           title: 'Corn Chips',
           brand: 'BrandCo',
           description: 'A delicious crunchy snack the whole family will love.',
         }],
       }),
     }));
-    const result = await lookupUpcItemDb('12345678');
+    const result = await lookupUpcItemDb('012345678905');
+    expect(result.ingredients_text).toBeUndefined();
+  });
+
+  it('does not treat lowercase mid-sentence "ingredients:" marketing copy as ingredients', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          ean: '0012345678905',
+          title: 'Corn Chips',
+          brand: 'BrandCo',
+          description: 'Crafted with the finest ingredients: taste the difference. Perfect for parties.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('012345678905');
+    expect(result.ingredients_text).toBeUndefined();
+  });
+
+  it('rejects an uppercase INGREDIENTS capture that does not look like an ingredient list', async () => {
+    // Real statements are comma-separated lists; prose without a single comma
+    // is noise even behind the right label.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          ean: '0012345678905',
+          title: 'Corn Chips',
+          brand: 'BrandCo',
+          description: 'INGREDIENTS: taste the difference.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('012345678905');
     expect(result.ingredients_text).toBeUndefined();
   });
 
@@ -449,13 +560,16 @@ describe('barcode handler analytics', () => {
     vi.unstubAllGlobals();
   });
 
-  it('tracks a not_found failure with the barcode when no database knows it', async () => {
+  it('tracks a not_found failure without recording the barcode (privacy: no record of what you scanned)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OFF_MISS));
     const res = mockRes();
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: { 'x-client': 'ios' } }, res);
     expect(res.statusCode).toBe(404);
     expect(trackScanFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'barcode', reason: 'not_found', platform: 'ios', barcode: '12345678' })
+      expect.objectContaining({ method: 'barcode', reason: 'not_found', platform: 'ios' })
+    );
+    expect(trackScanFailure).not.toHaveBeenCalledWith(
+      expect.objectContaining({ barcode: expect.anything() })
     );
     expect(trackScan).not.toHaveBeenCalled();
   });
@@ -465,13 +579,17 @@ describe('barcode handler analytics', () => {
       if (String(url).includes('upcitemdb')) {
         return {
           ok: true,
-          json: async () => ({ code: 'OK', total: 1, items: [{ title: 'Corn Chips', brand: 'BrandCo' }] }),
+          json: async () => ({
+            code: 'OK',
+            total: 1,
+            items: [{ ean: '0012345678905', title: 'Corn Chips', brand: 'BrandCo' }],
+          }),
         };
       }
       return OFF_MISS;
     }));
     const res = mockRes();
-    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    await handler({ method: 'POST', body: { barcode: '012345678905' }, headers: {} }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.verdict).toBe('caution');
     expect(res.body.data_source).toBe('upcitemdb');
@@ -480,6 +598,46 @@ describe('barcode handler analytics', () => {
       expect.objectContaining({ dataSource: 'upcitemdb', hadIngredientData: false })
     );
     expect(trackScanFailure).not.toHaveBeenCalled();
+  });
+
+  it('runs a full Claude analysis when a UPCitemdb description carries ingredients', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      verdict: 'caution',
+      flagged_ingredients: ['oats'],
+      allergen_warnings: [],
+      explanation: 'Oats without GF certification.',
+      confidence: 'medium',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+      }
+      if (String(url).includes('upcitemdb')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 'OK',
+            total: 1,
+            items: [{
+              ean: '0016000275270',
+              title: 'Honey Nut Cheerios',
+              brand: 'General Mills',
+              description: 'INGREDIENTS: / WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.',
+            }],
+          }),
+        };
+      }
+      return OFF_MISS;
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '016000275270' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.verdict).toBe('caution');
+    expect(res.body.data_source).toBe('upcitemdb');
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ dataSource: 'upcitemdb', hadIngredientData: true, confidence: 'medium' })
+    );
   });
 
   it('tracks a rate_limited failure when the daily limit is hit', async () => {

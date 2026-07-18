@@ -153,12 +153,14 @@ describe('buildScanFailureProperties', () => {
     expect(props).not.toHaveProperty('$geoip_country_code');
     expect(props).not.toHaveProperty('$geoip_subdivision_1_code');
     expect(props).not.toHaveProperty('$geoip_city_name');
-    expect(props).not.toHaveProperty('barcode');
   });
 
-  it('includes the barcode when provided so coverage gaps are measurable', () => {
+  it('never records the barcode, even if a caller passes one (privacy: no record of what you scanned)', () => {
+    // The privacy policy promises no record of what users scanned and no
+    // product names in analytics; a UPC resolves to a product name, so it
+    // must never reach PostHog.
     const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found', barcode: '012345678905' });
-    expect(props.barcode).toBe('012345678905');
+    expect(props).not.toHaveProperty('barcode');
   });
 });
 
