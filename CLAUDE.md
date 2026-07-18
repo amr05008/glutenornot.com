@@ -7,6 +7,7 @@
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
 - **Session history**: `.claude/sessions/`
 - **Decisions**: `.claude/decisions/`
+- **Skills**: `.claude/skills/` — `glutenornot-release` drives the iOS release (points at `mobile/RELEASE.md`)
 
 ## Project Structure (Monorepo)
 
