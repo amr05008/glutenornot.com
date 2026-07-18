@@ -337,6 +337,89 @@ describe('analyze handler analytics', () => {
     expect(trackScan).not.toHaveBeenCalled();
   });
 
+  // OCR capture-assist instrumentation (plans/ocr-capture-assist-2026-07-18.md):
+  // image_kb + ocr_chars on scan/scan_failed decide whether OCR failures are an
+  // aiming problem (no text found) or a blur/light problem (small images), and
+  // what size threshold a client-side pre-check should use.
+  it('attaches image_kb and ocr_chars to ocr_failed failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+    const res = mockRes();
+    // 4096 base64 chars ≈ 3072 bytes = 3 KB
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: {} }, res);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'ocr_failed', imageKb: 3, ocrChars: 0 })
+    );
+  });
+
+  it('attaches image_kb and ocr_chars to successful scans', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      mode: 'label',
+      verdict: 'safe',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'All clear.',
+      confidence: 'high',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+      }
+      return OCR_TEXT;
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(trackScan).toHaveBeenCalledWith(
+      // 'rice, salt' = 10 chars
+      expect.objectContaining({ imageKb: 3, ocrChars: 10 })
+    );
+  });
+
+  it('rejects a non-string image with 400 instead of shipping junk to Vision', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 42 }, headers: {} }, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('Missing image');
+  });
+
+  it('tracks ocr_failed via the return path when Vision finds only whitespace', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ responses: [{ textAnnotations: [{ description: '   ' }] }] }),
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: {} }, res);
+    expect(res.statusCode).toBe(400);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'ocr_failed', imageKb: 3, ocrChars: 0 })
+    );
+  });
+
+  it('attaches image_kb and ocr_chars to claude_error failures (OCR had succeeded)', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_TEXT));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: {} }, res);
+    const args = trackScanFailure.mock.calls[0][0];
+    expect(args.reason).toBe('claude_error');
+    expect(args.imageKb).toBe(3);
+    expect(args.ocrChars).toBe(10);
+  });
+
+  it('attaches image_kb but omits ocr_chars when the Vision call itself fails', async () => {
+    // OCR_ERROR is thrown before ocrChars is ever assigned — the property must
+    // be absent (omitted), not zero: zero means "Vision found no text".
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: {} }, res);
+    const args = trackScanFailure.mock.calls[0][0];
+    expect(args.reason).toBe('server_error');
+    expect(args.imageKb).toBe(3);
+    expect(args.ocrChars).toBeUndefined();
+  });
+
   it('tracks a claude_error failure when analysis fails', async () => {
     delete process.env.ANTHROPIC_API_KEY; // callClaude throws a persistent ClaudeError
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_TEXT));

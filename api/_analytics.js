@@ -21,7 +21,7 @@ const SCAN_FAILED_EVENT = 'scan_failed';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city, confidence, hadIngredientData } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city, confidence, hadIngredientData, imageKb, ocrChars } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -31,6 +31,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // Barcode path only: splits caution verdicts into "the database had no
   // ingredient data" vs a real judgement call on actual ingredients.
   if (hadIngredientData != null) props.had_ingredient_data = hadIngredientData;
+  // OCR path only (plans/ocr-capture-assist-2026-07-18.md): technical capture
+  // metrics — decoded upload size and how much text Vision extracted. Byte and
+  // char COUNTS only, never content (privacy: no record of what was scanned).
+  if (imageKb != null) props.image_kb = imageKb;
+  if (ocrChars != null) props.ocr_chars = ocrChars;
   // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
   // canonical $geoip_* names so the World Map insight and country/region
   // breakdowns work natively without any extra mapping.
@@ -45,9 +50,15 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
  * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error | server_error.
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, country, region, city } = {}) {
+function buildScanFailureProperties({ method, reason, platform, country, region, city, imageKb, ocrChars } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
+  // OCR path only: capture metrics (counts, never content). NB: ocr_chars is 0
+  // on every ocr_failed BY CONSTRUCTION (the event fires only when Vision found
+  // no text) — the aiming-vs-blur discriminator is image_kb compared against
+  // the successful-scan distribution, not ocr_chars on failures.
+  if (imageKb != null) props.image_kb = imageKb;
+  if (ocrChars != null) props.ocr_chars = ocrChars;
   // Deliberately NO barcode property: the privacy policy promises "no record
   // of what you scanned" and no product names in analytics, and a UPC resolves
   // to a product name. Missed barcodes are visible only in ephemeral Vercel
@@ -94,6 +105,8 @@ function anonId(ip) {
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
+ * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
+ * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
  */
 async function trackScan({ ip, ...fields } = {}) {
   return captureEvent(SCAN_EVENT, ip, buildScanProperties(fields));
@@ -112,6 +125,8 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
+ * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
+ * @param {number} [input.ocrChars]         OCR path only: chars extracted (always 0 on ocr_failed by construction; omitted when failure precedes OCR)
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));
