@@ -103,6 +103,14 @@ async function callClaude(
       if (!text) {
         throw new ClaudeError('empty', response.status, 'No text content in Claude response');
       }
+      if (data.stop_reason === 'max_tokens') {
+        // Truncated output usually fails JSON parsing downstream and degrades to
+        // the generic caution fallback as a 200 — make that visible instead of silent.
+        console.warn('Claude response truncated at max_tokens', {
+          maxTokens,
+          outputTokens: data.usage && data.usage.output_tokens,
+        });
+      }
       return text;
     }
 
