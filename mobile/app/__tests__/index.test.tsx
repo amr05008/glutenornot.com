@@ -5,12 +5,22 @@ import { Alert } from 'react-native';
 // --- Mocks ---
 
 const mockTakePictureAsync = jest.fn();
+// Tests can suppress the automatic onCameraReady (cameraReadyControl.auto =
+// false) and fire it by hand (cameraReadyControl.fire()) to probe the
+// pre-ready frame of a freshly (re)mounted camera.
+const cameraReadyControl: { auto: boolean; fire: () => void } = {
+  auto: true,
+  fire: () => {},
+};
 jest.mock('expo-camera', () => {
   const { forwardRef, useEffect, useImperativeHandle } = require('react');
   const { View } = require('react-native');
   return {
     CameraView: forwardRef(({ onCameraReady, ...props }: any, ref: any) => {
-      useEffect(() => { onCameraReady?.(); }, []);
+      useEffect(() => {
+        cameraReadyControl.fire = () => onCameraReady?.();
+        if (cameraReadyControl.auto) onCameraReady?.();
+      }, []);
       useImperativeHandle(ref, () => ({
         takePictureAsync: mockTakePictureAsync,
       }));
@@ -79,6 +89,7 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation();
   jest.spyOn(console, 'warn').mockImplementation();
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
+  cameraReadyControl.auto = true;
 });
 
 afterEach(() => {
@@ -123,6 +134,37 @@ describe('CameraScreen recents integration', () => {
 });
 
 describe('CameraScreen torch toggle', () => {
+  it('never pre-sets enableTorch on a freshly remounted camera — waits for onCameraReady', async () => {
+    // expo-camera has historically fumbled enableTorch applied at mount time
+    // on iOS. The torch must reach the camera as a false→true transition on a
+    // live camera (the manual-toggle path), never as a mount-time prop.
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+
+    const { getByLabelText, getByText, getByTestId } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+    await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+
+    // The retry remounts the camera; this one never auto-reports ready
+    cameraReadyControl.auto = false;
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight & retry'));
+    });
+
+    // Torch requested, but the camera hasn't called back yet → prop must be off
+    expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+
+    // Camera reports ready → torch flips on via the live-camera transition
+    await act(async () => {
+      cameraReadyControl.fire();
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+  });
+
   it('starts with the torch off and toggles it from the overlay button', async () => {
     const { getByLabelText, getByTestId } = render(<CameraScreen />);
 

@@ -82,12 +82,22 @@ export default function CameraScreen() {
     return () => sub.remove();
   }, []);
 
-  // Fallback: if onCameraReady never fires (production build race), force-enable after 2s
+  // The camera unmounts whenever the spinner or a system state replaces it —
+  // reset the ready gate so the torch is re-applied as a false→true prop
+  // transition on the remounted live camera (the manual-toggle path) instead
+  // of being pre-set at mount, which expo-camera has fumbled on iOS.
   useEffect(() => {
-    if (cameraReady) return;
+    if (isAnalyzing || systemState) setCameraReady(false);
+  }, [isAnalyzing, systemState]);
+
+  // Fallback: if onCameraReady never fires (production build race), force-enable
+  // after 2s. Only while the camera is actually mounted — otherwise the timer
+  // would mark an unmounted camera ready and defeat the remount gate above.
+  useEffect(() => {
+    if (cameraReady || isAnalyzing || systemState) return;
     const timeout = setTimeout(() => setCameraReady(true), 2000);
     return () => clearTimeout(timeout);
-  }, [cameraReady]);
+  }, [cameraReady, isAnalyzing, systemState]);
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -349,7 +359,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
-        enableTorch={torch}
+        enableTorch={torch && cameraReady}
         onCameraReady={() => setCameraReady(true)}
         barcodeScannerSettings={{
           barcodeTypes: [...FOOD_BARCODE_TYPES],
