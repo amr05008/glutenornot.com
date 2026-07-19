@@ -122,6 +122,24 @@ describe('CameraScreen recents integration', () => {
   });
 });
 
+describe('CameraScreen torch toggle', () => {
+  it('starts with the torch off and toggles it from the overlay button', async () => {
+    const { getByLabelText, getByTestId } = render(<CameraScreen />);
+
+    expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight'));
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn off flashlight'));
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+  });
+});
+
 describe('CameraScreen error flow', () => {
   it('shows the "Couldn\'t read" state screen after a failed OCR scan', async () => {
     mockAnalyzeImage.mockRejectedValueOnce(
@@ -159,12 +177,12 @@ describe('CameraScreen error flow', () => {
     alertSpy.mockRestore();
   });
 
-  it('"Try again" returns to the camera capture view', async () => {
+  it('"Turn on flashlight & retry" returns to the camera with the torch on', async () => {
     mockAnalyzeImage.mockRejectedValueOnce(
       new APIError("Couldn't read the text.", 'ocr_failed')
     );
 
-    const { getByLabelText, getByText, queryByText } = render(<CameraScreen />);
+    const { getByLabelText, getByText, getByTestId, queryByText } = render(<CameraScreen />);
 
     await act(async () => {
       fireEvent.press(getByLabelText('Capture photo of ingredients'));
@@ -174,14 +192,41 @@ describe('CameraScreen error flow', () => {
       expect(getByText("Couldn't read that")).toBeTruthy();
     });
 
-    // Dismiss the state screen
+    // Primary action pre-enables the torch for the retry (dim light is the
+    // likeliest cause of an unreadable label)
     await act(async () => {
-      fireEvent.press(getByLabelText('Try again'));
+      fireEvent.press(getByLabelText('Turn on flashlight & retry'));
     });
 
-    // Couldn't-read screen gone, capture controls back
+    // Couldn't-read screen gone, capture controls back, torch on
     expect(queryByText("Couldn't read that")).toBeNull();
     expect(getByLabelText('Capture photo of ingredients')).toBeTruthy();
+    expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+  });
+
+  it('falls back to "Try again" as primary when the torch is already on', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+
+    const { getByLabelText, getByText, queryByLabelText } = render(<CameraScreen />);
+
+    // Torch on before scanning
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight'));
+    });
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+
+    await waitFor(() => {
+      expect(getByText("Couldn't read that")).toBeTruthy();
+    });
+
+    // Suggesting the flashlight would be nonsense — it's already on
+    expect(queryByLabelText('Turn on flashlight & retry')).toBeNull();
+    expect(getByLabelText('Try again')).toBeTruthy();
   });
 
   it('shows the Offline state screen on a network error', async () => {
@@ -198,6 +243,33 @@ describe('CameraScreen error flow', () => {
     await waitFor(() => {
       expect(getByText("You're offline")).toBeTruthy();
     });
+  });
+
+  it('keeps the torch state across retakes within a session', async () => {
+    mockAnalyzeImage.mockRejectedValue(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+
+    const { getByLabelText, getByText, getByTestId } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+    await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight & retry'));
+    });
+
+    // Second failed capture — torch must still be on when the camera returns
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+    await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(getByLabelText('Try again'));
+    });
+
+    expect(getByTestId('camera-view').props.enableTorch).toBe(true);
   });
 
   it('"Choose a photo instead" opens the image picker', async () => {

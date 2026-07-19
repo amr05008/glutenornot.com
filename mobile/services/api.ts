@@ -1,5 +1,5 @@
 import * as Network from 'expo-network';
-import { API_URL, BARCODE_API_URL, AnalysisResult } from '../constants/verdicts';
+import { API_URL, BARCODE_API_URL, TRACK_API_URL, AnalysisResult } from '../constants/verdicts';
 
 export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found' | 'invalid_input';
 
@@ -37,6 +37,24 @@ async function ensureConnected(): Promise<void> {
   }
 }
 
+// Failure beacon: a timeout or dropped connection dies on the wire, so the
+// server never sees it and scan_failed under-counts exactly the failures that
+// hurt most in-store. Fire-and-forget — never awaited on the user path, and a
+// failing beacon must never alter the error the user sees. Deliberately not
+// fired from the pre-flight offline check: those requests were never sent, and
+// a hard-offline beacon can't be delivered anyway.
+function sendFailureBeacon(method: 'ocr' | 'barcode', reason: 'timeout' | 'network'): void {
+  try {
+    fetch(TRACK_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Client': 'ios' },
+      body: JSON.stringify({ method, reason }),
+    }).catch(() => {});
+  } catch {
+    // Telemetry can never break a scan.
+  }
+}
+
 const TIMEOUT_MS = 60000; // 60 seconds - OCR + Claude can take a while
 
 export async function analyzeImage(
@@ -52,8 +70,13 @@ export async function analyzeImage(
   const onExternalAbort = () => controller.abort();
   externalSignal?.addEventListener('abort', onExternalAbort);
 
-  console.log('Starting API call to:', API_URL);
-  console.log('Payload size:', Math.round(base64Image.length / 1024), 'KB');
+  // Dev-only: Sentry captures console output as breadcrumbs in release builds,
+  // so nothing scan-related may be logged outside __DEV__ ("no record of what
+  // you scanned" — the privacy policy's promise applies to Sentry too).
+  if (__DEV__) {
+    console.log('Starting API call to:', API_URL);
+    console.log('Payload size:', Math.round(base64Image.length / 1024), 'KB');
+  }
   const startTime = Date.now();
 
   try {
@@ -67,7 +90,7 @@ export async function analyzeImage(
       signal: controller.signal,
     });
 
-    console.log('Response received in', Date.now() - startTime, 'ms');
+    if (__DEV__) console.log('Response received in', Date.now() - startTime, 'ms');
 
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener('abort', onExternalAbort);
@@ -109,6 +132,7 @@ export async function analyzeImage(
         if (externalSignal?.aborted) {
           throw error; // User cancelled — preserve AbortError for caller
         }
+        sendFailureBeacon('ocr', 'timeout');
         throw new APIError(
           TIMEOUT_MESSAGE,
           'timeout'
@@ -116,6 +140,7 @@ export async function analyzeImage(
       }
 
       if (error.message.includes('Network') || error.message.includes('fetch')) {
+        sendFailureBeacon('ocr', 'network');
         throw new APIError(
           NETWORK_MESSAGE,
           'network'
@@ -144,7 +169,9 @@ export async function lookupBarcode(
   const onExternalAbort = () => controller.abort();
   externalSignal?.addEventListener('abort', onExternalAbort);
 
-  console.log('Starting barcode lookup:', barcode);
+  // Dev-only: the barcode value identifies a product — must never reach the
+  // release console (Sentry breadcrumbs would carry it off-device).
+  if (__DEV__) console.log('Starting barcode lookup:', barcode);
   const startTime = Date.now();
 
   try {
@@ -155,7 +182,7 @@ export async function lookupBarcode(
       signal: controller.signal,
     });
 
-    console.log('Barcode response received in', Date.now() - startTime, 'ms');
+    if (__DEV__) console.log('Barcode response received in', Date.now() - startTime, 'ms');
 
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener('abort', onExternalAbort);
@@ -201,9 +228,11 @@ export async function lookupBarcode(
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         if (externalSignal?.aborted) throw error;
+        sendFailureBeacon('barcode', 'timeout');
         throw new APIError(TIMEOUT_MESSAGE, 'timeout');
       }
       if (error.message.includes('Network') || error.message.includes('fetch')) {
+        sendFailureBeacon('barcode', 'network');
         throw new APIError(NETWORK_MESSAGE, 'network');
       }
     }

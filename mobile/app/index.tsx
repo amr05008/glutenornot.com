@@ -49,6 +49,9 @@ export default function CameraScreen() {
   const [systemState, setSystemState] = useState<SystemState>(null);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Reading ingredients…');
+  // Session-scoped by design: survives retakes and result round-trips (the
+  // screen stays mounted under the stack), resets when the app relaunches.
+  const [torch, setTorch] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
   const scanningRef = useRef(false);
@@ -167,14 +170,16 @@ export default function CameraScreen() {
         throw new Error('Failed to process image');
       }
 
-      console.log('Image size (bytes):', manipulated.base64.length);
+      // Dev-only: Sentry captures console output as breadcrumbs in release
+      // builds — scan content (results, barcodes) must never reach it.
+      if (__DEV__) console.log('Image size (bytes):', manipulated.base64.length);
 
       // Analyze with API, passing abort signal for cancellation
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const result = await analyzeImage(manipulated.base64, controller.signal);
       abortControllerRef.current = null;
-      console.log('API result:', result);
+      if (__DEV__) console.log('API result:', result);
 
       await navigateToResult(result);
     } catch (error) {
@@ -201,7 +206,7 @@ export default function CameraScreen() {
     // Immediately block further scans (synchronous)
     scanningRef.current = true;
 
-    console.log('Barcode detected:', barcodeData);
+    if (__DEV__) console.log('Barcode detected:', barcodeData);
     setBarcodeScanned(true);
     setOcrError(null);
 
@@ -213,7 +218,7 @@ export default function CameraScreen() {
       abortControllerRef.current = controller;
       const result = await lookupBarcode(barcodeData, controller.signal);
       abortControllerRef.current = null;
-      console.log('Barcode result:', result);
+      if (__DEV__) console.log('Barcode result:', result);
 
       await navigateToResult(result);
     } catch (error) {
@@ -322,8 +327,13 @@ export default function CameraScreen() {
         iconBg={theme.verdict.caution.surface}
         title="Couldn't read that"
         body="The text was too blurry or small to read. Hold steady and fill the frame with the label."
-        primary="Try again"
-        onPrimary={() => setSystemState(null)}
+        primary={torch ? 'Try again' : 'Turn on flashlight & retry'}
+        onPrimary={() => {
+          // Dim light is the likeliest fixable cause of an unreadable label —
+          // pre-enable the torch for the retry (no-op if already on).
+          setTorch(true);
+          setSystemState(null);
+        }}
         secondary="Choose a photo instead"
         onSecondary={() => {
           setSystemState(null);
@@ -339,6 +349,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
+        enableTorch={torch}
         onCameraReady={() => setCameraReady(true)}
         barcodeScannerSettings={{
           barcodeTypes: [...FOOD_BARCODE_TYPES],
@@ -357,6 +368,20 @@ export default function CameraScreen() {
         <Text style={[styles.hint, { bottom: insets.bottom + 132 }]}>
           Point at a label, menu, or barcode
         </Text>
+        <TouchableOpacity
+          style={[
+            styles.torchButton,
+            { top: insets.top + theme.space[4] },
+            torch && styles.torchButtonActive,
+          ]}
+          onPress={() => setTorch((t) => !t)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'}
+          accessibilityHint="Lights up the label in dim surroundings"
+        >
+          <Icon name="torch" size={20} color={torch ? '#0E0E0F' : '#fff'} stroke={1.7} />
+        </TouchableOpacity>
       </View>
 
       {/* OCR error toast */}
@@ -522,5 +547,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  torchButton: {
+    position: 'absolute',
+    right: theme.space[4],
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  torchButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
 });

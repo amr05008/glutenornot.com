@@ -80,7 +80,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (45 tests as of PR #15)
+npm test             # jest — all green (54 tests as of capture-assist Phase 2)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -113,6 +113,12 @@ Verify in the **simulator**:
 Verify on a **physical device** (camera doesn't exist in the simulator):
 - [ ] Live camera feed + the **shutter** capture path.
 - [ ] **Barcode** auto-detection.
+- [ ] **Torch** (1.4.0+): overlay toggle actually lights the LED; torch stays on
+      across a retake; and — the path jest can't prove — after the **Couldn't
+      read** screen, "Turn on flashlight & retry" must re-light the torch when
+      the camera remounts (expo-camera has historic iOS quirks applying
+      `enableTorch` at mount). Also confirm barcode auto-detect still fires
+      with the torch on.
 
 ## 3. Bump the version
 

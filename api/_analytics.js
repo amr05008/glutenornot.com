@@ -47,7 +47,9 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
 
 /**
  * Build the PostHog event properties for a failed scan attempt.
- * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error | server_error.
+ * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error |
+ * server_error (server-emitted), or timeout | network (client beacon via
+ * /api/track — failures that die on the wire and never reach the server).
  * Pure — no I/O.
  */
 function buildScanFailureProperties({ method, reason, platform, country, region, city, imageKb, ocrChars } = {}) {
@@ -120,7 +122,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {object} input
  * @param {string} [input.ip]               client IP, hashed into the distinct ID
  * @param {'barcode'|'ocr'} input.method    how the scan was initiated
- * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'} input.reason
+ * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'} input.reason
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
