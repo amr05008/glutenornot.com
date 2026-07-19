@@ -30,6 +30,11 @@ Context still worth knowing:
 - **PR #15 (2026-07-11)**: pre-flight connectivity check + connectivity-framed error
   copy. Adds a **native dependency (`expo-network`)** — the first release after 1.3.0
   must be a full build (prebuild picks the module up automatically; no config plugin).
+- **Next release should be 1.4.0 and also bundle Phase 2 of
+  `plans/ocr-capture-assist-2026-07-18.md`** (torch toggle + glyph, "Turn on
+  flashlight & retry" failure state, `/api/track` beacon for client-side
+  timeout/network `scan_failed`) — built next session; don't cut a build with only
+  PR #15 unless something urgent forces it (two review cycles for no gain).
 - ⚠️ **Do NOT publish an `eas update` while the version is still 1.3.0.**
   `runtimeVersion.policy` is `appVersion`, so an update published at 1.3.0 would reach
   existing 1.3.0 binaries that *lack* the `expo-network` native module — the bundle

@@ -5,6 +5,7 @@
 - **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions, Sentry (crash reporting)
 - **APIs**: Google Cloud Vision (OCR), Claude API (Sonnet)
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
+- **Active plans**: `plans/` — scoped work-in-progress (currently: `ocr-capture-assist-2026-07-18.md`, drives the iOS 1.4.0/1.4.1 capture work)
 - **Session history**: `.claude/sessions/`
 - **Decisions**: `.claude/decisions/`
 - **Skills**: `.claude/skills/` — `glutenornot-release` drives the iOS release (points at `mobile/RELEASE.md`)

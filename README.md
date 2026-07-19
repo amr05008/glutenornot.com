@@ -7,7 +7,7 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 ## Features
 
 - **Photo scanning**: Take a photo of any ingredient label or restaurant menu
-- **Barcode scanning**: Point at a product barcode for instant lookup via Open Food Facts, USDA, and Nutritionix
+- **Barcode scanning**: Point at a product barcode for instant lookup via Open Food Facts, USDA, and UPCitemdb
 - **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
@@ -69,7 +69,7 @@ glutenornot.com/
 │   ├── _utils.js           # Shared rate limiting, verdict normalization, constants
 │   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # Serverless: OCR + Claude analysis
-│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix)
+│   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
@@ -86,7 +86,7 @@ glutenornot.com/
 **Barcode scanning (mobile):**
 1. Camera auto-detects barcodes (EAN-13, EAN-8, UPC-A, UPC-E)
 2. Barcode is sent to `/api/barcode`
-3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix
+3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix (paid key only) → UPCitemdb (keyless)
 4. Claude analyzes the retrieved ingredients and returns verdict
 
 ## Deployment
