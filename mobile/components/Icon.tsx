@@ -21,7 +21,8 @@ export type IconName =
   | 'message'
   | 'offline'
   | 'refresh'
-  | 'history';
+  | 'history'
+  | 'torch';
 
 interface IconProps {
   name: IconName;
@@ -82,6 +83,13 @@ const PATHS: Record<IconName, (p: { color: string; stroke: number }) => React.Re
     <>
       <Circle cx={12} cy={12} r={9} />
       <Path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  torch: () => (
+    <>
+      <Path d="M8 2.5h8V6c0 2-2 2.5-2 4.5V20a1.5 1.5 0 0 1-1.5 1.5h-1A1.5 1.5 0 0 1 10 20V10.5C10 8.5 8 8 8 6z" />
+      <Path d="M8 6h8" />
+      <Path d="M12 13.5v.1" />
     </>
   ),
 };

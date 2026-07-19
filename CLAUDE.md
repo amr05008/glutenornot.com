@@ -55,6 +55,7 @@
 │   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # OCR + Claude analysis
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
+│   ├── track.js            # Client failure beacon (timeout/network → scan_failed; those die on the wire, invisible to the server)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
@@ -110,7 +111,7 @@ Optional (for barcode lookup fallback sources):
 The final fallback, UPCitemdb, is keyless (free trial tier, 100 lookups/day) — nothing to configure. It returns name/brand (and, for many grocery items, an ingredient statement embedded in its description field, which the lookup extracts).
 
 Optional (for scan-event analytics — `api/_analytics.js`):
-- `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()`/`trackScanFailure()` are no-ops, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths, with `confidence`, — barcode only — `had_ingredient_data`, and — OCR only — `image_kb`/`ocr_chars` capture metrics: counts only, never content) and one `scan_failed` event per failed attempt (`reason`: not_found | ocr_failed | rate_limited | claude_error | server_error). Never add the scanned barcode/product to these events — the privacy policy promises "no record of what you scanned"; missed barcodes are visible only in ephemeral Vercel runtime logs. Keep `scan` success-only — existing dashboard insights count it as successful scans.
+- `POSTHOG_API_KEY` (PostHog project API key, `phc_…`). When unset, `trackScan()`/`trackScanFailure()` are no-ops, so analytics is off in dev/test by default. Set it in Vercel prod to record one `scan` event per successful analysis (both OCR and barcode paths, with `confidence`, — barcode only — `had_ingredient_data`, and — OCR only — `image_kb`/`ocr_chars` capture metrics: counts only, never content) and one `scan_failed` event per failed attempt (`reason`: not_found | ocr_failed | rate_limited | claude_error | server_error, plus the client-beacon-only timeout | network via `POST /api/track` — iOS client only (web doesn't beacon); the two failures that die on the wire and never reach the server; the beacon allowlist rejects everything else so server reasons can't be spoofed). NB: on a client timeout the server may still complete and emit `scan` — one attempt can then appear in both `scan` and `scan_failed`, so don't compute failure rate as `scan_failed/(scan+scan_failed)` without noting the overlap (reconcile item on the ROADMAP). Never add the scanned barcode/product to these events — the privacy policy promises "no record of what you scanned"; missed barcodes are visible only in ephemeral Vercel runtime logs. Keep `scan` success-only — existing dashboard insights count it as successful scans.
 - `POSTHOG_HOST` (defaults to `https://us.i.posthog.com`; set to the EU host if your project is in EU cloud)
 
 Optional (for proactive outage detection — `api/health.js`):

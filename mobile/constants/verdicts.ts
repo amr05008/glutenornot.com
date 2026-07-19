@@ -44,6 +44,7 @@ export const CONFIDENCE_LEVEL: Record<Confidence, number> = {
 
 export const API_URL = 'https://www.glutenornot.com/api/analyze';
 export const BARCODE_API_URL = 'https://www.glutenornot.com/api/barcode';
+export const TRACK_API_URL = 'https://www.glutenornot.com/api/track';
 
 // Barcode types relevant for food products
 export const FOOD_BARCODE_TYPES = [
