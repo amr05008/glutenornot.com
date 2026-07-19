@@ -21,7 +21,7 @@ function makeResponse({ ok, status, json, text }) {
 }
 
 function okWithText(textContent) {
-  return makeResponse({ ok: true, status: 200, json: { content: [{ text: textContent }] } });
+  return makeResponse({ ok: true, status: 200, json: { content: [{ type: 'text', text: textContent }] } });
 }
 
 // No-op sleep + zero backoff so retry tests don't actually wait.
@@ -44,6 +44,67 @@ describe('callClaude', () => {
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
     expect(result).toBe('hello world');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds the text block when a non-text block precedes it', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({
+      ok: true,
+      status: 200,
+      json: { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'the verdict' }] },
+    }));
+    const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toBe('the verdict');
+  });
+
+  it('skips an empty-string text block and returns a later non-empty one', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({
+      ok: true,
+      status: 200,
+      json: { content: [{ type: 'text', text: '' }, { type: 'text', text: 'real content' }] },
+    }));
+    const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toBe('real content');
+  });
+
+  it('throws empty ClaudeError when the only text-bearing block lacks a type', async () => {
+    // Intentionally strict: the real Messages API always sets type on blocks,
+    // so a type-less block is a malformed response, not content to trust.
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({
+      ok: true,
+      status: 200,
+      json: { content: [{ text: 'no type field' }] },
+    }));
+    await expect(callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ name: 'ClaudeError', kind: 'empty' });
+  });
+
+  it('throws empty ClaudeError when content is not an array', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({
+      ok: true,
+      status: 200,
+      json: { content: 'oops' },
+    }));
+    await expect(callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ name: 'ClaudeError', kind: 'empty' });
+  });
+
+  it('warns when the response was truncated at max_tokens', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({
+      ok: true,
+      status: 200,
+      json: {
+        content: [{ type: 'text', text: '{"verdict": "cau' }],
+        stop_reason: 'max_tokens',
+        usage: { output_tokens: 16 },
+      },
+    }));
+    const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toBe('{"verdict": "cau');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Claude response truncated at max_tokens',
+      { maxTokens: 16, outputTokens: 16 }
+    );
   });
 
   it('sends the configured model and api key headers', async () => {

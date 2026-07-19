@@ -611,7 +611,7 @@ describe('barcode handler analytics', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
       if (String(url).includes('anthropic')) {
-        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
       }
       if (String(url).includes('upcitemdb')) {
         return {
@@ -689,7 +689,7 @@ describe('barcode handler analytics', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
       if (String(url).includes('anthropic')) {
-        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
       }
       return {
         ok: true,
