@@ -363,7 +363,7 @@ describe('analyze handler analytics', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
       if (String(url).includes('anthropic')) {
-        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
       }
       return OCR_TEXT;
     }));
@@ -452,7 +452,7 @@ describe('analyze handler analytics', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
       if (String(url).includes('anthropic')) {
-        return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(analysis) }] }) };
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
       }
       return OCR_TEXT;
     }));

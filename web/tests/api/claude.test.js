@@ -21,7 +21,7 @@ function makeResponse({ ok, status, json, text }) {
 }
 
 function okWithText(textContent) {
-  return makeResponse({ ok: true, status: 200, json: { content: [{ text: textContent }] } });
+  return makeResponse({ ok: true, status: 200, json: { content: [{ type: 'text', text: textContent }] } });
 }
 
 // No-op sleep + zero backoff so retry tests don't actually wait.

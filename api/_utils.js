@@ -7,7 +7,7 @@ let rateLimitMap = new Map();
 const RATE_LIMIT = 50;
 const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in ms
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-opus-4-8';
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
 // Anthropic statuses worth retrying: 429 (rate limit), 529 (overloaded), and
@@ -95,7 +95,11 @@ async function callClaude(
 
     if (response.ok) {
       const data = await response.json().catch(() => null);
-      const text = data && data.content && data.content[0] && data.content[0].text;
+      // Find the first text block rather than assuming content[0] — resilient
+      // to any non-text blocks a future model/config might prepend.
+      const blocks = (data && Array.isArray(data.content)) ? data.content : [];
+      const textBlock = blocks.find((b) => b && b.type === 'text' && b.text);
+      const text = textBlock && textBlock.text;
       if (!text) {
         throw new ClaudeError('empty', response.status, 'No text content in Claude response');
       }

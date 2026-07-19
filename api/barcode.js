@@ -620,7 +620,7 @@ function buildIngredientContext(product) {
  */
 async function analyzeWithClaude(ingredientContext) {
   const content = await callClaude({
-    maxTokens: 1024,
+    maxTokens: 2048, // headroom for the Opus 4.7+ tokenizer (~1–1.35× Sonnet 4.6 counts)
     content: `${CLAUDE_PROMPT}\n\n### Product Data:\n${ingredientContext}`,
   });
 
