@@ -18,6 +18,10 @@ import { sans } from '../constants/fonts';
 
 type SystemState = 'offline' | 'error' | null;
 
+// How long the native camera session gets to settle before a torch transition
+// is trusted to reach the LED (see the torch-application effect).
+const TORCH_SETTLE_MS = 750;
+
 function Wordmark() {
   return (
     <View style={styles.wordmark}>
@@ -51,7 +55,11 @@ export default function CameraScreen() {
   const [loadingMessage, setLoadingMessage] = useState('Reading ingredients…');
   // Session-scoped by design: survives retakes and result round-trips (the
   // screen stays mounted under the stack), resets when the app relaunches.
+  // `torch` is the user's intent (drives the button); `torchApplied` is what
+  // actually reaches CameraView, applied on a settle delay — see below.
   const [torch, setTorch] = useState(false);
+  const [torchApplied, setTorchApplied] = useState(false);
+  const cameraReadyAtRef = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
   const scanningRef = useRef(false);
@@ -90,12 +98,37 @@ export default function CameraScreen() {
     if (isAnalyzing || systemState) setCameraReady(false);
   }, [isAnalyzing, systemState]);
 
+  // Apply the torch only after the camera has been ready for a settle period.
+  // On-device (1.4.0 TestFlight): a transition fired right at onCameraReady is
+  // silently dropped while the native session settles — the LED stays dark even
+  // though the prop (and button) say on. A transition ~1s later works, which is
+  // why a human toggle always works. Emulate that timing: immediate when the
+  // camera has been running past the settle window (manual toggles stay
+  // instant), delayed to the window's edge otherwise (retry/remount paths).
+  useEffect(() => {
+    if (!torch || !cameraReady) {
+      setTorchApplied(false);
+      return;
+    }
+    const settledMs = Date.now() - cameraReadyAtRef.current;
+    const delay = Math.max(0, TORCH_SETTLE_MS - settledMs);
+    if (delay === 0) {
+      setTorchApplied(true);
+      return;
+    }
+    const timer = setTimeout(() => setTorchApplied(true), delay);
+    return () => clearTimeout(timer);
+  }, [torch, cameraReady]);
+
   // Fallback: if onCameraReady never fires (production build race), force-enable
   // after 2s. Only while the camera is actually mounted — otherwise the timer
   // would mark an unmounted camera ready and defeat the remount gate above.
   useEffect(() => {
     if (cameraReady || isAnalyzing || systemState) return;
-    const timeout = setTimeout(() => setCameraReady(true), 2000);
+    const timeout = setTimeout(() => {
+      cameraReadyAtRef.current = Date.now();
+      setCameraReady(true);
+    }, 2000);
     return () => clearTimeout(timeout);
   }, [cameraReady, isAnalyzing, systemState]);
 
@@ -359,8 +392,11 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
-        enableTorch={torch && cameraReady}
-        onCameraReady={() => setCameraReady(true)}
+        enableTorch={torchApplied}
+        onCameraReady={() => {
+          cameraReadyAtRef.current = Date.now();
+          setCameraReady(true);
+        }}
         barcodeScannerSettings={{
           barcodeTypes: [...FOOD_BARCODE_TYPES],
         }}

@@ -158,9 +158,18 @@ describe('CameraScreen torch toggle', () => {
     // Torch requested, but the camera hasn't called back yet → prop must be off
     expect(getByTestId('camera-view').props.enableTorch).toBe(false);
 
-    // Camera reports ready → torch flips on via the live-camera transition
+    // Camera reports ready → still off: on-device testing (1.4.0 TestFlight)
+    // showed a transition right at onCameraReady is silently dropped while the
+    // native session settles — only a later transition lights the LED.
     await act(async () => {
       cameraReadyControl.fire();
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+
+    // After the settle period the torch flips on — same timing profile as a
+    // human reaching for the toggle, the path that provably works.
+    await act(async () => {
+      jest.advanceTimersByTime(750);
     });
     expect(getByTestId('camera-view').props.enableTorch).toBe(true);
   });
@@ -169,6 +178,12 @@ describe('CameraScreen torch toggle', () => {
     const { getByLabelText, getByTestId } = render(<CameraScreen />);
 
     expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+
+    // Let the camera session settle past the window — a manual toggle on a
+    // long-running camera must apply immediately, with no settle lag.
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
 
     await act(async () => {
       fireEvent.press(getByLabelText('Turn on flashlight'));
@@ -240,9 +255,14 @@ describe('CameraScreen error flow', () => {
       fireEvent.press(getByLabelText('Turn on flashlight & retry'));
     });
 
-    // Couldn't-read screen gone, capture controls back, torch on
+    // Couldn't-read screen gone, capture controls back
     expect(queryByText("Couldn't read that")).toBeNull();
     expect(getByLabelText('Capture photo of ingredients')).toBeTruthy();
+
+    // Torch reaches the camera after the settle window (see settle test)
+    await act(async () => {
+      jest.advanceTimersByTime(750);
+    });
     expect(getByTestId('camera-view').props.enableTorch).toBe(true);
   });
 
@@ -311,6 +331,9 @@ describe('CameraScreen error flow', () => {
       fireEvent.press(getByLabelText('Try again'));
     });
 
+    await act(async () => {
+      jest.advanceTimersByTime(750);
+    });
     expect(getByTestId('camera-view').props.enableTorch).toBe(true);
   });
 
