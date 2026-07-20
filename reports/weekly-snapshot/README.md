@@ -31,7 +31,7 @@ listed below; never touch styles, fonts, or layout.
 | "Verdicts delivered" band + rows | safe / caution / unsafe counts (`flex` = count) |
 | "Why scans miss" rows | `scan_failed` reasons desc by count; bar widths relative to the max; keep the zero row for backend errors |
 | `.fnote` | one honest sentence about the misses |
-| Sentry card | `0 events` + `quiet` chip + "verified silence" note when clean; if events exist, use the count, a `warn`/`unsafe` chip, and an issue box naming the top issue (see git history of this file for the event-week variant) |
+| Sentry card | `0 events` + `quiet` chip + "verified silence" note when clean. If events exist: use the count (drop the `quiet` class on `.num`), a `warn` chip, and replace `.sentry-note` with an issue box (CSS already present): `<div class="sentry-issue"><span class="iid">GLUTENORNOT-MOBILE-N</span><div class="ititle">Error title</div><div class="imeta">N users · date · one-line interpretation</div></div>`. Client timeouts report at `level:warning` — count warnings, not just errors. |
 
 Sanity checks before publishing: tile 1 = Σ `DAYS[].ok` = band totals on both
 split cards; tile 2 denominator = Σ ok + Σ fail; failure rows sum to Σ fail.

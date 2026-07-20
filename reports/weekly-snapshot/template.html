@@ -223,6 +223,11 @@
   }
   .sentry-note b { color: var(--ink); font-weight: 700; }
   .sentry-zeros { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  /* event-week variant (swap for .sentry-note when Sentry is not quiet) */
+  .sentry-issue { background: var(--surface-muted); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; margin-top: 12px; }
+  .sentry-issue .iid { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600; color: var(--sub); }
+  .sentry-issue .ititle { font-weight: 700; margin: 3px 0 2px; }
+  .sentry-issue .imeta { color: var(--sub); font-size: 12.5px; }
 
   /* ── Tooltip ────────────────────────────────────────── */
   #tip {
