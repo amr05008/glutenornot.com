@@ -1,5 +1,10 @@
 # OCR Capture Assist — instrument, fix the no-regrets gaps, then let data pick the blur fix
 
+> **Status 2026-07-19**: Phases 1–3 done — instrumentation shipped 2026-07-18
+> (PR #17), Phase 2 + release shipped as iOS 1.4.0 (PR #19, build 2, phased
+> release). Phase 4 remains: run the `image_kb` fork query ~2026-08-01; 1.4.1
+> also carries auto-retry (ROADMAP) and a proposed `torch_used` scan property.
+
 Goal: cut the OCR failure rate (25% → <15%) and shrink low-confidence OCR verdicts.
 Strategy: ship instrumentation + no-regrets fixes now; defer the blur pre-check until
 the data says whether blur is even the dominant failure mode.

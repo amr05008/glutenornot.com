@@ -6,12 +6,14 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.3.0 — Recents scan history (2026-07-07)
+## ✅ Last shipped: v1.4.0 — Flashlight capture assist + connectivity (2026-07-19)
 
-Submitted to App Store review on 2026-07-07 (build 1): Recents scan history
-(local-only, cap 50), the in-app rating prompt (expo-store-review), and the June
-full-bleed result-band fix. Version examples below still read `1.2.0` — substitute
-your new version.
+Submitted to App Store review on 2026-07-19 (**build 2** — build 1 was the
+TestFlight round that caught the torch settle quirk, see Notes below): torch
+toggle + "Turn on flashlight & retry", the `/api/track` client failure beacon,
+`__DEV__` log gating, and PR #15's pre-flight connectivity check (`expo-network`
+native dep). Phased release enabled. Version examples below still read `1.2.0`
+— substitute your new version.
 
 Context still worth knowing:
 - The app icon is committed (`mobile/assets/icon.png`) and ships automatically —
@@ -27,19 +29,11 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- **PR #15 (2026-07-11)**: pre-flight connectivity check + connectivity-framed error
-  copy. Adds a **native dependency (`expo-network`)** — the first release after 1.3.0
-  must be a full build (prebuild picks the module up automatically; no config plugin).
-- **Next release should be 1.4.0 and also bundle Phase 2 of
-  `plans/ocr-capture-assist-2026-07-18.md`** (torch toggle + glyph, "Turn on
-  flashlight & retry" failure state, `/api/track` beacon for client-side
-  timeout/network `scan_failed`) — built next session; don't cut a build with only
-  PR #15 unless something urgent forces it (two review cycles for no gain).
-- ⚠️ **Do NOT publish an `eas update` while the version is still 1.3.0.**
-  `runtimeVersion.policy` is `appVersion`, so an update published at 1.3.0 would reach
-  existing 1.3.0 binaries that *lack* the `expo-network` native module — the bundle
-  imports it at load, and scans would break for every updated user. Bump the version
-  (step 3) before any build **or** update publish.
+- Nothing — main is fully shipped as of v1.4.0 (2026-07-19).
+- Next up per `plans/ocr-capture-assist-2026-07-18.md` Phase 4: ~2 weeks of
+  `image_kb` data decides the 1.4.1 fork (blur warning vs framing guidance);
+  1.4.1 also carries auto-retry-with-backoff and, ideally, a `torch_used`
+  property on OCR scans to measure the flashlight's effect on `ocr_failed`.
 
 > **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
 > hit several one-time setup issues the M1 never did.
