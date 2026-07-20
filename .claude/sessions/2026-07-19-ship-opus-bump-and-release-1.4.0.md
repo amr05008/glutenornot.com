@@ -32,7 +32,7 @@ dropped while the camera session settles — fixed with a 750ms settle window.
   (`TORCH_SETTLE_MS = 750`): torch reaches CameraView only after the camera
   has been ready 750ms; manual toggles stay instant past the window.
 - **Release**: version lockstep 1.4.0 (fead058), prebuild + MARKETING_VERSION
-  patch + sentry.properties, build 2 submitted 2026-07-19, tag `v1.4.0` +
+  patch + sentry.properties, build 3 submitted 2026-07-19, tag `v1.4.0` +
   GitHub release. RELEASE.md: quirk documented, pending block cleared.
 
 ## Decisions

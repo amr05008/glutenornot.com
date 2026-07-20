@@ -8,7 +8,7 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ## ✅ Last shipped: v1.4.0 — Flashlight capture assist + connectivity (2026-07-19)
 
-Submitted to App Store review on 2026-07-19 (**build 2** — build 1 was the
+Submitted to App Store review on 2026-07-19 (**build 3** — build 1 was the
 TestFlight round that caught the torch settle quirk, see Notes below): torch
 toggle + "Turn on flashlight & retry", the `/api/track` client failure beacon,
 `__DEV__` log gating, and PR #15's pre-flight connectivity check (`expo-network`
