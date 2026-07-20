@@ -11,6 +11,7 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 - **Desktop support**: Drag-drop images or paste from clipboard
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
+- **Flashlight assist**: torch toggle on the camera, and one-tap "turn on flashlight & retry" when a label can't be read (iOS)
 - **Scan history**: Recent scans saved on-device (iOS) — no account, clearable anytime
 - **Multilingual**: Analyzes labels and menus in any language (dedicated Spanish, Dutch, Catalan, and French support)
 - **Offline support**: Works as a PWA with offline fallback
@@ -70,6 +71,7 @@ glutenornot.com/
 │   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # Serverless: OCR + Claude analysis
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
+│   ├── track.js            # Client failure beacon (timeout/network scan_failed)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```

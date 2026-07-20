@@ -160,6 +160,13 @@ In Xcode:
 4. **Product → Archive**.
 5. In the Organizer: **Distribute App → App Store Connect → Upload**.
 
+> **Hardware-dependent features? TestFlight before submitting.** If the release
+> touches camera, torch, haptics, or anything else jest and the simulator can't
+> prove, install the uploaded build via **TestFlight internal** (available in
+> minutes, no review) and smoke it on a real device *before* Submit for Review.
+> This caught the 1.4.0 torch settle quirk that two rounds of code-level
+> hardening and a green test suite could not.
+
 ## 6. App Store Connect (browser — appstoreconnect.apple.com)
 
 1. App icon: nothing to do — it's baked into the uploaded build.

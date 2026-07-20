@@ -67,3 +67,7 @@ dropped while the camera session settles — fixed with a 750ms settle window.
   (DON'T SHIP → fixed: truncation visibility, decision record) and PR #19
   (SHIP + fixes: beacon rate limit, double-count docs). Both dispositions
   are in the PR comments/bodies.
+- Build 3 submitted to review ~9:16 PM ET with phased release. A one-shot
+  cloud routine (`trig_01MMyYwpjSn3QUdtUUxfbCPP`) checks whether 1.4.0 is
+  live on the App Store Wednesday 2026-07-22 9:00 AM ET via the iTunes
+  lookup API; result lands at claude.ai/code/routines.
