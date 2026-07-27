@@ -10,6 +10,21 @@ scheduled Monday-morning routine:
 - **Data sources:** PostHog `scan` / `scan_failed` events (project 457245) and
   Sentry (`aaron-roy` org, `glutenornot-mobile` project).
 
+## The Monday routine (2026-07-27 shape)
+
+The cloud routine that refreshes this page pulls PostHog via **direct query-API
+curl calls authenticated with a personal API key** embedded in the routine
+config (PostHog is not an attachable MCP connector for cloud routines — don't
+"fix" it back to MCP). Rotating or revoking that key means updating the routine
+config; a dead key makes the routine abort loudly to #glutenornot rather than
+publish a partial week. Sentry stays on MCP (non-fatal if unavailable).
+
+Besides refreshing this artifact, the routine posts **two Discord messages**:
+the snapshot summary and an "analyst read" (week-over-week deltas, patterns
+after a per-person cluster triage that excludes App Store review / RC-testing
+traffic, 1–3 recommendations). The analyst content is Discord-only — it never
+adds sections to this page, and the update contract below is unchanged by it.
+
 ## Update contract
 
 The file in this directory always holds the **last published week** — it doubles

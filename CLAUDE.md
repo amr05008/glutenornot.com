@@ -57,6 +57,8 @@
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
 │   ├── track.js            # Client failure beacon (timeout/network → scan_failed; those die on the wire, invisible to the server)
 │   └── health.js           # Health check
+├── reports/
+│   └── weekly-snapshot/    # Weekly health snapshot artifact template + update contract (refreshed by a Monday cloud routine — see its README)
 └── package.json            # Monorepo root
 ```
 
