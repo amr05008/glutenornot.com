@@ -6,14 +6,21 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.4.0 — Flashlight capture assist + connectivity (2026-07-19)
+## ✅ Last shipped: v1.4.1 — Pre-release review fixes (2026-07-27)
 
-Submitted to App Store review on 2026-07-19 (**build 3** — build 1 was the
-TestFlight round that caught the torch settle quirk, see Notes below): torch
-toggle + "Turn on flashlight & retry", the `/api/track` client failure beacon,
-`__DEV__` log gating, and PR #15's pre-flight connectivity check (`expo-network`
-native dep). Phased release enabled. Version examples below still read `1.2.0`
-— substitute your new version.
+Submitted to App Store review on 2026-07-27 (**build 1**): the mobile fixes
+from `reports/2026-07-27-pre-release-review.md` — permission-gate render order
+(photo-picker scans work with camera denied), picker-aware couldn't-read
+screen (no flashlight offer for library picks), and the torch fallback-race
+fix (late real `onCameraReady` re-applies the torch as a fresh transition).
+The same commit shipped the api/web fixes via Vercel, including the
+multilingual gluten-signal safety bug. Version examples below still read
+`1.2.0` — substitute your new version.
+
+Previous: v1.4.0 (2026-07-19, build 3 — build 1 was the TestFlight round that
+caught the torch settle quirk, see Notes): torch toggle + flashlight retry,
+`/api/track` failure beacon, `__DEV__` log gating, pre-flight connectivity
+check. Phased release.
 
 Context still worth knowing:
 - The app icon is committed (`mobile/assets/icon.png`) and ships automatically —
@@ -29,11 +36,16 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.4.0 (2026-07-19).
+- Nothing — main is fully shipped as of v1.4.1 (2026-07-27).
 - Next up per `plans/ocr-capture-assist-2026-07-18.md` Phase 4: ~2 weeks of
-  `image_kb` data decides the 1.4.1 fork (blur warning vs framing guidance);
-  1.4.1 also carries auto-retry-with-backoff and, ideally, a `torch_used`
+  `image_kb` data decides the capture-assist fork (blur warning vs framing
+  guidance) — now targeted at **1.4.2** (1.4.1 became the bug-fix release);
+  it also carries auto-retry-with-backoff and, ideally, a `torch_used`
   property on OCR scans to measure the flashlight's effect on `ocr_failed`.
+- Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
+  its on-device confirmation rides the 1.4.1 TestFlight/production build —
+  if "Turn on flashlight & retry" ever leaves the LED dark again, see the
+  `readySignal` effect in `app/index.tsx` before raising `TORCH_SETTLE_MS`.
 
 > **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
 > hit several one-time setup issues the M1 never did.
@@ -74,7 +86,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (54 tests as of capture-assist Phase 2)
+npm test             # jest — all green (62 tests as of the 1.4.1 review fixes)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -152,8 +164,18 @@ grep -n "MARKETING_VERSION" ios/GlutenOrNot.xcodeproj/project.pbxproj   # confir
 open ios/GlutenOrNot.xcworkspace
 ```
 
+> **Skip steps 1–2 by pre-scripting them** (proven on 1.4.1): prebuild leaves
+> `CURRENT_PROJECT_VERSION = 1` (correct for a new version string) and no
+> `DEVELOPMENT_TEAM`. Insert the team next to it in both configs —
+> `perl -pi -e 's/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = 1;\n\t\t\t\tDEVELOPMENT_TEAM = 5AY7LN2ATY;/' ios/GlutenOrNot.xcodeproj/project.pbxproj`
+> — then verify all three resolve before opening Xcode:
+> `xcodebuild -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot -configuration Release -showBuildSettings | grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION|DEVELOPMENT_TEAM"`
+> (Team ID `5AY7LN2ATY` is recoverable from any past archive's Info.plist under
+> `~/Library/Developer/Xcode/Archives/` if it ever changes.)
+
 In Xcode:
-1. Select the **GlutenOrNot** target → **Signing & Capabilities** → pick your Team.
+1. Select the **GlutenOrNot** target → **Signing & Capabilities** → pick your Team
+   (pre-filled if you ran the script above).
 2. **General** tab → confirm **Version = 1.2.0**, set **Build = 1**
    (build number is scoped per version string, so 1 is valid for a new version).
 3. Toolbar device selector → **Any iOS Device (arm64)**.
