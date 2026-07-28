@@ -2,8 +2,12 @@
 
 > **Status 2026-07-19**: Phases 1–3 done — instrumentation shipped 2026-07-18
 > (PR #17), Phase 2 + release shipped as iOS 1.4.0 (PR #19, build 2, phased
-> release). Phase 4 remains: run the `image_kb` fork query ~2026-08-01; 1.4.1
-> also carries auto-retry (ROADMAP) and a proposed `torch_used` scan property.
+> release). Phase 4 remains: run the `image_kb` fork query ~2026-08-01.
+> **2026-07-27**: iOS **1.4.1** shipped as an unplanned bug-fix release
+> (pre-release review findings — see `reports/2026-07-27-pre-release-review.md`),
+> so the fork release below is now **1.4.2**; it also carries auto-retry
+> (ROADMAP) and a proposed `torch_used` scan property. Every "1.4.1" in the
+> body below predates that renumbering and means the fork release (1.4.2).
 
 Goal: cut the OCR failure rate (25% → <15%) and shrink low-confidence OCR verdicts.
 Strategy: ship instrumentation + no-regrets fixes now; defer the blur pre-check until

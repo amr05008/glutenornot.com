@@ -1,11 +1,15 @@
 ---
 date: 2026-07-27
-summary: Fixed all 9 findings from the 2026-07-27 pre-release review (Fable 5 + Kimi K3), failing-test-first
-tags: [pre-release, safety, timeouts, torch, analytics, regex]
+summary: Fixed all 9 pre-release review findings TDD-style, grilled, and shipped iOS 1.4.1
+tags: [pre-release, safety, timeouts, torch, analytics, regex, release]
 ---
 
 ## Summary
-Worked through the fix-status checklist in `reports/2026-07-27-pre-release-review.md` in order, TDD-style (every fix landed after a watched-failing test). All 9 items fixed and checked off; #1 additionally verified against live Open Food Facts data (Prince biscuits 7622210449283 now returns no misleading note). Suites: 212 web + 62 mobile, all passing.
+Worked through the fix-status checklist in `reports/2026-07-27-pre-release-review.md` in order, TDD-style (every fix landed after a watched-failing test). All 9 items fixed and checked off; #1 additionally verified against live Open Food Facts data (Prince biscuits 7622210449283 now returns no misleading note). A subagent grill returned **SHIP** with two 🟡 follow-ups, both landed pre-commit: a trailing-comma truncation guard on the UPCitemdb capture (the only failure mode that leaned toward "safe") and a 45s `callClaude` retry deadline (3 hung attempts previously ran ~76s past the 60s client budget). Then ran the full release: **iOS 1.4.1 (build 1) submitted to App Store review 2026-07-27 evening**, tagged `v1.4.1`; api/web halves deployed via Vercel on push. Final suites: 214 web + 62 mobile.
+
+Commits: `3400ad0` (all 9 fixes + grill follow-ups), `3a8b0a2` (1.4.1 bump), `057e996` (release close-out + runbook fixes), plus the wrap-up doc pass.
+
+Release notes-to-future-self: Xcode signing/version prep is now fully pre-scriptable (DEVELOPMENT_TEAM into pbxproj — recipe in RELEASE.md step 5); the App Store live-check cloud routine was re-armed for 1.4.1 (fires Thu 2026-07-30 9pm ET). TestFlight device pass was skipped this release — the torch fallback fix's on-device confirmation rides the production build (watch item in RELEASE.md).
 
 ## Changes
 - `api/barcode.js` — #1: `GLUTEN_GRAIN_PATTERN` extended with ES/NL/CA/FR (analyze-prompt vocab) + DE/IT terms, `\b` → `\p{L}` lookarounds with `u` flag (é broke `\b`); `tarwe/weizen/gerst/rogge` allow compound suffixes, `malt` stays exact (maltodextrin). Uncorroborated-tag note reworded to never assert grain absence. #9: dropped `/s` from the UPCitemdb `INGREDIENTS:` regex so multi-line retail prose stops at end of line.

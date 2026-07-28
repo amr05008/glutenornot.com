@@ -227,6 +227,12 @@ gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New tex
 
 ## 8. Post-release sanity (browser, optional)
 
+- **Re-arm the App Store live-check routine** (proven 1.4.0 + 1.4.1): a one-shot
+  cloud routine ("Check iOS x.y.z live on App Store", visible at
+  claude.ai/code/routines) curls the iTunes lookup API ~3 days after submission
+  and reports LIVE/NOT-LIVE. Reuse it via `/schedule` — update its prompt to the
+  new version + a fresh `run_once_at`; don't create a duplicate.
+
 - Confirm the live web app shows the redesign (hard-refresh; the service worker
   updates on the next visit). Spot-check a real scan.
 - Sentry `glutenornot-mobile`: watch for any new error-level issues after release.
