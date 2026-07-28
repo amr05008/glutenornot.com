@@ -31,9 +31,13 @@ const UPCITEMDB_API = 'https://api.upcitemdb.com/prod/trial/lookup';
 // Each external database fetch gets its own budget so one slow upstream reads
 // as a miss (fall through to the next source) instead of a client-side timeout.
 // In prod as configured (no Nutritionix keys) the worst case is 5 fetches/25s;
-// an all-upstreams-slow event is the only way to blow the client budget.
-// TODO(roadmap): add an overall waterfall deadline (~20s) instead of relying
-// on per-fetch budgets summing under the client abort.
+// on top of that, callClaude now carries its own 25s-per-attempt cap and 45s
+// retry deadline (see _utils.js), so a slow waterfall PLUS a hung Claude
+// attempt can still exceed the client's 30s abort — bounded, but not within
+// budget.
+// TODO(roadmap): add an overall per-request deadline (~20s waterfall + Claude
+// remainder) instead of relying on per-stage budgets summing under the client
+// abort.
 const EXTERNAL_FETCH_TIMEOUT_MS = 5000;
 
 /**
@@ -485,9 +489,16 @@ async function lookupUpcItemDb(barcode) {
     // marketing copy: require the uppercase INGREDIENTS label (live samples
     // are all uppercase; "finest ingredients: ..." prose is not) and a
     // comma in the capture (real statements are comma-separated lists).
-    const ingredientsMatch = item.description?.match(/INGREDIENTS\s*:\s*\/?\s*(.+)/s);
-    if (ingredientsMatch && ingredientsMatch[1].includes(',')) {
-      result.ingredients_text = ingredientsMatch[1].trim();
+    // No /s flag: capture stops at end of line so multi-line retail prose
+    // (directions, disclaimers) never reaches Claude as "ingredients". A
+    // capture ending in a comma is proof the statement wrapped to the next
+    // line and got truncated — a cut list could ground a "safe" verdict on
+    // half the ingredients, so reject it (fail-safe: the scan flows through
+    // the no-ingredient-data caution path).
+    const ingredientsMatch = item.description?.match(/INGREDIENTS\s*:\s*\/?\s*(.+)/);
+    const captured = ingredientsMatch && ingredientsMatch[1].trim();
+    if (captured && captured.includes(',') && !captured.endsWith(',')) {
+      result.ingredients_text = captured;
     }
 
     return result;
@@ -500,8 +511,15 @@ async function lookupUpcItemDb(barcode) {
 // Grains/derivatives that constitute an actual gluten source in an ingredient list.
 // Oats are deliberately excluded — they are a cross-contamination (caution) concern,
 // not proof of gluten, and are the usual reason a false `en:gluten` tag appears.
+// Open Food Facts returns ingredients in the product's local language, so the
+// pattern covers the analyze-prompt vocabulary (Spanish, Dutch, Catalan, French)
+// plus German and Italian. A miss in an uncovered language is handled by the
+// note's wording, which never asserts the grain is absent. `\b` breaks on
+// accented letters (é is non-\w in JS), hence `\p{L}` lookarounds with the u
+// flag. `tarwe`/`weizen`/`gerst`/`rogge` allow compound suffixes (tarwebloem,
+// Weizenmehl); `malt` stays exact so maltodextrin (gluten-free) never matches.
 const GLUTEN_GRAIN_PATTERN =
-  /\b(wheat|barley|rye|malt|triticale|spelt|kamut|khorasan|einkorn|emmer|durum|semolina|farina|seitan|bulgur|couscous|matzo|graham)\b/i;
+  /(?<!\p{L})(wheat|barley|rye|malt|triticale|spelt|kamut|khorasan|einkorn|emmer|durum|semolina|farina|seitan|bulgur|couscous|matzo|graham|trigo|cebada|centeno|malta|sémola|espelta|tarwe\p{L}*|gerst\p{L}*|rogge\p{L}*|mout|griesmeel|blat|ordi|sègol|sèmola|blé|froment|orge|seigle|semoule|épeautre|weizen\p{L}*|gerste|roggen|malz|dinkel|frumento|orzo|segale|malto|farro|semola)(?!\p{L})/iu;
 
 /**
  * Assess whether a database `gluten` allergen tag is trustworthy.
@@ -532,9 +550,11 @@ function assessGlutenSignal(product) {
   );
 
   let note =
-    "DATA RELIABILITY: The 'gluten' allergen tag is NOT corroborated by the ingredient list " +
-    '(no wheat, barley, or rye present). Open Food Facts often auto-derives a gluten tag from oats ' +
-    'or unverified crowd edits, so treat it as low-confidence metadata, not a manufacturer declaration. ' +
+    "DATA RELIABILITY: The 'gluten' allergen tag is NOT corroborated by any gluten-grain term " +
+    'this check recognizes (English plus common European languages). The ingredient list may be in a ' +
+    'language the check does not cover — if it contains a gluten grain in ANY language, treat the tag ' +
+    'as genuine. Otherwise, Open Food Facts often auto-derives a gluten tag from oats or unverified ' +
+    'crowd edits, so treat it as low-confidence metadata, not a manufacturer declaration. ' +
     'DO NOT mark this product unsafe on the strength of that tag alone — base the verdict on the actual ingredients.';
 
   if (hasGlutenFreeLabel) {

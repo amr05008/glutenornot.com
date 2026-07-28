@@ -1,4 +1,19 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+// Controllable posthog-node stand-in for the flush-behavior tests below. The
+// real SDK is only dynamically imported once POSTHOG_API_KEY is set, so the
+// other suites in this file never touch it.
+const posthogControl = vi.hoisted(() => ({
+  shutdown: () => Promise.resolve(),
+  captured: [],
+}));
+vi.mock('posthog-node', () => ({
+  PostHog: class {
+    capture(event) { posthogControl.captured.push(event); }
+    shutdown() { return posthogControl.shutdown(); }
+  },
+}));
+
 import {
   buildScanProperties,
   buildScanFailureProperties,
@@ -240,6 +255,58 @@ describe('anonId', () => {
     expect(anonId('')).toBe('anonymous');
     expect(anonId(null)).toBe('anonymous');
     expect(anonId(undefined)).toBe('anonymous');
+  });
+});
+
+// Pre-release review 2026-07-27 #4: every scan response was serially blocked on
+// a PostHog flush (up to the 2s shutdown cap when PostHog is degraded). On
+// Vercel the flush must be handed to the request context's waitUntil so it
+// completes after the response; without a context (local/dev) it is awaited as
+// before so the event is still delivered.
+describe('captureEvent flush scheduling', () => {
+  const CTX_SYMBOL = Symbol.for('@vercel/request-context');
+  const originalKey = process.env.POSTHOG_API_KEY;
+
+  afterEach(() => {
+    delete globalThis[CTX_SYMBOL];
+    if (originalKey === undefined) delete process.env.POSTHOG_API_KEY;
+    else process.env.POSTHOG_API_KEY = originalKey;
+    posthogControl.shutdown = () => Promise.resolve();
+    posthogControl.captured = [];
+  });
+
+  it('hands the flush to waitUntil instead of blocking the response', async () => {
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    const waitUntil = vi.fn();
+    globalThis[CTX_SYMBOL] = { get: () => ({ waitUntil }) };
+
+    await trackScan({ ip: '203.0.113.7', method: 'ocr', verdict: 'safe' });
+
+    expect(posthogControl.captured).toHaveLength(1);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves without waiting for the flush when a request context exists', async () => {
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    // A flush that never settles: with waitUntil the scan response must not
+    // depend on it.
+    posthogControl.shutdown = () => new Promise(() => {});
+    const waitUntil = vi.fn();
+    globalThis[CTX_SYMBOL] = { get: () => ({ waitUntil }) };
+
+    await expect(
+      trackScan({ ip: '203.0.113.7', method: 'ocr', verdict: 'safe' })
+    ).resolves.toBeUndefined();
+  }, 1000);
+
+  it('awaits the flush when no request context is available (local/dev)', async () => {
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    let flushed = false;
+    posthogControl.shutdown = async () => { flushed = true; };
+
+    await trackScan({ ip: '203.0.113.7', method: 'ocr', verdict: 'safe' });
+
+    expect(flushed).toBe(true);
   });
 });
 

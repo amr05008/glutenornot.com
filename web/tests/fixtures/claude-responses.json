@@ -49,8 +49,9 @@
       "verdict": "caution",
       "flagged_ingredients": [],
       "allergen_warnings": [],
-      "explanation": "Unable to fully analyze the ingredients. Please review manually.",
-      "confidence": "low"
+      "explanation": "Not sure",
+      "confidence": "medium",
+      "mode": "label"
     }
   },
   "no_json_found": {

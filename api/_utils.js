@@ -54,9 +54,28 @@ function _truncate(str, max = 300) {
  *
  * Options (mainly for tests): `fetchImpl`, `maxRetries`, `baseDelayMs`, `sleepImpl`.
  */
+// Per-attempt cap on the Anthropic call. Opus legitimately takes tens of
+// seconds on a long menu, so this only cuts off hung connections.
+const CLAUDE_ATTEMPT_TIMEOUT_MS = 25000;
+// Total cap on retrying: once this much time has been spent, no new attempt is
+// launched. With the 25s per-attempt cap, a fully hung upstream resolves in
+// ~50s of Claude time (two attempts) — at the edge of the OCR client's 60s
+// budget instead of far past it (three hung attempts would be ~76s), and far
+// below Vercel's 300s kill. The barcode client's 30s budget can still be
+// exceeded by one hung attempt on top of the lookup waterfall; the overall
+// per-request deadline remains a roadmap item.
+const CLAUDE_RETRY_DEADLINE_MS = 45000;
+
 async function callClaude(
   { maxTokens, content },
-  { fetchImpl = fetch, maxRetries = 2, baseDelayMs = 400, sleepImpl = _sleep } = {}
+  {
+    fetchImpl = fetch,
+    maxRetries = 2,
+    baseDelayMs = 400,
+    sleepImpl = _sleep,
+    attemptTimeoutMs = CLAUDE_ATTEMPT_TIMEOUT_MS,
+    retryDeadlineMs = CLAUDE_RETRY_DEADLINE_MS,
+  } = {}
 ) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -64,9 +83,13 @@ async function callClaude(
   }
 
   let lastError = null;
+  const startedAt = Date.now();
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
+      // Out of retry budget — surface the last transient failure rather than
+      // launching another attempt the client has no time left to wait for.
+      if (Date.now() - startedAt >= retryDeadlineMs) break;
       // Exponential backoff with a little jitter: 400ms, 800ms, …
       const delay = baseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 150);
       await sleepImpl(delay);
@@ -86,9 +109,10 @@ async function callClaude(
           max_tokens: maxTokens,
           messages: [{ role: 'user', content }],
         }),
+        signal: AbortSignal.timeout(attemptTimeoutMs),
       });
     } catch (err) {
-      // Network-level failure (DNS, connection reset, fetch abort) — transient.
+      // Network-level failure (DNS, connection reset, fetch abort/timeout) — transient.
       lastError = new ClaudeError('overloaded', null, err && err.message);
       continue;
     }

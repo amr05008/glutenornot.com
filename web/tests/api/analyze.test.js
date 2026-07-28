@@ -10,6 +10,7 @@ vi.mock('../../../api/_analytics.js', async (importOriginal) => {
 import handler, {
   normalizeMode,
   parseClaudeResponse,
+  performOCR,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,
@@ -38,9 +39,38 @@ describe('parseClaudeResponse', () => {
     expect(result).toEqual(fixtures.missing_optional_fields.expected);
   });
 
-  it('falls back to caution for invalid verdict value', () => {
+  // Pre-release review 2026-07-27 #5: a non-standard verdict normalizes to
+  // caution but KEEPS the rest of the analysis (matching the barcode parser),
+  // instead of discarding it for the generic "Unable to fully analyze" fallback.
+  it('normalizes an invalid verdict to caution, keeping the analysis', () => {
     const result = parseClaudeResponse(fixtures.invalid_verdict_value.input);
     expect(result).toEqual(fixtures.invalid_verdict_value.expected);
+  });
+
+  it('normalizes a cased verdict instead of discarding a complete analysis', () => {
+    const result = parseClaudeResponse(JSON.stringify({
+      verdict: 'Safe',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'No gluten ingredients found.',
+      confidence: 'high',
+    }));
+    expect(result.verdict).toBe('safe');
+    expect(result.explanation).toBe('No gluten ingredients found.');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('maps a WARNING verdict to caution, keeping flagged ingredients', () => {
+    const result = parseClaudeResponse(JSON.stringify({
+      verdict: 'WARNING',
+      flagged_ingredients: ['malt extract'],
+      allergen_warnings: [],
+      explanation: 'Contains malt extract.',
+      confidence: 'medium',
+    }));
+    expect(result.verdict).toBe('caution');
+    expect(result.flagged_ingredients).toEqual(['malt extract']);
+    expect(result.explanation).toBe('Contains malt extract.');
   });
 
   it('falls back to caution when no JSON found', () => {
@@ -152,6 +182,42 @@ describe('CLAUDE_PROMPT multilingual support', () => {
 
   it('instructs Claude to keep explanations in English', () => {
     expect(CLAUDE_PROMPT).toMatch(/english/i);
+  });
+});
+
+// Pre-release review 2026-07-27 #2: the barcode waterfall got per-fetch abort
+// budgets (GLUTENORNOT-MOBILE-7) but the OCR path's Vision fetch had none — a
+// hung upstream burned the function until Vercel's 300s cap while the user
+// stared at a spinner. The Vision call must be time-bounded, and a timeout is
+// a Vision failure (OCR_ERROR), not an unclassified crash.
+describe('performOCR timeouts', () => {
+  const ORIGINAL_KEY = process.env.GOOGLE_CLOUD_VISION_API_KEY;
+
+  beforeEach(() => {
+    process.env.GOOGLE_CLOUD_VISION_API_KEY = 'test-vision-key';
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_KEY === undefined) delete process.env.GOOGLE_CLOUD_VISION_API_KEY;
+    else process.env.GOOGLE_CLOUD_VISION_API_KEY = ORIGINAL_KEY;
+    vi.unstubAllGlobals();
+  });
+
+  it('passes an abort signal to the Vision fetch', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ responses: [{ textAnnotations: [{ description: 'WHEAT FLOUR, SALT' }] }] }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    await performOCR('base64data');
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('surfaces a Vision timeout as OCR_ERROR (a bounded, classified failure)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+      Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+    ));
+    await expect(performOCR('base64data')).rejects.toThrow('OCR_ERROR');
   });
 });
 

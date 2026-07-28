@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { handleErrorResponse, APIError, ErrorType } from '../../js/api.js';
+import { handleErrorResponse, APIError, ErrorType, API_TIMEOUT } from '../../js/api.js';
+
+// Pre-release review 2026-07-27 #6: the web client aborted OCR at 30s while the
+// server can legitimately take longer (Vision + Opus with retries) — mobile
+// already learned this and runs 60s. Keep the two clients in lockstep.
+describe('API_TIMEOUT', () => {
+  it('gives the server the same 60s budget as the mobile client', () => {
+    expect(API_TIMEOUT).toBe(60000);
+  });
+});
 
 // Helper to create mock Response objects
 function createMockResponse(status, body = {}, headers = {}) {

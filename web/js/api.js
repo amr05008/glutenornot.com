@@ -3,7 +3,7 @@
  * Handles communication with serverless functions
  */
 
-const API_TIMEOUT = 30000; // 30 seconds
+const API_TIMEOUT = 60000; // 60 seconds — OCR + Claude can take a while; matches the mobile client
 
 /**
  * Error types for handling
@@ -160,5 +160,6 @@ export {
   checkHealth,
   APIError,
   ErrorType,
-  handleErrorResponse
+  handleErrorResponse,
+  API_TIMEOUT
 };

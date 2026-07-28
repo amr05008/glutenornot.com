@@ -12,6 +12,8 @@ const cameraReadyControl: { auto: boolean; fire: () => void } = {
   auto: true,
   fire: () => {},
 };
+// Tests can flip this to render the screen with camera permission denied.
+const permissionControl = { granted: true };
 jest.mock('expo-camera', () => {
   const { forwardRef, useEffect, useImperativeHandle } = require('react');
   const { View } = require('react-native');
@@ -26,7 +28,7 @@ jest.mock('expo-camera', () => {
       }));
       return <View testID="camera-view" {...props} />;
     }),
-    useCameraPermissions: () => [{ granted: true }, jest.fn()],
+    useCameraPermissions: () => [{ granted: permissionControl.granted }, jest.fn()],
   };
 });
 
@@ -90,6 +92,7 @@ beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation();
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
   cameraReadyControl.auto = true;
+  permissionControl.granted = true;
 });
 
 afterEach(() => {
@@ -168,6 +171,50 @@ describe('CameraScreen torch toggle', () => {
 
     // After the settle period the torch flips on — same timing profile as a
     // human reaching for the toggle, the path that provably works.
+    await act(async () => {
+      jest.advanceTimersByTime(750);
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+  });
+
+  // Pre-release review 2026-07-27 #8: the 2s camera-ready fallback stamps the
+  // settle clock when the FALLBACK fires, not when the native session is
+  // actually ready. If onCameraReady is merely slow (>2s), the torch was
+  // applied against an unsettled session and silently dropped — the exact bug
+  // the 1.4.0 settle fix targeted. The late real ready must re-apply the torch
+  // as a fresh false→true transition after a full settle window.
+  it('re-applies the torch when the real camera-ready arrives after the 2s fallback', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+    const { getByLabelText, getByText, getByTestId } = render(<CameraScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+    await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+
+    // Retry with flashlight; the remounted camera is slow — onCameraReady
+    // does not fire before the 2s fallback forces readiness
+    cameraReadyControl.auto = false;
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight & retry'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2000); // fallback forces cameraReady
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(750); // settle window measured from the fallback
+    });
+
+    // The real ready arrives now — everything applied so far may have been
+    // dropped by the unsettled session, so the torch must go through a fresh
+    // false→true transition timed from THIS instant
+    await act(async () => {
+      cameraReadyControl.fire();
+    });
+    expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+
     await act(async () => {
       jest.advanceTimersByTime(750);
     });
@@ -335,6 +382,150 @@ describe('CameraScreen error flow', () => {
       jest.advanceTimersByTime(750);
     });
     expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+  });
+
+  // Pre-release review 2026-07-27 #7: the couldn't-read screen is shared by
+  // camera captures and photo-library picks, but "Turn on flashlight & retry"
+  // is a no-op for a blurry screenshot from the library — and it left the torch
+  // on afterwards. Library-sourced failures get a plain "Try again" that never
+  // touches the torch.
+  describe('couldn\'t-read screen for photo-library picks', () => {
+    beforeEach(() => {
+      mockLaunchLibrary.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://picked.jpg' }],
+      } as any);
+      mockAnalyzeImage.mockRejectedValue(
+        new APIError("Couldn't read the text.", 'ocr_failed')
+      );
+    });
+
+    it('offers a plain "Try again" instead of the flashlight retry', async () => {
+      const { getByLabelText, getByText, queryByLabelText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+
+      expect(queryByLabelText('Turn on flashlight & retry')).toBeNull();
+      expect(getByLabelText('Try again')).toBeTruthy();
+    });
+
+    it('"Try again" does not turn the torch on', async () => {
+      const { getByLabelText, getByText, getByTestId } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Try again'));
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+    });
+
+    it('a later camera-capture failure still offers the flashlight retry', async () => {
+      const { getByLabelText, getByText } = render(<CameraScreen />);
+
+      // First: a failed library pick
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+      await act(async () => {
+        fireEvent.press(getByLabelText('Try again'));
+      });
+
+      // Then: a failed camera capture — dim light is plausible again
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of ingredients'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+      expect(getByLabelText('Turn on flashlight & retry')).toBeTruthy();
+    });
+  });
+
+  // Pre-release review 2026-07-27 #3: the permission gate rendered before the
+  // isAnalyzing/systemState branches, so a user who denied camera access and
+  // scanned via the photo picker saw the frozen permission screen for the whole
+  // analysis, and error states were set but never rendered.
+  describe('with camera permission denied (photo-picker scans)', () => {
+    beforeEach(() => {
+      permissionControl.granted = false;
+    });
+
+    it('shows the analyzing spinner while a picked photo is processed', async () => {
+      mockLaunchLibrary.mockResolvedValueOnce({
+        canceled: false,
+        assets: [{ uri: 'file://picked.jpg' }],
+      } as any);
+      let resolveAnalyze: (r: any) => void = () => {};
+      mockAnalyzeImage.mockReturnValueOnce(new Promise((r) => { resolveAnalyze = r; }) as any);
+
+      const { getByLabelText, getByText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Choose a photo instead'));
+      });
+
+      expect(getByText('Reading ingredients…')).toBeTruthy();
+
+      await act(async () => {
+        resolveAnalyze({
+          mode: 'label',
+          verdict: 'safe',
+          flagged_ingredients: [],
+          allergen_warnings: [],
+          explanation: 'All clear.',
+          confidence: 'high',
+        });
+      });
+    });
+
+    it("shows the couldn't-read screen when a picked photo fails OCR", async () => {
+      mockLaunchLibrary.mockResolvedValueOnce({
+        canceled: false,
+        assets: [{ uri: 'file://picked.jpg' }],
+      } as any);
+      mockAnalyzeImage.mockRejectedValueOnce(
+        new APIError("Couldn't read the text.", 'ocr_failed')
+      );
+
+      const { getByLabelText, getByText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Choose a photo instead'));
+      });
+
+      await waitFor(() => {
+        expect(getByText("Couldn't read that")).toBeTruthy();
+      });
+    });
+
+    it('shows the offline screen when a picked photo hits a network error', async () => {
+      mockLaunchLibrary.mockResolvedValueOnce({
+        canceled: false,
+        assets: [{ uri: 'file://picked.jpg' }],
+      } as any);
+      mockAnalyzeImage.mockRejectedValueOnce(
+        new APIError('Network error. Please check your connection.', 'network')
+      );
+
+      const { getByLabelText, getByText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Choose a photo instead'));
+      });
+
+      await waitFor(() => {
+        expect(getByText("You're offline")).toBeTruthy();
+      });
+    });
   });
 
   it('"Choose a photo instead" opens the image picker', async () => {

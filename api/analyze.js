@@ -323,6 +323,10 @@ export default async function handler(req, res) {
   }
 }
 
+// Generous next to the barcode waterfall's 5s (Vision is doing real OCR work),
+// but far below the 60s client budget so a timeout still yields a response.
+const VISION_FETCH_TIMEOUT_MS = 10000;
+
 /**
  * Perform OCR using Google Cloud Vision API
  */
@@ -333,21 +337,31 @@ async function performOCR(base64Image) {
     throw new Error('Google Cloud Vision API key not configured');
   }
 
-  const response = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: base64Image },
-          features: [{ type: 'TEXT_DETECTION' }]
-        }]
-      })
-    }
-  );
+  // Time-bound the upstream call (the barcode waterfall's GLUTENORNOT-MOBILE-7
+  // lesson): a hung Vision connection otherwise burns the function until
+  // Vercel's 300s cap while the client gives up at 60s.
+  let response;
+  try {
+    response = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{
+            image: { content: base64Image },
+            features: [{ type: 'TEXT_DETECTION' }]
+          }]
+        }),
+        signal: AbortSignal.timeout(VISION_FETCH_TIMEOUT_MS)
+      }
+    );
+  } catch (error) {
+    console.error('Vision fetch failed:', error.message);
+    throw new Error('OCR_ERROR');
+  }
 
   if (!response.ok) {
     console.error('Vision API error:', response.status);
@@ -404,10 +418,10 @@ function parseClaudeResponse(content) {
 
     const result = JSON.parse(jsonMatch[0]);
 
-    // Validate required fields
-    if (!result.verdict || !['safe', 'caution', 'unsafe'].includes(result.verdict)) {
-      throw new Error('Invalid verdict');
-    }
+    // Normalize the verdict ("Safe"/"WARNING"/etc.) instead of discarding a
+    // complete analysis over casing — same fail-safe mapping the barcode
+    // parser uses (anything unrecognized becomes caution).
+    result.verdict = normalizeVerdict(result.verdict);
 
     // Ensure arrays exist
     result.flagged_ingredients = result.flagged_ingredients || [];
@@ -466,6 +480,7 @@ export {
   normalizeMode,
   normalizeVerdict,
   parseClaudeResponse,
+  performOCR,
   checkRateLimit,
   incrementRateLimit,
   formatTimeRemaining,

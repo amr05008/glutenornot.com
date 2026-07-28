@@ -214,6 +214,70 @@ describe('assessGlutenSignal', () => {
   });
 });
 
+describe('assessGlutenSignal — non-English ingredient lists', () => {
+  // Regression: Prince biscuits (OFF 7622210449283). Open Food Facts returns
+  // ingredients in the product's local language, so a French wheat product
+  // ("Farine de blé 34,8%") looked "uncorroborated" to the English-only grain
+  // pattern and the note pushed Claude AWAY from unsafe on a wheat product.
+  it('treats French blé as corroborating the gluten tag (accented word — \\b breaks on é)', () => {
+    const note = assessGlutenSignal({
+      ingredients_text:
+        'Farine de blé 34,8%, sucre, huiles végétales (palme, colza), chocolat 8,4% (sucre, pâte de cacao, beurre de cacao), sel',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('treats Spanish trigo as corroborating the gluten tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'Harina de trigo, azúcar, aceite de girasol, sal',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('treats a Dutch tarwe compound (tarwebloem) as corroborating the gluten tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'Tarwebloem, suiker, plantaardige oliën, zout',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('treats German Weizenmehl as corroborating the gluten tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'Weizenmehl, Zucker, Palmöl, Salz',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('treats Catalan blat as corroborating the gluten tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'Blat integral, sucre, oli de gira-sol, sal',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('never asserts grain absence in the uncorroborated note (the list may be non-English)', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'oats, brown rice, honey, salt',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeTruthy();
+    expect(note).not.toMatch(/no wheat, barley, or rye present/i);
+  });
+
+  it('still does not corroborate from maltodextrin (gluten-free despite the malt prefix)', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'rice, maltodextrin, salt',
+      allergens_tags: ['en:gluten'],
+    });
+    expect(note).toBeTruthy();
+  });
+});
+
 describe('buildIngredientContext data reliability (UPCitemdb)', () => {
   it('appends a retail-listing reliability caveat for upcitemdb-sourced ingredients', () => {
     const context = buildIngredientContext({
@@ -471,6 +535,54 @@ describe('lookupUpcItemDb', () => {
           title: 'Corn Chips',
           brand: 'BrandCo',
           description: 'INGREDIENTS: taste the difference.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('012345678905');
+    expect(result.ingredients_text).toBeUndefined();
+  });
+
+  // Pre-release review 2026-07-27 #9: the extraction regex used the /s flag,
+  // so everything after "INGREDIENTS:" in a multi-line retail description —
+  // directions, disclaimers, marketing — became ingredients_text and went to
+  // Claude as the ingredient statement (wrong-verdict risk).
+  it('captures only the ingredient line, not the retail prose after it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          ean: '0016000275270',
+          title: 'Honey Nut Cheerios',
+          brand: 'General Mills',
+          description:
+            'INGREDIENTS: / WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.\n' +
+            'Directions: enjoy as part of a balanced breakfast.\n' +
+            'Satisfaction guaranteed or your money back. Processed in a facility that also handles wheat.',
+        }],
+      }),
+    }));
+    const result = await lookupUpcItemDb('016000275270');
+    expect(result.ingredients_text).toBe('WHOLE GRAIN OATS, SUGAR, OAT BRAN, SALT.');
+  });
+
+  // Grill follow-up to #9: without /s the capture stops at end of line, so a
+  // manufacturer statement WRAPPED across lines gets cut mid-list — and a
+  // clean-looking truncated list (gluten term on the next line) could ground a
+  // "safe" verdict. A trailing comma is proof of truncation: reject it and let
+  // the scan flow through the no-ingredient-data caution path instead.
+  it('rejects a capture that ends in a comma (wrapped statement truncated at end of line)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'OK',
+        total: 1,
+        items: [{
+          ean: '0012345678905',
+          title: 'Rice Snacks',
+          brand: 'BrandCo',
+          description: 'INGREDIENTS: RICE, SUGAR,\nWHEAT FLOUR, SALT.',
         }],
       }),
     }));

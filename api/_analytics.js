@@ -150,14 +150,34 @@ async function captureEvent(event, ip, properties) {
       event,
       properties,
     });
-    // Serverless: flush the batched event before the function freezes, but cap the
-    // wait — shutdown() defaults to a 30s timeout, and this runs on the user-facing
-    // scan response path. 2s is plenty for a single event; a degraded PostHog must
-    // never stall a scan.
-    await client.shutdown(2000);
+    // Serverless: flush the batched event before the function freezes, but never
+    // on the user-facing response path — trackScan/trackScanFailure are awaited
+    // right before res.json() in both handlers, so an awaited flush made every
+    // scan pay a PostHog round-trip (up to the 2s shutdown cap when PostHog is
+    // degraded). On Vercel, hand the flush to the request context's waitUntil:
+    // it runs after the response is sent and still completes before the
+    // function freezes. Without a context (local/dev), await as before.
+    const flush = client.shutdown(2000);
+    const waitUntil = getWaitUntil();
+    if (waitUntil) {
+      waitUntil(flush.catch((err) => console.error(`${event} flush failed:`, err)));
+    } else {
+      await flush;
+    }
   } catch (err) {
     console.error(`${event} tracking failed:`, err);
   }
+}
+
+/**
+ * The Vercel request context's waitUntil, or null when not running on Vercel.
+ * Reads the platform's stable Symbol.for('@vercel/request-context') contract —
+ * the same thing @vercel/functions' waitUntil() does, but returning null (so we
+ * can fall back to awaiting) instead of silently dropping the registration.
+ */
+function getWaitUntil() {
+  const ctx = globalThis[Symbol.for('@vercel/request-context')]?.get?.() ?? {};
+  return typeof ctx.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : null;
 }
 
 export {

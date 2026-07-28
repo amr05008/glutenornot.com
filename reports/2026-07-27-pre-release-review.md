@@ -4,15 +4,15 @@ I ran the [pre-release review prompt](../pre-release-review-prompt.md) through t
 
 ## Fix status (the union — 9 findings)
 
-- [ ] **1. Multilingual gluten-signal note asserts "no wheat present" for non-English products** — `api/barcode.js:503-538` *(Fable #1 — safety bug, live-reproduced with OFF product 7622210449283; fix first)*
-- [ ] **2. OCR path has no upstream timeouts — Vision/Claude fetches can hang** — `api/analyze.js:336-350`, `api/_utils.js:77-89` *(the one both models caught: Fable #3 ≡ K3 #1)*
-- [ ] **3. Camera-permission gate hides all analysis/error UI for photo-picker scans** — `mobile/app/index.tsx:327-339` *(Fable #2)*
-- [ ] **4. Every scan response serially blocked on a PostHog flush** — `api/_analytics.js:148-157` *(Fable #4)*
-- [ ] **5. analyze.js discards complete analyses over verdict casing; barcode.js normalizes** — `api/analyze.js:408-410` *(Fable #5 — one-liner)*
-- [ ] **6. Web client timeout (30s) shorter than realistic server time; web never beacons** — `web/js/api.js:7` *(K3 #2 — one-liner)*
-- [ ] **7. "Turn on flashlight & retry" offered for gallery picks (and leaves torch on)** — `mobile/app/index.tsx:365-387` *(K3 #3)*
-- [ ] **8. Camera-ready 2s fallback races the 1.4.0 torch-settle fix** — `mobile/app/index.tsx:123-133` *(K3 #4 — needs on-device repro)*
-- [ ] **9. UPCitemdb ingredient regex `/s` can swallow a whole retail description** — `api/barcode.js:488-491` *(K3 #5 — wrong-verdict risk, one regex change)*
+- [x] **1. Multilingual gluten-signal note asserts "no wheat present" for non-English products** — `api/barcode.js:503-538` *(Fable #1 — safety bug, live-reproduced with OFF product 7622210449283; fix first)*
+- [x] **2. OCR path has no upstream timeouts — Vision/Claude fetches can hang** — `api/analyze.js:336-350`, `api/_utils.js:77-89` *(the one both models caught: Fable #3 ≡ K3 #1)*
+- [x] **3. Camera-permission gate hides all analysis/error UI for photo-picker scans** — `mobile/app/index.tsx:327-339` *(Fable #2)*
+- [x] **4. Every scan response serially blocked on a PostHog flush** — `api/_analytics.js:148-157` *(Fable #4)*
+- [x] **5. analyze.js discards complete analyses over verdict casing; barcode.js normalizes** — `api/analyze.js:408-410` *(Fable #5 — one-liner)*
+- [x] **6. Web client timeout (30s) shorter than realistic server time; web never beacons** — `web/js/api.js:7` *(K3 #2 — timeout raised to 60s + SW cache v6; the web failure beacon was not in K3's fix line and remains intentionally absent per CLAUDE.md)*
+- [x] **7. "Turn on flashlight & retry" offered for gallery picks (and leaves torch on)** — `mobile/app/index.tsx:365-387` *(K3 #3)*
+- [x] **8. Camera-ready 2s fallback races the 1.4.0 torch-settle fix** — `mobile/app/index.tsx:123-133` *(K3 #4 — fixed + unit-tested: late real onCameraReady now re-applies the torch as a fresh transition; still confirm on device before release)*
+- [x] **9. UPCitemdb ingredient regex `/s` can swallow a whole retail description** — `api/barcode.js:488-491` *(K3 #5 — wrong-verdict risk, one regex change)*
 
 **Unverified hunches to triage** (7 total, no overlap between the two lists): UPC-E resolution, iOS network-error message classification, TORCH_SETTLE_MS on older devices, capture-tap before cameraReady (Fable); track.js limiter cold-start reset, stale-schema recents, rate limiter counting only successes (K3).
 

@@ -7,7 +7,8 @@
 // files instead of stale cache (e.g. the V2 redesign). v3: V2 "Clinic" redesign.
 // v4: ship the api.js that sends the X-Client header (PostHog platform split).
 // v5: api.js surfaces the backend's distinct 503 message + retryable hint.
-const CACHE_NAME = 'glutenornot-v5';
+// v6: api.js timeout 30s → 60s to match mobile (pre-release review 2026-07-27 #6).
+const CACHE_NAME = 'glutenornot-v6';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

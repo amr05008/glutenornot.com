@@ -53,12 +53,20 @@ export default function CameraScreen() {
   const [systemState, setSystemState] = useState<SystemState>(null);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Reading ingredients…');
+  // Where the last analyzed photo came from — the couldn't-read screen only
+  // offers the flashlight retry for camera captures (a torch can't fix a
+  // blurry screenshot from the photo library).
+  const [scanSource, setScanSource] = useState<'camera' | 'picker'>('camera');
   // Session-scoped by design: survives retakes and result round-trips (the
   // screen stays mounted under the stack), resets when the app relaunches.
   // `torch` is the user's intent (drives the button); `torchApplied` is what
   // actually reaches CameraView, applied on a settle delay — see below.
   const [torch, setTorch] = useState(false);
   const [torchApplied, setTorchApplied] = useState(false);
+  // Bumped each time the native onCameraReady callback actually fires — lets
+  // the torch effect re-run when the real ready arrives AFTER the 2s fallback
+  // already forced cameraReady (see the torch-application effect).
+  const [readySignal, setReadySignal] = useState(0);
   const cameraReadyAtRef = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
@@ -116,9 +124,14 @@ export default function CameraScreen() {
       setTorchApplied(true);
       return;
     }
+    // Force a fresh false→true transition: if the 2s fallback already applied
+    // the torch against an unsettled session (readySignal re-run), that prop
+    // change was silently dropped — leaving the prop true would never light
+    // the LED.
+    setTorchApplied(false);
     const timer = setTimeout(() => setTorchApplied(true), delay);
     return () => clearTimeout(timer);
-  }, [torch, cameraReady]);
+  }, [torch, cameraReady, readySignal]);
 
   // Fallback: if onCameraReady never fires (production build race), force-enable
   // after 2s. Only while the camera is actually mounted — otherwise the timer
@@ -194,9 +207,10 @@ export default function CameraScreen() {
     Alert.alert('Error', message);
   }, []);
 
-  const processAndAnalyze = async (imageUri: string) => {
+  const processAndAnalyze = async (imageUri: string, source: 'camera' | 'picker') => {
     setOcrError(null);
     setSystemState(null);
+    setScanSource(source);
 
     try {
       setIsAnalyzing(true);
@@ -296,7 +310,7 @@ export default function CameraScreen() {
         return;
       }
 
-      await processAndAnalyze(photo.uri);
+      await processAndAnalyze(photo.uri, 'camera');
     } catch (error) {
       // Camera can unmount if a barcode scan triggers navigation mid-capture
       console.warn('Photo capture failed:', error);
@@ -316,28 +330,17 @@ export default function CameraScreen() {
 
     if (result.canceled) return;
 
-    await processAndAnalyze(result.assets[0].uri);
+    await processAndAnalyze(result.assets[0].uri, 'picker');
   };
 
   if (!permission) {
     return <View style={styles.container} />;
   }
 
-  // Camera permission gate → designed system-state screen
-  if (!permission.granted) {
-    return (
-      <StateScreen
-        icon="camera"
-        title="Camera access"
-        body="GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored."
-        primary="Enable camera"
-        onPrimary={requestPermission}
-        secondary="Choose a photo instead"
-        onSecondary={handlePickImage}
-      />
-    );
-  }
-
+  // The analyzing/system-state branches must render before the permission gate:
+  // photo-picker scans work without camera access, and gating them behind the
+  // permission screen froze the UI for the whole analysis and swallowed the
+  // offline/couldn't-read states entirely.
   if (isAnalyzing) {
     return (
       <LoadingSpinner
@@ -370,11 +373,12 @@ export default function CameraScreen() {
         iconBg={theme.verdict.caution.surface}
         title="Couldn't read that"
         body="The text was too blurry or small to read. Hold steady and fill the frame with the label."
-        primary={torch ? 'Try again' : 'Turn on flashlight & retry'}
+        primary={scanSource === 'camera' && !torch ? 'Turn on flashlight & retry' : 'Try again'}
         onPrimary={() => {
-          // Dim light is the likeliest fixable cause of an unreadable label —
-          // pre-enable the torch for the retry (no-op if already on).
-          setTorch(true);
+          // Dim light is the likeliest fixable cause of an unreadable camera
+          // capture — pre-enable the torch for the retry (no-op if already
+          // on). Library picks never touch the torch: it can't fix them.
+          if (scanSource === 'camera') setTorch(true);
           setSystemState(null);
         }}
         secondary="Choose a photo instead"
@@ -382,6 +386,21 @@ export default function CameraScreen() {
           setSystemState(null);
           handlePickImage();
         }}
+      />
+    );
+  }
+
+  // Camera permission gate → designed system-state screen
+  if (!permission.granted) {
+    return (
+      <StateScreen
+        icon="camera"
+        title="Camera access"
+        body="GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored."
+        primary="Enable camera"
+        onPrimary={requestPermission}
+        secondary="Choose a photo instead"
+        onSecondary={handlePickImage}
       />
     );
   }
@@ -396,6 +415,10 @@ export default function CameraScreen() {
         onCameraReady={() => {
           cameraReadyAtRef.current = Date.now();
           setCameraReady(true);
+          // If the 2s fallback beat this callback, the settle window was
+          // measured from the wrong instant and the torch may have been
+          // dropped by the unsettled session — re-stamp and re-apply.
+          setReadySignal((n) => n + 1);
         }}
         barcodeScannerSettings={{
           barcodeTypes: [...FOOD_BARCODE_TYPES],

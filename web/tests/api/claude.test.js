@@ -136,6 +136,45 @@ describe('callClaude', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  // Pre-release review 2026-07-27 #2: a hung Anthropic connection held the
+  // serverless function until Vercel's 300s kill while the client gave up at
+  // 60s. Every attempt must carry an abort signal, and an aborted attempt is
+  // transient (overloaded) — it takes the existing retry path.
+  it('passes an abort signal to fetch on every attempt', async () => {
+    const fetchImpl = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }))
+      .mockResolvedValueOnce(okWithText('ok'));
+    const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toBe('ok');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const call of fetchImpl.mock.calls) {
+      expect(call[1].signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  // Grill follow-up to #2: per-attempt timeouts alone let 3 hung attempts run
+  // ~76s, past the OCR client's 60s budget. A total retry deadline stops
+  // launching new attempts once the budget is spent, so a fully hung upstream
+  // resolves in ~50s of Claude time instead.
+  it('stops launching retries once the total retry deadline has passed', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse({ ok: false, status: 529, text: 'overloaded' }),
+    );
+    await expect(
+      callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast, retryDeadlineMs: 0 }),
+    ).rejects.toMatchObject({ name: 'ClaudeError', kind: 'overloaded' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('exhausts retries when every attempt times out and throws overloaded', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(
+      Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+    );
+    await expect(callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ name: 'ClaudeError', kind: 'overloaded' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
   it('retries on a network error then succeeds', async () => {
     const fetchImpl = vi
       .fn()
