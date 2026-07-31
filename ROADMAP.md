@@ -105,6 +105,13 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Reconcile "server completed but client timed out": idempotency key + short server-side result cache so a retry returns the already-computed verdict instead of re-running Claude (avoids the wasted analysis call; low urgency at current scale) (deferred from PR #15). NB since the client beacon (2026-07-19): this scenario now double-counts — the server emits `scan` (success) while the client beacons `scan_failed`/`timeout` for the same attempt; weekly reviews computing failure rates should note the overlap.
 - [ ] Improve "not found" UX: inline fallback button + Open Food Facts add link (deferred)
 
+### Mobile App Features (folded in from CLAUDE.md, 2026-07-31)
+- [ ] **Favorites**: Save products you buy regularly
+- [ ] **Share results**: Share verdict as image/text
+- [ ] **Haptic feedback**: Vibrate on verdict (success/warning patterns)
+- [ ] **Dark mode**: Match system preference (see also the light/dark toggle under Visual Polish; dark mode is undesigned — Clinic design system has no formal dark spec)
+- [ ] **User accounts**: Sync history across devices (lower priority)
+
 ### Product Database (Future — builds on barcode scanning)
 - [ ] Cache barcode → verdict mappings for instant repeat lookups
 - [ ] Build database of verified safe/unsafe products
