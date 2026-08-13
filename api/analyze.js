@@ -218,6 +218,64 @@ Be clear but compassionate. Examples:
 - Scare tactics or alarming language`;
 
 /**
+ * Below this many extracted characters, a "safe" verdict is never returned —
+ * caution is the floor (see applySafeVerdictFloor).
+ *
+ * Read off the observed distribution of successful OCR extractions rather than
+ * guessed: median 725 chars, 10th percentile ~98. The entire observed hazard
+ * sits below that percentile (the single sub-threshold "safe" ever recorded was
+ * a 3-char read), while the smallest extraction that has ever supported a
+ * legitimate "safe" was 331 chars — so the floor costs nothing above it.
+ */
+const MIN_OCR_CHARS_FOR_SAFE = 100;
+
+// Mode-neutral on purpose: this fires for menus too, and telling someone who
+// photographed a menu to reframe the "ingredient list" reads as a broken app.
+// Mirrors the OCR_FAILED copy, which already says "ingredients or menu".
+const TOO_LITTLE_TEXT_EXPLANATION =
+  "I could only make out a few characters here — not enough to call it safe. Try again with the ingredients or menu fully in frame.";
+
+/**
+ * Hard safety floor: an extraction with almost no text can never come back "safe".
+ *
+ * When Vision returns only a fragment (a logo, a brand name, a corner of the
+ * package), Claude sees no gluten words and can legitimately answer "safe" —
+ * about text that was never the ingredient list. "Safe" is the word a celiac
+ * acts on, so caution is the correct floor when there is nearly nothing to read.
+ *
+ * Only ever downgrades: unsafe and caution verdicts pass through untouched.
+ * Mutates and returns the analysis.
+ */
+function applySafeVerdictFloor(analysis, ocrChars) {
+  if (!(ocrChars < MIN_OCR_CHARS_FOR_SAFE)) return analysis; // also covers undefined/NaN
+
+  let floored = false;
+
+  if (analysis.verdict === 'safe') {
+    analysis.verdict = 'caution';
+    // Claude's reassurance ("Good news! ...") is exactly what must not survive.
+    analysis.explanation = TOO_LITTLE_TEXT_EXPLANATION;
+    floored = true;
+  }
+
+  // A per-item "safe" badge on a menu is acted on the same way the overall
+  // verdict is, so it gets the same floor. Optional chaining is load-bearing:
+  // parseClaudeResponse only filters junk out of menu_items when mode is
+  // "menu", so a label response that carries a menu_items array reaches here
+  // unsanitised — and a null element would turn a scan into a 500.
+  if (Array.isArray(analysis.menu_items)) {
+    analysis.menu_items = analysis.menu_items.map((item) => {
+      if (item?.verdict !== 'safe') return item;
+      floored = true;
+      return { ...item, verdict: 'caution' };
+    });
+  }
+
+  if (floored) analysis.confidence = 'low';
+  return analysis;
+}
+
+/**
  * Main handler
  */
 export default async function handler(req, res) {
@@ -277,6 +335,10 @@ export default async function handler(req, res) {
 
     // Step 2: Analyze with Claude
     const analysis = await analyzeWithClaude(ocrText);
+
+    // Step 3: safety floor — a near-empty read can never come back "safe".
+    // Applied before tracking so analytics records the delivered verdict.
+    applySafeVerdictFloor(analysis, ocrChars);
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
@@ -479,6 +541,8 @@ async function analyzeWithClaude(ocrText) {
 export {
   normalizeMode,
   normalizeVerdict,
+  applySafeVerdictFloor,
+  MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
   performOCR,
   checkRateLimit,
