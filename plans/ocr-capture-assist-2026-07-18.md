@@ -1,16 +1,20 @@
 # OCR Capture Assist — instrument, fix the no-regrets gaps, then let data pick the blur fix
 
 > **Status 2026-08-13**: Phase 4 is **decided** — framing guidance, no blur
-> detection, no size gate. See "Phase 4 DECIDED" below; 1.4.2 is unblocked.
+> detection, no size gate. See "Phase 4 DECIDED" below. The fork release is now
+> **1.4.3**: 1.4.2 was taken as a deliberate one-change release carrying only the
+> `X-Client-Version` header, so that the build introducing `app_version` is not
+> also the build that changes capture behaviour. Framing guidance is unbuilt.
 >
 > **Status 2026-07-19**: Phases 1–3 done — instrumentation shipped 2026-07-18
 > (PR #17), Phase 2 + release shipped as iOS 1.4.0 (PR #19, build 2, phased
 > release). Phase 4 remains: run the `image_kb` fork query ~2026-08-01.
 > **2026-07-27**: iOS **1.4.1** shipped as an unplanned bug-fix release
 > (pre-release review findings — see `reports/2026-07-27-pre-release-review.md`),
-> so the fork release below is now **1.4.2**; it also carries auto-retry
+> so the fork release below was renumbered; it also carries auto-retry
 > (ROADMAP) and a proposed `torch_used` scan property. Every "1.4.1" in the
-> body below predates that renumbering and means the fork release (1.4.2).
+> body below predates that renumbering and means the fork release (now 1.4.3,
+> per the 2026-08-13 status above).
 
 Goal: cut the OCR failure rate (25% → <15%) and shrink low-confidence OCR verdicts.
 Strategy: ship instrumentation + no-regrets fixes now; defer the blur pre-check until

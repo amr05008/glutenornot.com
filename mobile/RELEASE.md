@@ -36,12 +36,19 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.4.1 (2026-07-27).
-- Next up per `plans/ocr-capture-assist-2026-07-18.md` Phase 4: ~2 weeks of
-  `image_kb` data decides the capture-assist fork (blur warning vs framing
-  guidance) — now targeted at **1.4.2** (1.4.1 became the bug-fix release);
-  it also carries auto-retry-with-backoff and, ideally, a `torch_used`
-  property on OCR scans to measure the flashlight's effect on `ocr_failed`.
+- **`X-Client-Version` header** (PR #22, 2026-08-13) — the app sends its version
+  on all three endpoints so `scan` events carry `app_version`. The server half is
+  already live via Vercel; the client half needs this build. Until it ships,
+  `app_version` is null on every event. Verify it post-release (step 8) — a null
+  after shipping means attribution is broken, not that users are on old builds.
+  **This is all 1.4.2 carries** — deliberately a one-change release, so the
+  version that introduces attribution is not also the version that changes
+  capture behaviour.
+- Deferred to **1.4.3**: capture-assist Phase 4 is decided (2026-08-13, see the
+  plan) — failures are 0-char reads at normal file sizes, so the fix is
+  **framing/aiming guidance**, no blur detection and no client-side size gate.
+  Still unbuilt, along with auto-retry-with-backoff (ROADMAP) and a `torch_used`
+  property on OCR scans.
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the
@@ -86,7 +93,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (62 tests as of the 1.4.1 review fixes)
+npm test             # jest — all green (63 tests as of the 1.4.2 version header)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
