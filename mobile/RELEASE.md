@@ -54,13 +54,15 @@ Context still worth knowing:
 ## ⏳ Pending on main (not yet shipped)
 
 - Nothing — main is fully shipped as of v1.4.2 (2026-08-13).
-- Next up, all targeted at **1.4.3** and all unbuilt: capture-assist Phase 4 is
-  decided (2026-08-13, see the plan) — failures are 0-char reads at normal file
-  sizes, so the fix is **framing/aiming guidance**, with blur detection and a
-  client-side size gate both explicitly ruled out by the data. Alongside it:
-  auto-retry-with-backoff (ROADMAP) and a `torch_used` property on OCR scans.
-  Wait for a `app_version: 1.4.2` baseline to accumulate before shipping 1.4.3,
-  or the framing change lands with nothing to compare against.
+- **No next iOS release is scheduled.** The capture-assist plan was closed on
+  2026-08-13 (goal met at a 7.4% clean OCR failure rate against a <15% target,
+  and 9 of the 11 residual failures come from installs too old to receive a
+  client fix) — so the framing guidance that was going to be 1.4.3 is not being
+  built. See the plan's CLOSED header.
+- A holistic data review is scheduled for ~2026-08-27 to decide what, if
+  anything, the next release should carry. Until then there is no queued mobile
+  work; auto-retry-with-backoff remains on the ROADMAP on its own merits
+  (connectivity, not capture).
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the

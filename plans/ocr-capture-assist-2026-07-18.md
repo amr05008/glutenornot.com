@@ -1,10 +1,48 @@
 # OCR Capture Assist — instrument, fix the no-regrets gaps, then let data pick the blur fix
 
-> **Status 2026-08-13**: Phase 4 is **decided** — framing guidance, no blur
-> detection, no size gate. See "Phase 4 DECIDED" below. The fork release is now
-> **1.4.3**: 1.4.2 was taken as a deliberate one-change release carrying only the
-> `X-Client-Version` header, so that the build introducing `app_version` is not
-> also the build that changes capture behaviour. Framing guidance is unbuilt.
+> # ✅ CLOSED 2026-08-13 — goal met, no client work warranted
+>
+> **The plan's own success metric was already satisfied by the time the fork
+> query could be run, and the remaining failures are not reachable by a client
+> fix. Nothing further ships from this plan.** The instrumentation (Phase 1) and
+> the 1.4.0 capture work (Phase 2) stay; the deferred blur/framing fix does not.
+>
+> Three numbers, all from the 30-day window Jul 14 – Aug 13 with App Review
+> traffic excluded (`reports/weekly-snapshot/README.md`):
+>
+> 1. **The goal is met.** Target was 25% → <15% OCR failures. Actual clean rate:
+>    **7.4%** (11 failures / 149 attempts). The 25% baseline was computed on
+>    uncleaned data that was substantially Apple reviewers failing 100% of the
+>    time — the problem was smaller than it looked from the start.
+> 2. **OCR is no longer the weak path.** 7.4% against barcode's 8.5%
+>    `not_found`. The premise that photo capture is where scans are lost no
+>    longer holds.
+> 3. **The residual failures are unreachable by a client fix.** 9 of the 11 came
+>    from `platform: unknown` — installs older than 1.2.0, which cannot receive
+>    any 1.4.x capture work until they update, and demonstrably don't. Only
+>    **2 failures in 30 days** came from current builds. Framing guidance would
+>    have targeted those two.
+>
+> Phase 4's *technical* question was still answered, and the answer stands if
+> this is ever reopened: **the failure mode is aiming, not blur** — ship framing
+> guidance, never a size gate. See "Phase 4 DECIDED" below for the derivation.
+> What changed is that it stopped being worth building, not what it concluded.
+>
+> **Not carried forward from the 1.4.3 bundle:** auto-retry-with-backoff was
+> queued alongside this but is *connectivity* work, not capture — it keeps its
+> own ROADMAP line and its own justification. `torch_used` only mattered as
+> instrumentation for a capture fix that is no longer shipping.
+>
+> **If you reopen this**, the trigger is a rise in OCR failures *from current
+> builds* — the 2-per-30-days figure is what to watch, not the headline rate.
+>
+> ---
+>
+> ## Historical status (kept for context)
+>
+> **2026-08-13**: Phase 4 decided — framing guidance, no blur detection, no size
+> gate. 1.4.2 shipped as a deliberate one-change release carrying only the
+> `X-Client-Version` header.
 >
 > **Status 2026-07-19**: Phases 1–3 done — instrumentation shipped 2026-07-18
 > (PR #17), Phase 2 + release shipped as iOS 1.4.0 (PR #19, build 2, phased
