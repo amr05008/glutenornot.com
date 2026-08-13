@@ -6,16 +6,33 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.4.1 — Pre-release review fixes (2026-07-27)
+## ✅ Last shipped: v1.4.2 — Analytics attribution (2026-08-13)
 
-Submitted to App Store review on 2026-07-27 (**build 1**): the mobile fixes
-from `reports/2026-07-27-pre-release-review.md` — permission-gate render order
+Submitted to App Store review on 2026-08-13 (**build 1**): a deliberate
+one-change release. The app sends `X-Client-Version` on all three endpoints so
+`scan` events carry `app_version` — previously every event reported
+`$lib_version: posthog-node`, the SDK's version, which is why 1.4.1's capture
+work could not be attributed. Keeping the release to this one change means the
+build that introduces attribution is not also the build that changes capture
+behaviour, so 1.4.3 can be measured against a version-tagged baseline. No
+user-visible changes. Version examples below still read `1.2.0` — substitute
+your new version.
+
+**Post-release check that matters for this one:** confirm a real scan from an
+updated install reports `app_version: 1.4.2` (step 8). This release is a single
+header whose failure mode is silent — if `Constants.expoConfig` returned empty
+in a production build, the app would send nothing, the server would log nothing,
+and every event would look like a pre-1.4.2 client. Pre-submission the generated
+`EXConstants.bundle/app.config` was verified to carry `1.4.2`, but only a live
+scan proves the whole path.
+
+Previous: v1.4.1 (2026-07-27, build 1): the mobile fixes from
+`reports/2026-07-27-pre-release-review.md` — permission-gate render order
 (photo-picker scans work with camera denied), picker-aware couldn't-read
 screen (no flashlight offer for library picks), and the torch fallback-race
 fix (late real `onCameraReady` re-applies the torch as a fresh transition).
 The same commit shipped the api/web fixes via Vercel, including the
-multilingual gluten-signal safety bug. Version examples below still read
-`1.2.0` — substitute your new version.
+multilingual gluten-signal safety bug.
 
 Previous: v1.4.0 (2026-07-19, build 3 — build 1 was the TestFlight round that
 caught the torch settle quirk, see Notes): torch toggle + flashlight retry,
@@ -36,19 +53,14 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- **`X-Client-Version` header** (PR #22, 2026-08-13) — the app sends its version
-  on all three endpoints so `scan` events carry `app_version`. The server half is
-  already live via Vercel; the client half needs this build. Until it ships,
-  `app_version` is null on every event. Verify it post-release (step 8) — a null
-  after shipping means attribution is broken, not that users are on old builds.
-  **This is all 1.4.2 carries** — deliberately a one-change release, so the
-  version that introduces attribution is not also the version that changes
-  capture behaviour.
-- Deferred to **1.4.3**: capture-assist Phase 4 is decided (2026-08-13, see the
-  plan) — failures are 0-char reads at normal file sizes, so the fix is
-  **framing/aiming guidance**, no blur detection and no client-side size gate.
-  Still unbuilt, along with auto-retry-with-backoff (ROADMAP) and a `torch_used`
-  property on OCR scans.
+- Nothing — main is fully shipped as of v1.4.2 (2026-08-13).
+- Next up, all targeted at **1.4.3** and all unbuilt: capture-assist Phase 4 is
+  decided (2026-08-13, see the plan) — failures are 0-char reads at normal file
+  sizes, so the fix is **framing/aiming guidance**, with blur detection and a
+  client-side size gate both explicitly ruled out by the data. Alongside it:
+  auto-retry-with-backoff (ROADMAP) and a `torch_used` property on OCR scans.
+  Wait for a `app_version: 1.4.2` baseline to accumulate before shipping 1.4.3,
+  or the framing change lands with nothing to compare against.
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the
