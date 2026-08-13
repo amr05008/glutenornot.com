@@ -24,6 +24,11 @@ deliberate one-change release.
 - `reports/weekly-snapshot/README.md`, `api/ANALYTICS.md` — App Review exclusion
   rule; `plans/ocr-capture-assist-2026-07-18.md` — Phase 4 decision.
 - Version lockstep → 1.4.2 (`2f8e1aa`), tag `v1.4.2`, GitHub release.
+- `plans/ocr-capture-assist-2026-07-18.md` — **CLOSED** (`4518741`); ROADMAP,
+  `mobile/RELEASE.md` and `CLAUDE.md` propagated (no active plans remain).
+- Doc pass at wrap-up: ROADMAP gained the three items this session shipped,
+  README documents the floor in the pipeline + test coverage, CLAUDE.md carries
+  the floor as a don't-remove-this gotcha.
 
 ## Decisions
 - **Safety floor at 100 chars**, derived from the distribution rather than picked:
@@ -48,6 +53,16 @@ deliberate one-change release.
   Noted at the time that the volume (~150 OCR scans/month) can't power a real
   before/after on failure rate regardless — `app_version` earns its keep for spike
   detection and RC exclusion, not for a powered A/B.
+- **The capture-assist plan was CLOSED rather than deferred**, and there is no
+  1.4.3. Phase 4's technical answer (aiming, not blur) was correct but the work
+  stopped being worth building: the plan's own 25% → <15% target was already met
+  at a clean 7.4%, OCR now fails less than barcode `not_found` (8.5%), and 9 of
+  the 11 residual failures came from installs older than 1.2.0 that can't receive
+  a client fix — leaving 2 failures a month that framing guidance would address.
+  The 25% baseline had been computed on uncleaned data that was largely reviewer
+  traffic, so the problem was smaller than it looked from the start. Auto-retry
+  was explicitly *not* carried forward with the closure: it is connectivity work
+  that was bundled by scheduling accident, not by rationale.
 
 ## Corrections to the incoming review
 - App Review is **14 of 35** `ocr_failed` events *on its own*; the fourth cluster
@@ -88,5 +103,16 @@ Post-release watch:
   (69.6% → 64.1%). Consistent with 1.4.0's capture work offsetting a hedgier
   model, but "Opus is uniformly hedgier" is not established. `model` is now
   recorded, so the next swap is measurable rather than archaeological.
-- App Store live-check routine **not** re-armed for 1.4.2 — decide whether it's
-  worth it for a release with no user-visible change.
+Two cloud routines armed (both one-shot):
+- `trig_01MMyYwpjSn3QUdtUUxfbCPP` — "Check iOS 1.4.2 live on App Store",
+  2026-08-16 9pm ET. Reused the 1.4.1 routine per the runbook rather than
+  duplicating. Its prompt now teaches the interpretation that would otherwise
+  cause a false alarm: at ~3 days almost nobody has updated, so zero 1.4.2
+  events is expected — the failure signal is 1.4.2 events with `app_version`
+  empty, not the absence of them.
+- `trig_01EikYLcTGbfwPWAHa8Y8jxF` — "GlutenOrNot holistic review (post-1.4.2)",
+  2026-08-27 9am ET. Decides what (if anything) the next release carries, with
+  "ship nothing" named as a valid and expected answer so the agent doesn't
+  manufacture work. It is handed the closed plan and the exclusion rule as
+  required reading, and told the reopen trigger is failures **from current
+  builds**, not the headline rate.

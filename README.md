@@ -83,7 +83,8 @@ glutenornot.com/
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
 4. Claude analyzes ingredients or menu items and returns verdict
-5. UI displays result: Safe / Caution / Unsafe
+5. Verdicts are floored to "caution" when OCR extracted almost no text — "safe" requires enough text to justify it
+6. UI displays result: Safe / Caution / Unsafe
 
 **Barcode scanning (mobile):**
 1. Camera auto-detects barcodes (EAN-13, EAN-8, UPC-A, UPC-E)
@@ -125,6 +126,8 @@ npm run test:coverage # Run with coverage report
 
 Tests cover:
 - Claude response parsing and fallback behavior
+- Safety floor on low-text OCR reads
+- Analytics event properties (app version, model, capture metrics)
 - Rate limiting logic
 - API error handling
 
