@@ -239,6 +239,13 @@ gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New tex
 - PostHog: after a real scan from an **updated** install, confirm the `scan` event
   now reports `platform: ios` (older installs keep showing `platform: unknown`
   until users update — that's expected).
+- PostHog: confirm that same event carries **`app_version` = the version you just
+  shipped**. This is the only check that catches the client half failing: if
+  `Constants.expoConfig` ever comes back empty in a production build, the app
+  sends no version header, the server logs nothing (it never saw one), and every
+  event silently looks like it came from a pre-1.4.2 client. A missing
+  `app_version` here means release attribution is broken — fix before relying on
+  any before/after comparison.
 
 ---
 

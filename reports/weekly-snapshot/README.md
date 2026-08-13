@@ -25,6 +25,41 @@ after a per-person cluster triage that excludes App Store review / RC-testing
 traffic, 1–3 recommendations). The analyst content is Discord-only — it never
 adds sections to this page, and the update contract below is unchanged by it.
 
+## Exclude App Review traffic (do this in every query)
+
+Apple's App Store review runs the app once per submission and never gets a
+successful scan: bursts of 3–6 OCR attempts inside ~3 minutes, zero successes,
+tiny images. Left in, it inflates the OCR failure count after **every** release —
+over the 30 days to 2026-08-13 it was **14 of 35 `ocr_failed` events (40%)**,
+which pushed the OCR failure rate from a real 12.1% to a reported 18.7%.
+
+The identities are not stable (`distinct_id` is a SHA-256 of the client IP, so a
+new one appears per submission), so the exclusion is a **rule, not a list**: the
+traffic geolocates to Cupertino, CA. Two equivalent forms — use either:
+
+```sql
+-- PostHog cohort (id 481139), auto-picks up each new submission
+AND person_id NOT IN COHORT 'App Review traffic (Cupertino)'
+
+-- or the same rule inline, no cohort dependency
+AND coalesce(properties.$geoip_city_name, '') != 'Cupertino'
+```
+
+Apply it to **every** tile, chart, and split on this page. Two rules to keep it honest:
+
+- Say so on the page: the `.fnote` must state that App Review traffic is excluded
+  and how many events that removed, so an excluded real user can never hide silently.
+- **Do not** exclude by city anywhere else. Cupertino is Apple HQ and has never
+  produced a real user; every other city that looks like a failure cluster has
+  turned out to hold several genuine users, so a city rule there deletes real
+  signal. Aaron's own RC-testing device needs a per-identity exclusion, kept in
+  the routine config — never a city rule, and never an identifier committed to
+  this repo.
+
+Un-upgraded clients (`platform: unknown`) are **not** internal traffic — see the
+2026-08-13 session log. They are real users on an iOS build older than 1.2.0.
+Keep them in.
+
 ## Update contract
 
 The file in this directory always holds the **last published week** — it doubles

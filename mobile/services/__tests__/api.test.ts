@@ -2,6 +2,15 @@ jest.mock('expo-network', () => ({
   getNetworkStateAsync: jest.fn(),
 }));
 
+// Constants.expoConfig is null under jest (there is no manifest to read), so
+// stub it — otherwise every header assertion below compares undefined to
+// undefined and passes without testing anything.
+const APP_VERSION = '9.9.9';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '9.9.9' } },
+}));
+
 import * as Network from 'expo-network';
 import { analyzeImage, lookupBarcode, APIError } from '../api';
 
@@ -108,6 +117,21 @@ describe('failure beacon (timeout/network → POST /api/track)', () => {
     // Without X-Client the server buckets platform as "unknown" and the
     // per-platform failure dashboards silently miscount.
     expect(beacons[0][1].headers['X-Client']).toBe('ios');
+    // Analytics is server-side, so app_version is the ONLY way a release can be
+    // attributed — it has to ride on failures too, not just successes.
+    expect(beacons[0][1].headers['X-Client-Version']).toBe(APP_VERSION);
+  });
+
+  it('sends the app version on scan and barcode requests so releases are attributable', async () => {
+    const fetchMock = mockFetchScanFails(new Error('Network request failed'));
+    await expect(analyzeImage('base64data')).rejects.toBeDefined();
+    await expect(lookupBarcode('012345678905')).rejects.toBeDefined();
+
+    for (const path of ['/api/analyze', '/api/barcode']) {
+      const call = fetchMock.mock.calls.find(([url]) => String(url).includes(path));
+      expect(call[1].headers['X-Client-Version']).toBe(APP_VERSION);
+      expect(call[1].headers['X-Client']).toBe('ios');
+    }
   });
 
   it('fires an ocr/network beacon when the analyze request hits a network error', async () => {

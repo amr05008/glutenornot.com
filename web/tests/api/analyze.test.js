@@ -558,6 +558,37 @@ describe('analyze handler analytics', () => {
     );
   });
 
+  it('records the app version and model from the request headers', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      mode: 'label', verdict: 'unsafe', flagged_ingredients: ['wheat'],
+      allergen_warnings: [], explanation: 'Contains wheat.', confidence: 'high',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+      }
+      return OCR_TEXT_FULL_LABEL;
+    }));
+    const res = mockRes();
+    await handler(
+      { method: 'POST', body: { image: 'A'.repeat(4096) }, headers: { 'x-client': 'ios', 'x-client-version': '1.4.2' } },
+      res,
+    );
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ appVersion: '1.4.2', model: 'claude-opus-4-8' })
+    );
+  });
+
+  it('omits the app version when the client is too old to send it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: { 'x-client': 'ios' } }, res);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'ocr_failed', appVersion: null })
+    );
+  });
+
   it('rejects a non-string image with 400 instead of shipping junk to Vision', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
     const res = mockRes();

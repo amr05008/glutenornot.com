@@ -6,6 +6,7 @@
 import {
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
+  CLAUDE_MODEL,
   callClaude,
   claudeErrorResponse,
   describeClaudeError,
@@ -18,7 +19,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
+import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
 
 /**
  * Claude prompt for ingredient analysis
@@ -287,12 +288,13 @@ export default async function handler(req, res) {
   // Check rate limit
   const clientIP = getClientIP(req);
   const platform = normalizeClient(req.headers['x-client']);
+  const appVersion = normalizeAppVersion(req.headers['x-client-version']);
   const geo = getClientGeo(req);
   const rateLimitResult = checkRateLimit(clientIP);
 
   if (!rateLimitResult.allowed) {
     res.setHeader('Retry-After', Math.ceil(rateLimitResult.resetIn / 1000));
-    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'rate_limited', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'rate_limited', ...geo });
     return res.status(429).json({
       error: 'Rate limit exceeded',
       message: `You've reached today's scan limit (${RATE_LIMIT}). Resets in ${formatTimeRemaining(rateLimitResult.resetIn)}.`
@@ -325,7 +327,7 @@ export default async function handler(req, res) {
     ocrChars = ocrText ? ocrText.trim().length : 0;
 
     if (!ocrText || ocrText.trim().length === 0) {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -346,6 +348,8 @@ export default async function handler(req, res) {
     await trackScan({
       ip: clientIP,
       platform,
+      appVersion,
+      model: CLAUDE_MODEL,
       method: 'ocr',
       mode: analysis.mode,
       verdict: analysis.verdict,
@@ -362,7 +366,7 @@ export default async function handler(req, res) {
     console.error('Analysis error:', error);
 
     if (error.message === 'OCR_EMPTY') {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -372,12 +376,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'

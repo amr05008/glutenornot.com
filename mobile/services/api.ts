@@ -1,5 +1,20 @@
 import * as Network from 'expo-network';
+import Constants from 'expo-constants';
 import { API_URL, BARCODE_API_URL, TRACK_API_URL, AnalysisResult } from '../constants/verdicts';
+
+// Analytics ships server-side, so every event carries $lib_version =
+// posthog-node — the SDK's version, not the app's. Without this header a
+// release is unattributable: there is no way to tell whether a capture change
+// moved the OCR failure rate. Read from app.json (the version the release
+// runbook keeps in lockstep) rather than hardcoded, so it can't drift.
+const APP_VERSION = Constants.expoConfig?.version;
+
+// Server whitelists this header, so a missing/odd value is simply omitted.
+const clientHeaders = (): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  'X-Client': 'ios',
+  ...(APP_VERSION ? { 'X-Client-Version': APP_VERSION } : {}),
+});
 
 export type ErrorType = 'network' | 'timeout' | 'rate_limit' | 'ocr_failed' | 'server_error' | 'not_found' | 'invalid_input';
 
@@ -47,7 +62,7 @@ function sendFailureBeacon(method: 'ocr' | 'barcode', reason: 'timeout' | 'netwo
   try {
     fetch(TRACK_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Client': 'ios' },
+      headers: clientHeaders(),
       body: JSON.stringify({ method, reason }),
     }).catch(() => {});
   } catch {
@@ -82,10 +97,7 @@ export async function analyzeImage(
   try {
     const response = await fetch(API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Client': 'ios',
-      },
+      headers: clientHeaders(),
       body: JSON.stringify({ image: base64Image }),
       signal: controller.signal,
     });
@@ -177,7 +189,7 @@ export async function lookupBarcode(
   try {
     const response = await fetch(BARCODE_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Client': 'ios' },
+      headers: clientHeaders(),
       body: JSON.stringify({ barcode }),
       signal: controller.signal,
     });

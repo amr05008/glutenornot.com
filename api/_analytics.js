@@ -21,12 +21,19 @@ const SCAN_FAILED_EVENT = 'scan_failed';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, country, region, city, confidence, hadIngredientData, imageKb, ocrChars } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
   if (dataSource != null) props.data_source = dataSource;
   if (platform != null) props.platform = platform;
+  // Client build that produced the scan (absent on clients older than the
+  // X-Client-Version header). Without it a release is unattributable: every
+  // event carries $lib_version = posthog-node, which is the SDK, not the app.
+  if (appVersion != null) props.app_version = appVersion;
+  // Which Claude model produced the verdict, so a model swap is attributable
+  // at the time it happens instead of archaeologically.
+  if (model != null) props.model = model;
   if (confidence != null) props.confidence = confidence;
   // Barcode path only: splits caution verdicts into "the database had no
   // ingredient data" vs a real judgement call on actual ingredients.
@@ -52,9 +59,10 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
  * /api/track — failures that die on the wire and never reach the server).
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, country, region, city, imageKb, ocrChars } = {}) {
+function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
+  if (appVersion != null) props.app_version = appVersion;
   // OCR path only: capture metrics (counts, never content). NB: ocr_chars is 0
   // on every ocr_failed BY CONSTRUCTION (the event fires only when Vision found
   // no text) — the aiming-vs-blur discriminator is image_kb compared against
@@ -83,6 +91,33 @@ function normalizeClient(raw) {
 }
 
 /**
+ * Normalize the client-supplied `X-Client-Version` header into an app version.
+ *
+ * Like `X-Client`, this value is untrusted and lands in a PostHog property, so
+ * it is whitelisted to a short dotted-numeric shape rather than passed through:
+ * an open endpoint that accepted arbitrary strings here would let anyone blow
+ * up the property's cardinality and make version breakdowns useless.
+ *
+ * A bounded pre-release suffix is allowed (`1.5.0-rc.1`): tagging RC/TestFlight
+ * builds is how internal testing stays excludable by rule rather than by a
+ * hardcoded identity list — see reports/weekly-snapshot/README.md.
+ *
+ * Returns null for anything absent or malformed, so the property is omitted —
+ * `app_version IS NULL` then means "a client too old to send it".
+ * Pure — no I/O.
+ */
+function normalizeAppVersion(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim();
+  if (/^\d{1,3}(\.\d{1,3}){1,2}(-[a-z0-9.]{1,10})?$/i.test(v)) return v;
+  // A version that arrived but didn't parse is indistinguishable downstream
+  // from an old client that sent nothing — exactly the ambiguity app_version
+  // exists to remove. Say so in the logs instead of dropping it silently.
+  if (v) console.warn('Rejected X-Client-Version:', v.slice(0, 32));
+  return null;
+}
+
+/**
  * Stable, privacy-preserving distinct ID derived from the client IP.
  * Lets PostHog approximate unique devices without ever storing a raw IP.
  * Pure — no I/O.
@@ -104,6 +139,8 @@ function anonId(ip) {
  * @param {string} [input.detectedLanguage] ISO 639-1, OCR path only
  * @param {string} [input.dataSource]       barcode source (openfoodfacts|usda|nutritionix|upcitemdb)
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
+ * @param {string} [input.appVersion]       client app version (absent on older clients)
+ * @param {string} [input.model]            Claude model that produced the verdict
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
@@ -124,6 +161,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {'barcode'|'ocr'} input.method    how the scan was initiated
  * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'} input.reason
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
+ * @param {string} [input.appVersion]       client app version (absent on older clients)
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)
@@ -187,6 +225,7 @@ export {
   buildScanFailureProperties,
   anonId,
   normalizeClient,
+  normalizeAppVersion,
   trackScan,
   trackScanFailure,
 };

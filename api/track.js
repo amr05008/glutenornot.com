@@ -13,7 +13,7 @@
  * dashboard insight counts on it.
  */
 import { getClientIP, getClientGeo } from './_utils.js';
-import { trackScanFailure, normalizeClient } from './_analytics.js';
+import { trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
 
 const CLIENT_REASONS = new Set(['timeout', 'network']);
 const METHODS = new Set(['ocr', 'barcode']);
@@ -58,6 +58,7 @@ export default async function handler(req, res) {
   await trackScanFailure({
     ip: getClientIP(req),
     platform: normalizeClient(req.headers['x-client']),
+    appVersion: normalizeAppVersion(req.headers['x-client-version']),
     method,
     reason,
     ...getClientGeo(req),
