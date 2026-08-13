@@ -5,6 +5,7 @@
 
 import {
   RATE_LIMIT,
+  CLAUDE_MODEL,
   callClaude,
   claudeErrorResponse,
   describeClaudeError,
@@ -17,7 +18,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
+import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -105,12 +106,13 @@ export default async function handler(req, res) {
 
   const clientIP = getClientIP(req);
   const platform = normalizeClient(req.headers['x-client']);
+  const appVersion = normalizeAppVersion(req.headers['x-client-version']);
   const geo = getClientGeo(req);
   const rateLimitResult = checkRateLimit(clientIP);
 
   if (!rateLimitResult.allowed) {
     res.setHeader('Retry-After', Math.ceil(rateLimitResult.resetIn / 1000));
-    await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'rate_limited', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'barcode', reason: 'rate_limited', ...geo });
     return res.status(429).json({
       error: 'Rate limit exceeded',
       message: `You've reached today's scan limit (${RATE_LIMIT}). Resets in ${formatTimeRemaining(rateLimitResult.resetIn)}.`
@@ -143,7 +145,7 @@ export default async function handler(req, res) {
       // Ephemeral Vercel-log breadcrumb only — the barcode must NOT go to
       // PostHog (privacy policy: "no record of what you scanned").
       console.log('barcode_not_found', cleanBarcode);
-      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'not_found', ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'barcode', reason: 'not_found', ...geo });
       return res.status(404).json({
         error: 'Product not found',
         message: "Product not found in our database. Try scanning the ingredient label instead."
@@ -164,6 +166,7 @@ export default async function handler(req, res) {
       await trackScan({
         ip: clientIP,
         platform,
+        appVersion,
         method: 'barcode',
         mode: 'label',
         verdict: 'caution',
@@ -198,6 +201,8 @@ export default async function handler(req, res) {
     await trackScan({
       ip: clientIP,
       platform,
+      appVersion,
+      model: CLAUDE_MODEL,
       method: 'barcode',
       mode: analysis.mode,
       verdict: analysis.verdict,
@@ -214,12 +219,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'claude_error', ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'barcode', reason: 'claude_error', ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, method: 'barcode', reason: 'server_error', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'barcode', reason: 'server_error', ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'

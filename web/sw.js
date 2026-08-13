@@ -8,7 +8,11 @@
 // v4: ship the api.js that sends the X-Client header (PostHog platform split).
 // v5: api.js surfaces the backend's distinct 503 message + retryable hint.
 // v6: api.js timeout 30s → 60s to match mobile (pre-release review 2026-07-27 #6).
-const CACHE_NAME = 'glutenornot-v6';
+// v7: privacy policy discloses app_version + model. NB this file is not in
+// PRECACHE_FILES — the fetch handler is cache-first and runtime-caches every
+// same-origin page, so a visited policy is pinned until CACHE_NAME changes.
+// Any user-facing HTML edit needs this bump, not just the precached assets.
+const CACHE_NAME = 'glutenornot-v7';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

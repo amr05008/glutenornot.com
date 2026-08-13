@@ -9,6 +9,8 @@ vi.mock('../../../api/_analytics.js', async (importOriginal) => {
 
 import handler, {
   normalizeMode,
+  applySafeVerdictFloor,
+  MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
   performOCR,
   checkRateLimit,
@@ -144,6 +146,90 @@ describe('parseClaudeResponse', () => {
     const result = parseClaudeResponse(fixtures.english_label_no_language.input);
     expect(result).toEqual(fixtures.english_label_no_language.expected);
     expect(result.detected_language).toBeUndefined();
+  });
+});
+
+// Safety floor (2026-08-13 analytics review): on 2026-07-19 a 3-character OCR
+// read came back "safe". Every other sub-threshold read degraded to caution on
+// its own, so this is a missing floor, not a calibration problem — and "safe"
+// is the word a celiac acts on.
+describe('applySafeVerdictFloor', () => {
+  const safeLabel = () => ({
+    mode: 'label',
+    verdict: 'safe',
+    flagged_ingredients: [],
+    allergen_warnings: [],
+    explanation: 'Good news! This product contains no gluten ingredients.',
+    confidence: 'low',
+  });
+
+  it('floors a "safe" verdict to caution when almost no text was extracted', () => {
+    const result = applySafeVerdictFloor(safeLabel(), 3);
+    expect(result.verdict).toBe('caution');
+    expect(result.confidence).toBe('low');
+    expect(result.explanation).not.toContain('Good news');
+  });
+
+  it('leaves a "safe" verdict alone at the threshold', () => {
+    const result = applySafeVerdictFloor(safeLabel(), MIN_OCR_CHARS_FOR_SAFE);
+    expect(result.verdict).toBe('safe');
+    expect(result.explanation).toContain('Good news');
+  });
+
+  it('never upgrades: an unsafe verdict on a tiny read stays unsafe', () => {
+    const result = applySafeVerdictFloor({ ...safeLabel(), verdict: 'unsafe' }, 3);
+    expect(result.verdict).toBe('unsafe');
+  });
+
+  it('keeps a caution verdict and its explanation untouched', () => {
+    const analysis = { ...safeLabel(), verdict: 'caution', explanation: 'Contains oats.' };
+    const result = applySafeVerdictFloor(analysis, 3);
+    expect(result.verdict).toBe('caution');
+    expect(result.explanation).toBe('Contains oats.');
+  });
+
+  // A per-item "safe" badge on a menu is acted on exactly like the overall
+  // verdict, so it gets the same floor.
+  it('floors safe menu_items on a near-empty menu read', () => {
+    const result = applySafeVerdictFloor({
+      mode: 'menu',
+      verdict: 'caution',
+      menu_items: [
+        { name: 'Ensalada', verdict: 'safe', notes: 'No gluten ingredients listed' },
+        { name: 'Pan', verdict: 'unsafe', notes: 'Bread' },
+      ],
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: '1 item looks safe.',
+      confidence: 'medium',
+    }, 20);
+    expect(result.menu_items[0].verdict).toBe('caution');
+    expect(result.menu_items[1].verdict).toBe('unsafe');
+    expect(result.confidence).toBe('low');
+  });
+
+  it('is a no-op when ocr_chars is unknown', () => {
+    expect(applySafeVerdictFloor(safeLabel(), undefined).verdict).toBe('safe');
+  });
+
+  // parseClaudeResponse only sanitises menu_items when mode === 'menu', so a
+  // label response carrying that array arrives here unfiltered. A throw in the
+  // safety path would turn the scan into a 500.
+  it('survives a junk menu_items array on a label response', () => {
+    const result = applySafeVerdictFloor(
+      { ...safeLabel(), mode: 'label', menu_items: [null, undefined, { name: 'x', verdict: 'safe' }] },
+      20,
+    );
+    expect(result.verdict).toBe('caution');
+    expect(result.menu_items[2].verdict).toBe('caution');
+  });
+
+  it('tells a menu scan to reframe the menu, not an ingredient list', () => {
+    const result = applySafeVerdictFloor(
+      { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'low' },
+      20,
+    );
+    expect(result.explanation).toContain('menu');
   });
 });
 
@@ -363,6 +449,8 @@ describe('analyze handler analytics', () => {
   }
 
   const OCR_TEXT = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'rice, salt' }] }] }) };
+  // Above MIN_OCR_CHARS_FOR_SAFE, for tests that need a verdict to survive the floor.
+  const OCR_TEXT_FULL_LABEL = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'INGREDIENTS: '.concat('rice, salt, sunflower oil, sugar, citric acid, natural flavor, '.repeat(3)) }] }] }) };
   const OCR_EMPTY = { ok: true, json: async () => ({ responses: [{}] }) };
 
   let savedEnv;
@@ -439,6 +527,65 @@ describe('analyze handler analytics', () => {
     expect(trackScan).toHaveBeenCalledWith(
       // 'rice, salt' = 10 chars
       expect.objectContaining({ imageKb: 3, ocrChars: 10 })
+    );
+  });
+
+  // End-to-end regression for the 2026-07-19 event: Vision returned 3 chars,
+  // Claude answered "safe", and the app told a celiac the product was safe.
+  it('never returns "safe" end-to-end when Vision extracted almost nothing', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      mode: 'label',
+      verdict: 'safe',
+      flagged_ingredients: [],
+      allergen_warnings: [],
+      explanation: 'Good news! No gluten ingredients here.',
+      confidence: 'low',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+      }
+      return { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'GF!' }] }] }) };
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: { 'x-client': 'ios' } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.verdict).toBe('caution');
+    // The delivered verdict is what analytics must record, not Claude's raw one.
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ verdict: 'caution', ocrChars: 3 })
+    );
+  });
+
+  it('records the app version and model from the request headers', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = {
+      mode: 'label', verdict: 'unsafe', flagged_ingredients: ['wheat'],
+      allergen_warnings: [], explanation: 'Contains wheat.', confidence: 'high',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+      }
+      return OCR_TEXT_FULL_LABEL;
+    }));
+    const res = mockRes();
+    await handler(
+      { method: 'POST', body: { image: 'A'.repeat(4096) }, headers: { 'x-client': 'ios', 'x-client-version': '1.4.2' } },
+      res,
+    );
+    expect(trackScan).toHaveBeenCalledWith(
+      expect.objectContaining({ appVersion: '1.4.2', model: 'claude-opus-4-8' })
+    );
+  });
+
+  it('omits the app version when the client is too old to send it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { image: 'A'.repeat(4096) }, headers: { 'x-client': 'ios' } }, res);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'ocr_failed', appVersion: null })
     );
   });
 
@@ -520,7 +667,9 @@ describe('analyze handler analytics', () => {
       if (String(url).includes('anthropic')) {
         return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
       }
-      return OCR_TEXT;
+      // A full-label read: this asserts confidence passes through untouched,
+      // which only holds above the safe-verdict floor.
+      return OCR_TEXT_FULL_LABEL;
     }));
     const res = mockRes();
     await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);

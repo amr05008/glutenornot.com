@@ -6,6 +6,7 @@
 import {
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
+  CLAUDE_MODEL,
   callClaude,
   claudeErrorResponse,
   describeClaudeError,
@@ -18,7 +19,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, trackScanFailure, normalizeClient } from './_analytics.js';
+import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
 
 /**
  * Claude prompt for ingredient analysis
@@ -218,6 +219,64 @@ Be clear but compassionate. Examples:
 - Scare tactics or alarming language`;
 
 /**
+ * Below this many extracted characters, a "safe" verdict is never returned —
+ * caution is the floor (see applySafeVerdictFloor).
+ *
+ * Read off the observed distribution of successful OCR extractions rather than
+ * guessed: median 725 chars, 10th percentile ~98. The entire observed hazard
+ * sits below that percentile (the single sub-threshold "safe" ever recorded was
+ * a 3-char read), while the smallest extraction that has ever supported a
+ * legitimate "safe" was 331 chars — so the floor costs nothing above it.
+ */
+const MIN_OCR_CHARS_FOR_SAFE = 100;
+
+// Mode-neutral on purpose: this fires for menus too, and telling someone who
+// photographed a menu to reframe the "ingredient list" reads as a broken app.
+// Mirrors the OCR_FAILED copy, which already says "ingredients or menu".
+const TOO_LITTLE_TEXT_EXPLANATION =
+  "I could only make out a few characters here — not enough to call it safe. Try again with the ingredients or menu fully in frame.";
+
+/**
+ * Hard safety floor: an extraction with almost no text can never come back "safe".
+ *
+ * When Vision returns only a fragment (a logo, a brand name, a corner of the
+ * package), Claude sees no gluten words and can legitimately answer "safe" —
+ * about text that was never the ingredient list. "Safe" is the word a celiac
+ * acts on, so caution is the correct floor when there is nearly nothing to read.
+ *
+ * Only ever downgrades: unsafe and caution verdicts pass through untouched.
+ * Mutates and returns the analysis.
+ */
+function applySafeVerdictFloor(analysis, ocrChars) {
+  if (!(ocrChars < MIN_OCR_CHARS_FOR_SAFE)) return analysis; // also covers undefined/NaN
+
+  let floored = false;
+
+  if (analysis.verdict === 'safe') {
+    analysis.verdict = 'caution';
+    // Claude's reassurance ("Good news! ...") is exactly what must not survive.
+    analysis.explanation = TOO_LITTLE_TEXT_EXPLANATION;
+    floored = true;
+  }
+
+  // A per-item "safe" badge on a menu is acted on the same way the overall
+  // verdict is, so it gets the same floor. Optional chaining is load-bearing:
+  // parseClaudeResponse only filters junk out of menu_items when mode is
+  // "menu", so a label response that carries a menu_items array reaches here
+  // unsanitised — and a null element would turn a scan into a 500.
+  if (Array.isArray(analysis.menu_items)) {
+    analysis.menu_items = analysis.menu_items.map((item) => {
+      if (item?.verdict !== 'safe') return item;
+      floored = true;
+      return { ...item, verdict: 'caution' };
+    });
+  }
+
+  if (floored) analysis.confidence = 'low';
+  return analysis;
+}
+
+/**
  * Main handler
  */
 export default async function handler(req, res) {
@@ -229,12 +288,13 @@ export default async function handler(req, res) {
   // Check rate limit
   const clientIP = getClientIP(req);
   const platform = normalizeClient(req.headers['x-client']);
+  const appVersion = normalizeAppVersion(req.headers['x-client-version']);
   const geo = getClientGeo(req);
   const rateLimitResult = checkRateLimit(clientIP);
 
   if (!rateLimitResult.allowed) {
     res.setHeader('Retry-After', Math.ceil(rateLimitResult.resetIn / 1000));
-    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'rate_limited', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'rate_limited', ...geo });
     return res.status(429).json({
       error: 'Rate limit exceeded',
       message: `You've reached today's scan limit (${RATE_LIMIT}). Resets in ${formatTimeRemaining(rateLimitResult.resetIn)}.`
@@ -267,7 +327,7 @@ export default async function handler(req, res) {
     ocrChars = ocrText ? ocrText.trim().length : 0;
 
     if (!ocrText || ocrText.trim().length === 0) {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -278,12 +338,18 @@ export default async function handler(req, res) {
     // Step 2: Analyze with Claude
     const analysis = await analyzeWithClaude(ocrText);
 
+    // Step 3: safety floor — a near-empty read can never come back "safe".
+    // Applied before tracking so analytics records the delivered verdict.
+    applySafeVerdictFloor(analysis, ocrChars);
+
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
 
     await trackScan({
       ip: clientIP,
       platform,
+      appVersion,
+      model: CLAUDE_MODEL,
       method: 'ocr',
       mode: analysis.mode,
       verdict: analysis.verdict,
@@ -300,7 +366,7 @@ export default async function handler(req, res) {
     console.error('Analysis error:', error);
 
     if (error.message === 'OCR_EMPTY') {
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -310,12 +376,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'
@@ -479,6 +545,8 @@ async function analyzeWithClaude(ocrText) {
 export {
   normalizeMode,
   normalizeVerdict,
+  applySafeVerdictFloor,
+  MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
   performOCR,
   checkRateLimit,

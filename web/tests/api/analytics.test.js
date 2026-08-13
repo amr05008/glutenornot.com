@@ -19,6 +19,7 @@ import {
   buildScanFailureProperties,
   anonId,
   normalizeClient,
+  normalizeAppVersion,
   trackScan,
   trackScanFailure,
   SCAN_EVENT,
@@ -235,6 +236,77 @@ describe('normalizeClient', () => {
     expect(normalizeClient(undefined)).toBe('unknown');
     expect(normalizeClient('')).toBe('unknown');
     expect(normalizeClient('android')).toBe('unknown');
+  });
+});
+
+// Release attribution (2026-08-13 analytics review): every event carries
+// $lib_version = posthog-node, so without app_version a release cannot be
+// measured — 1.4.1's capture work was unattributable for exactly this reason.
+describe('normalizeAppVersion', () => {
+  it('accepts a semver-shaped version', () => {
+    expect(normalizeAppVersion('1.4.2')).toBe('1.4.2');
+    expect(normalizeAppVersion('1.4')).toBe('1.4');
+    expect(normalizeAppVersion('  1.4.2 ')).toBe('1.4.2');
+  });
+
+  // RC builds must stay taggable: a version-based rule is the only durable way
+  // to exclude internal testing without hardcoding a hashed identity.
+  it('accepts a bounded pre-release suffix', () => {
+    expect(normalizeAppVersion('1.5.0-rc.1')).toBe('1.5.0-rc.1');
+    expect(normalizeAppVersion('1.5.0-beta')).toBe('1.5.0-beta');
+  });
+
+  it('returns null when absent, so the property is omitted for older clients', () => {
+    expect(normalizeAppVersion(undefined)).toBeNull();
+    expect(normalizeAppVersion('')).toBeNull();
+    expect(normalizeAppVersion(42)).toBeNull();
+  });
+
+  // The header is untrusted and lands in a PostHog property: arbitrary values
+  // would let anyone blow up its cardinality and ruin version breakdowns.
+  it('rejects anything that is not a short dotted-numeric version', () => {
+    expect(normalizeAppVersion('9999.1')).toBeNull();
+    expect(normalizeAppVersion('1')).toBeNull();
+    expect(normalizeAppVersion('1.2.3.4')).toBeNull();
+    expect(normalizeAppVersion('<script>')).toBeNull();
+    expect(normalizeAppVersion('1.4.2-' + 'x'.repeat(50))).toBeNull();
+    expect(normalizeAppVersion('1.4.2'.repeat(50))).toBeNull();
+  });
+
+  it('logs a rejected version instead of dropping it silently', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    normalizeAppVersion('not-a-version');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('stays quiet when no version was sent at all', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    normalizeAppVersion(undefined);
+    normalizeAppVersion('   ');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('buildScanProperties (release attribution)', () => {
+  it('includes app_version and model when provided', () => {
+    const props = buildScanProperties({
+      method: 'ocr', verdict: 'safe', appVersion: '1.4.2', model: 'claude-opus-4-8',
+    });
+    expect(props.app_version).toBe('1.4.2');
+    expect(props.model).toBe('claude-opus-4-8');
+  });
+
+  it('omits both when absent, so old clients stay distinguishable', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe' });
+    expect('app_version' in props).toBe(false);
+    expect('model' in props).toBe(false);
+  });
+
+  it('carries app_version onto failures too', () => {
+    const props = buildScanFailureProperties({ method: 'ocr', reason: 'ocr_failed', appVersion: '1.4.2' });
+    expect(props.app_version).toBe('1.4.2');
   });
 });
 
