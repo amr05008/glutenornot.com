@@ -396,3 +396,35 @@ describe('trackScan (unconfigured)', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('timing properties (plans/weak-signal-upload-2026-08-28.md)', () => {
+  // Nothing recorded where a scan's time went before this: on weak signal the
+  // upload dominates, but the server leg (Vision + Opus) was only ever an
+  // estimate — decision 002 accepted Opus latency pending scan-duration data.
+  it('maps ocrMs / claudeMs / totalMs to snake_case scan properties', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe', ocrMs: 1210, claudeMs: 8400, totalMs: 9800 });
+    expect(props).toMatchObject({ ocr_ms: 1210, claude_ms: 8400, total_ms: 9800 });
+  });
+
+  it('omits timing on a scan that has none (barcode path)', () => {
+    const props = buildScanProperties({ method: 'barcode', verdict: 'safe' });
+    expect(props).not.toHaveProperty('ocr_ms');
+    expect(props).not.toHaveProperty('claude_ms');
+    expect(props).not.toHaveProperty('total_ms');
+  });
+
+  it('records how long a cancelled attempt waited, and the OCR leg on server-side failures', () => {
+    expect(buildScanFailureProperties({ method: 'ocr', reason: 'cancelled', elapsedMs: 31450 })).toMatchObject({
+      elapsed_ms: 31450,
+    });
+    expect(buildScanFailureProperties({ method: 'ocr', reason: 'claude_error', ocrMs: 1300 })).toMatchObject({
+      ocr_ms: 1300,
+    });
+  });
+
+  it('omits elapsed_ms and ocr_ms from failures when unknown', () => {
+    const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found' });
+    expect(props).not.toHaveProperty('elapsed_ms');
+    expect(props).not.toHaveProperty('ocr_ms');
+  });
+});

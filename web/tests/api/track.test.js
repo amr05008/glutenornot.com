@@ -161,3 +161,78 @@ describe('POST /api/track (client failure beacon)', () => {
     expect(trackScan).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/track — cancelled attempts (plans/weak-signal-upload-2026-08-28.md)', () => {
+  // A user who gives up on a slow upload is a failed attempt from their seat,
+  // but it used to be invisible everywhere: user-cancel is an AbortError that
+  // the client drops before Sentry or the beacon fire. The 2026-08-28 field
+  // incident was three attempts and one server-side event.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _setBeaconRateLimitMap(new Map());
+  });
+
+  it('records a cancelled OCR attempt with how long the user waited', async () => {
+    const res = mockRes();
+    await handler(
+      {
+        method: 'POST',
+        body: { method: 'ocr', reason: 'cancelled', elapsed_ms: 31450 },
+        headers: { 'x-client': 'ios' },
+      },
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'cancelled', elapsedMs: 31450, platform: 'ios' })
+    );
+    expect(trackScan).not.toHaveBeenCalled();
+  });
+
+  it('accepts elapsed_ms on the existing timeout/network reasons too', async () => {
+    const res = mockRes();
+    await handler(
+      { method: 'POST', body: { method: 'barcode', reason: 'network', elapsed_ms: 4020 }, headers: {} },
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'barcode', reason: 'network', elapsedMs: 4020 })
+    );
+  });
+
+  it('leaves elapsedMs out when the client did not send it', async () => {
+    await handler({ method: 'POST', body: { method: 'ocr', reason: 'cancelled' }, headers: {} }, mockRes());
+    const arg = trackScanFailure.mock.calls[0][0];
+    expect(arg.reason).toBe('cancelled');
+    expect(arg.elapsedMs).toBeUndefined();
+  });
+
+  it('clamps elapsed_ms into [0, 120000] and rounds it — untrusted input on an open endpoint', async () => {
+    for (const [sent, expected] of [
+      [999999, 120000],
+      [-50, 0],
+      [1234.7, 1235],
+    ]) {
+      vi.clearAllMocks();
+      await handler(
+        { method: 'POST', body: { method: 'ocr', reason: 'cancelled', elapsed_ms: sent }, headers: {} },
+        mockRes()
+      );
+      expect(trackScanFailure.mock.calls[0][0].elapsedMs).toBe(expected);
+    }
+  });
+
+  it('drops a non-numeric elapsed_ms instead of shipping junk to analytics', async () => {
+    for (const junk of ['abc', '31450', null, {}, [], NaN, Infinity, true]) {
+      vi.clearAllMocks();
+      const res = mockRes();
+      await handler(
+        { method: 'POST', body: { method: 'ocr', reason: 'cancelled', elapsed_ms: junk }, headers: {} },
+        res
+      );
+      expect(res.statusCode).toBe(204); // the beacon itself is still valid
+      expect(trackScanFailure.mock.calls[0][0].elapsedMs).toBeUndefined();
+    }
+  });
+});

@@ -21,7 +21,7 @@ const SCAN_FAILED_EVENT = 'scan_failed';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars, ocrMs, claudeMs, totalMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -43,6 +43,14 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // char COUNTS only, never content (privacy: no record of what was scanned).
   if (imageKb != null) props.image_kb = imageKb;
   if (ocrChars != null) props.ocr_chars = ocrChars;
+  // OCR path only (plans/weak-signal-upload-2026-08-28.md): where the server
+  // leg's time went. Before this, "Vision + Opus ≈ 7–13 s" was an estimate and
+  // decision 002 accepted Opus latency pending scan-duration data. Milliseconds
+  // only. The upload leg is not visible here — the server clock starts when
+  // the body has arrived; see elapsed_ms on client-beaconed failures for that.
+  if (ocrMs != null) props.ocr_ms = ocrMs;
+  if (claudeMs != null) props.claude_ms = claudeMs;
+  if (totalMs != null) props.total_ms = totalMs;
   // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
   // canonical $geoip_* names so the World Map insight and country/region
   // breakdowns work natively without any extra mapping.
@@ -55,11 +63,12 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
 /**
  * Build the PostHog event properties for a failed scan attempt.
  * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error |
- * server_error (server-emitted), or timeout | network (client beacon via
- * /api/track — failures that die on the wire and never reach the server).
+ * server_error (server-emitted), or timeout | network | cancelled (client
+ * beacon via /api/track — failures that die on the wire, or that the user
+ * abandoned, and so never reach the server as a request).
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars } = {}) {
+function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars, elapsedMs, ocrMs } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
   if (appVersion != null) props.app_version = appVersion;
@@ -69,6 +78,11 @@ function buildScanFailureProperties({ method, reason, platform, appVersion, coun
   // the successful-scan distribution, not ocr_chars on failures.
   if (imageKb != null) props.image_kb = imageKb;
   if (ocrChars != null) props.ocr_chars = ocrChars;
+  // Client-beaconed failures: how long the user waited before the attempt
+  // died or they gave up (the only view of the upload leg on weak signal).
+  // Server-side failures: how long Vision took before the failure, when known.
+  if (elapsedMs != null) props.elapsed_ms = elapsedMs;
+  if (ocrMs != null) props.ocr_ms = ocrMs;
   // Deliberately NO barcode property: the privacy policy promises "no record
   // of what you scanned" and no product names in analytics, and a UPC resolves
   // to a product name. Missed barcodes are visible only in ephemeral Vercel
@@ -146,6 +160,9 @@ function anonId(ip) {
  * @param {string} [input.city]             city name (edge geo)
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
+ * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
+ * @param {number} [input.claudeMs]         OCR path only: Claude round-trip in ms (incl. retries)
+ * @param {number} [input.totalMs]          OCR path only: body-received → verdict, in ms
  */
 async function trackScan({ ip, ...fields } = {}) {
   return captureEvent(SCAN_EVENT, ip, buildScanProperties(fields));
@@ -159,7 +176,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {object} input
  * @param {string} [input.ip]               client IP, hashed into the distinct ID
  * @param {'barcode'|'ocr'} input.method    how the scan was initiated
- * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'} input.reason
+ * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'|'cancelled'} input.reason
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.appVersion]       client app version (absent on older clients)
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
@@ -167,6 +184,8 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {string} [input.city]             city name (edge geo)
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars extracted (always 0 on ocr_failed by construction; omitted when failure precedes OCR)
+ * @param {number} [input.elapsedMs]        client beacon only: ms the user waited before the attempt died or was cancelled
+ * @param {number} [input.ocrMs]            server-side OCR failures only: Vision round-trip in ms, when known
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));

@@ -14,6 +14,13 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
 - `confidence` (both paths)
 - `had_ingredient_data` (barcode only)
 - `image_kb`, `ocr_chars` (OCR only — capture metrics; counts only, never content)
+- `ocr_ms`, `claude_ms`, `total_ms` (OCR only — the **server leg**: Vision
+  round-trip, Claude round-trip incl. retries, and body-received → verdict.
+  The upload leg is *not* in `total_ms` — the server clock starts once the body
+  has arrived. On weak signal the upload dominates; its only view is
+  `elapsed_ms` on client-beaconed failures. Added 2026-08-28,
+  `plans/weak-signal-upload-2026-08-28.md`, so decision 002's "revisit Opus
+  latency on scan-duration complaints" has data instead of an estimate.)
 - `model` — the Claude model that produced the verdict. Omitted when no Claude
   call happened (barcode hit with no ingredient data). Makes a model swap
   attributable at the time it happens: `claude-opus-4-8` went out the same day
@@ -31,7 +38,9 @@ version to send — a stale web build is already visible as `platform: unknown`)
 **`scan_failed`** — one per failed attempt. `reason` taxonomy:
 
 - Server-side: `not_found` | `ocr_failed` | `rate_limited` | `claude_error` | `server_error`
-- Client-beacon-only: `timeout` | `network` — these two die on the wire and never reach the server, so the iOS client reports them via `POST /api/track` (web doesn't beacon). The beacon allowlist rejects every other reason so server-side reasons can't be spoofed.
+- Client-beacon-only: `timeout` | `network` | `cancelled` — these never reach the server as a request (the first two die on the wire; `cancelled` is the user giving up on a slow attempt, which before 2026-08-28 left no trace anywhere — user-cancel is an `AbortError` the client dropped before Sentry or the beacon fired), so the iOS client reports them via `POST /api/track` (web doesn't beacon). The beacon allowlist rejects every other reason so server-side reasons can't be spoofed.
+- `elapsed_ms` (client-beaconed reasons only) — how long the user waited before the attempt died or they cancelled. Untrusted input: whitelisted to a finite number and clamped to `[0, 120000]`, dropped otherwise. This is the only measurement of the upload leg.
+- `ocr_ms` (server-side OCR-path failures, when known) — Vision round-trip before the failure.
 
 ## Privacy invariant
 
@@ -48,4 +57,6 @@ changes per submission.
 
 ## Metric caveats
 
-On a client timeout the server may still complete and emit `scan` — one attempt can then appear in both `scan` and `scan_failed`. Don't compute failure rate as `scan_failed / (scan + scan_failed)` without noting the overlap (reconcile item on the ROADMAP).
+On a client timeout the server may still complete and emit `scan` — one attempt can then appear in both `scan` and `scan_failed`. Don't compute failure rate as `scan_failed / (scan + scan_failed)` without noting the overlap (reconcile item on the ROADMAP). The same overlap applies to `cancelled` when the body had already arrived before the user gave up.
+
+`cancelled` **lowers the success-rate tile by design.** A user who gave up after 30 s on a weak-signal upload had a failed attempt from their seat; a three-attempts-one-verdict session *was* a 33% experience, and the weekly review should see it. (If that ever proves the wrong call, the alternative was a separate `scan_cancelled` event — toggle T3 in the plan.)
