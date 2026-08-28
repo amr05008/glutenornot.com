@@ -135,6 +135,21 @@ describe('buildScanProperties (quality fields)', () => {
   });
 });
 
+describe('buildScanProperties (gf_claim_present)', () => {
+  it('records gf_claim_present, including an explicit false', () => {
+    const withClaim = buildScanProperties({ method: 'ocr', verdict: 'safe', gfClaimPresent: true });
+    expect(withClaim.gf_claim_present).toBe(true);
+
+    const withoutClaim = buildScanProperties({ method: 'ocr', verdict: 'caution', gfClaimPresent: false });
+    expect(withoutClaim.gf_claim_present).toBe(false);
+  });
+
+  it('omits gf_claim_present when not provided (barcode path)', () => {
+    const props = buildScanProperties({ method: 'barcode', verdict: 'safe', hadIngredientData: true });
+    expect(props).not.toHaveProperty('gf_claim_present');
+  });
+});
+
 describe('SCAN_FAILED_EVENT', () => {
   it('is the stable event name "scan_failed"', () => {
     expect(SCAN_FAILED_EVENT).toBe('scan_failed');

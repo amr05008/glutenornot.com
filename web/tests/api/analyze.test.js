@@ -12,6 +12,7 @@ import handler, {
   applySafeVerdictFloor,
   MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
+  detectGlutenFreeClaim,
   performOCR,
   checkRateLimit,
   incrementRateLimit,
@@ -276,6 +277,140 @@ describe('CLAUDE_PROMPT multilingual support', () => {
 // hung upstream burned the function until Vercel's 300s cap while the user
 // stared at a spinner. The Vision call must be time-bounded, and a timeout is
 // a Vision failure (OCR_ERROR), not an unclassified crash.
+// plans/gf-label-claim-2026-08-28.md / decision 003: an explicit gluten-free
+// claim is a regulated claim (FDA 21 CFR 101.91, EU 828/2014) and beats the
+// ambiguous-ingredient heuristics — the incident label came back caution with
+// an explanation that opened "Good news — this is labeled gluten-free".
+describe('CLAUDE_PROMPT gluten-free label claims', () => {
+  // The rule lives in its own block so these assertions can't be satisfied by
+  // the glossary lines that merely translate "Sin gluten" etc.
+  function claimsBlock() {
+    const [, rest = ''] = CLAUDE_PROMPT.split('#### Gluten-free label claims');
+    return rest.split('####')[0];
+  }
+
+  it('has a dedicated gluten-free label claims block', () => {
+    expect(claimsBlock()).not.toBe('');
+  });
+
+  it('tells Claude a claim keeps ambiguous ingredients from lowering the verdict', () => {
+    expect(claimsBlock()).toMatch(/do NOT lower the verdict/);
+    expect(claimsBlock()).toMatch(/Return "safe"/);
+  });
+
+  it('keeps oats at caution unless the claim is a certification mark (T2)', () => {
+    expect(claimsBlock()).toMatch(/Oats — still "caution", unless the claim is a third-party certification mark/);
+    expect(claimsBlock()).toContain('GFCO');
+  });
+
+  it('keeps a listed gluten source and may-contain advisories at caution despite the claim (T1, T3)', () => {
+    expect(claimsBlock()).toMatch(/A listed gluten source/);
+    expect(claimsBlock()).toMatch(/label and the ingredient list\s+disagree/);
+    expect(claimsBlock()).toMatch(/"may contain wheat\/gluten"/);
+  });
+
+  it('ignores negated or unrelated gluten-free phrasing (negation guard)', () => {
+    expect(claimsBlock()).toContain('"not gluten-free"');
+    expect(claimsBlock()).toContain('"gluten-free options available"');
+    expect(claimsBlock()).toMatch(/"gluten-free facility"/);
+  });
+
+  // /grill 2026-08-28: "Ignore 'not gluten-free'" measurably talked the model
+  // out of calling a self-declared non-GF product unsafe (baseline unsafe×3
+  // → caution×3). A negated claim is a gluten statement, not a no-op.
+  it('treats a negated claim as a statement that the product contains gluten', () => {
+    expect(claimsBlock()).toMatch(/statement that the product contains gluten/);
+    expect(claimsBlock()).toMatch(/Return "unsafe"/);
+  });
+
+  it('names the near-claims that are not gluten-free claims', () => {
+    for (const phrase of ['"wheat-free"', '"gluten-friendly"', '"gluten-reduced"', '"very low gluten"']) {
+      expect(claimsBlock()).toContain(phrase);
+    }
+  });
+
+  it('scopes an ingredient-level claim to that ingredient, not the product', () => {
+    expect(claimsBlock()).toContain('"gluten-free soy sauce"');
+    expect(claimsBlock()).toMatch(/covers only that ingredient/);
+  });
+
+  it('treats a claim with no visible ingredient list as an incomplete read', () => {
+    expect(claimsBlock()).toMatch(/no visible ingredient list/);
+    expect(claimsBlock()).toMatch(/incomplete read/);
+  });
+
+  it('lists the claim phrases for every supported language (T7)', () => {
+    for (const phrase of ['sin gluten', 'libre de gluten', 'glutenvrij', 'sense gluten', 'sans gluten', 'senza glutine', 'glutenfrei', 'sem glúten']) {
+      expect(claimsBlock()).toContain(`"${phrase}"`);
+    }
+  });
+
+  it('narrows the HVP caution to hydrolyzed protein of unstated source', () => {
+    expect(CLAUDE_PROMPT).toContain('hydrolyzed vegetable/plant protein of unstated source');
+    expect(CLAUDE_PROMPT).toContain('"hydrolyzed soy protein"');
+    // The old unconditional entry is gone
+    expect(CLAUDE_PROMPT).not.toContain('hydrolyzed vegetable protein, soy sauce');
+  });
+
+  it('gives a safe-tone example that names the label as what covers the ingredients', () => {
+    expect(CLAUDE_PROMPT).toContain("Labeled gluten-free — that's a regulated claim");
+  });
+
+  it('still keeps the general be-conservative rule (guard — everything the block does not name)', () => {
+    expect(CLAUDE_PROMPT).toContain('Be conservative—when uncertain, use "caution"');
+  });
+});
+
+// Presence signal for the gf_claim_present analytics property — a boolean for
+// measuring the rule's effect, never the verdict rule itself (Claude reads the
+// text). Deterministic so it is testable and cannot drift with the model.
+describe('detectGlutenFreeClaim', () => {
+  it.each([
+    ['English, spaced', 'INGREDIENTS: corn, salt.\nGluten Free\nNET WT 7 OZ'],
+    ['English, hyphenated + upper-case', 'GLUTEN-FREE\nINGREDIENTS: rice'],
+    ['English, no separator', 'Glutenfree snack'],
+    ['certification mark, spelled out', 'Certified Gluten-Free (GFCO)'],
+    ['certification mark, acronym only', 'Look for the GFCO seal'],
+    ['Spanish: sin gluten', 'PATATAS FRITAS\nSin gluten\nINGREDIENTES: patatas'],
+    ['Spanish: libre de gluten', 'Libre de gluten'],
+    ['Dutch', 'Glutenvrij\nINGREDIËNTEN: aardappelen'],
+    ['Catalan', 'Sense gluten'],
+    ['French', 'Sans gluten'],
+    ['Italian', 'Senza glutine'],
+    ['German', 'glutenfrei'],
+    ['Portuguese, accented', 'Sem glúten'],
+    ['Portuguese, unaccented OCR', 'sem gluten'],
+    // OCR emits typographic dashes; packaging uses the inflected forms
+    ['English, en dash', 'Gluten–Free'],
+    ['English, em dash', 'Gluten—Free'],
+    ['English, unicode hyphen', 'Gluten‐Free'],
+    ['Dutch, inflected', 'Glutenvrije koekjes'],
+    ['German, inflected', 'Glutenfreie Kekse'],
+  ])('detects a claim: %s', (_label, text) => {
+    expect(detectGlutenFreeClaim(text)).toBe(true);
+  });
+
+  it.each([
+    ['no claim at all', 'INGREDIENTS: wheat flour, sugar, salt.\nCONTAINS: WHEAT.'],
+    ['the word gluten alone', 'Contains gluten'],
+    ['negated English claim', 'This product is not gluten-free.'],
+    ['negated, hyphen-less', 'NOT GLUTEN FREE'],
+    ['a near-claim: wheat-free', 'Wheat-Free'],
+    ['a near-claim: gluten-friendly', 'Gluten Friendly'],
+    ['a near-claim: very low gluten', 'Very low gluten'],
+    ['a near-claim: gluten-reduced', 'Gluten-Reduced'],
+    ['empty string', ''],
+    ['non-string', null],
+  ])('returns false for %s', (_label, text) => {
+    expect(detectGlutenFreeClaim(text)).toBe(false);
+  });
+
+  it('is only a presence signal: a negated claim next to an affirmative one still counts', () => {
+    // Claude decides the verdict; this flag just says the phrase appeared.
+    expect(detectGlutenFreeClaim('Not gluten-free? Try our Gluten Free line.')).toBe(true);
+  });
+});
+
 describe('performOCR timeouts', () => {
   const ORIGINAL_KEY = process.env.GOOGLE_CLOUD_VISION_API_KEY;
 
@@ -678,6 +813,40 @@ describe('analyze handler analytics', () => {
       expect.objectContaining({ method: 'ocr', confidence: 'high' })
     );
     expect(trackScanFailure).not.toHaveBeenCalled();
+  });
+
+  // gf_claim_present (plans/gf-label-claim-2026-08-28.md step 4): a boolean
+  // detected server-side from the OCR text, so the rule's effect on the
+  // caution share is measurable. A flag, never the claim text or the product.
+  describe('gf_claim_present', () => {
+    const analysis = { mode: 'label', verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: 'Labeled gluten-free.', confidence: 'high' };
+    const OCR_LABELED_GF = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'KETTLE CORN\nGluten Free\nINGREDIENTS: '.concat('popcorn, cane sugar, sunflower oil, sea salt, natural flavor, '.repeat(3)) }] }] }) };
+
+    function stubScan(ocrResponse) {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return ocrResponse;
+      }));
+    }
+
+    it('tracks gfClaimPresent: true when the OCR text carries a gluten-free claim', async () => {
+      stubScan(OCR_LABELED_GF);
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ method: 'ocr', gfClaimPresent: true }));
+    });
+
+    it('tracks gfClaimPresent: false when there is no claim', async () => {
+      stubScan(OCR_TEXT_FULL_LABEL);
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ method: 'ocr', gfClaimPresent: false }));
+    });
   });
 });
 

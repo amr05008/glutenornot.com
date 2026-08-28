@@ -14,6 +14,12 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
 - `confidence` (both paths)
 - `had_ingredient_data` (barcode only)
 - `image_kb`, `ocr_chars` (OCR only — capture metrics; counts only, never content)
+- `gf_claim_present` (OCR only) — boolean: the OCR text carried a gluten-free
+  claim phrase (`detectGlutenFreeClaim` in `api/analyze.js`, a server-side regex
+  over the prompt's claim-phrase list — not Claude's judgement). Splits the
+  caution share into labeled vs unlabeled products so the claim rule (decision
+  003, `plans/gf-label-claim-2026-08-28.md`) is measurable. A flag, never the
+  text — the privacy invariant below holds. Omitted on barcode scans.
 - `ocr_ms`, `claude_ms`, `total_ms` (OCR only — the **server leg**: Vision
   round-trip, Claude round-trip incl. retries, and body-received → verdict.
   The upload leg is *not* in `total_ms` — the server clock starts once the body

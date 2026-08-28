@@ -21,7 +21,7 @@ const SCAN_FAILED_EVENT = 'scan_failed';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars, ocrMs, claudeMs, totalMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars, gfClaimPresent, ocrMs, claudeMs, totalMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -43,6 +43,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // char COUNTS only, never content (privacy: no record of what was scanned).
   if (imageKb != null) props.image_kb = imageKb;
   if (ocrChars != null) props.ocr_chars = ocrChars;
+  // OCR path only (plans/gf-label-claim-2026-08-28.md): did the label carry a
+  // gluten-free claim phrase? Splits the caution share into labeled vs
+  // unlabeled products so the claim rule's effect is measurable. A boolean
+  // from a server-side regex — never the claim text, never the product.
+  if (gfClaimPresent != null) props.gf_claim_present = gfClaimPresent;
   // OCR path only (plans/weak-signal-upload-2026-08-28.md): where the server
   // leg's time went. Before this, "Vision + Opus ≈ 7–13 s" was an estimate and
   // decision 002 accepted Opus latency pending scan-duration data. Milliseconds
@@ -160,6 +165,7 @@ function anonId(ip) {
  * @param {string} [input.city]             city name (edge geo)
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
+ * @param {boolean} [input.gfClaimPresent]  OCR path only: the text carried a gluten-free claim phrase
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
  * @param {number} [input.claudeMs]         OCR path only: Claude round-trip in ms (incl. retries)
  * @param {number} [input.totalMs]          OCR path only: body-received → verdict, in ms
