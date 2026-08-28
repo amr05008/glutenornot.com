@@ -5,7 +5,7 @@
 - **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions, Sentry (crash reporting)
 - **APIs**: Google Cloud Vision (OCR), Claude API (Opus)
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
-- **Active plans**: `plans/` — scoped work-in-progress. **Two open (2026-08-28, run in parallel by separate sessions):** `gf-label-claim-2026-08-28.md` (server-only prompt rule — merges first) and `weak-signal-upload-2026-08-28.md` (mobile upload/progress/cancel telemetry → iOS 1.4.3). `ocr-capture-assist-2026-07-18.md` is closed (2026-08-13) — read its CLOSED header before reopening the capture question
+- **Active plans**: `plans/` — scoped work-in-progress. **One open:** `weak-signal-upload-2026-08-28.md` (mobile upload/progress/cancel telemetry → iOS 1.4.3). `gf-label-claim-2026-08-28.md` **shipped 2026-08-28** (PR #23, decision 003) — only its step-9 effect read (~2026-09-25) remains. `ocr-capture-assist-2026-07-18.md` is closed (2026-08-13) — read its CLOSED header before reopening the capture question
 - **Session history**: `.claude/sessions/`
 - **Decisions**: `.claude/decisions/`
 - **Skills**: `.claude/skills/` — `glutenornot-release` drives the iOS release (points at `mobile/RELEASE.md`)
