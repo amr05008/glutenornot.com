@@ -65,6 +65,13 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Add Italian / German glossary blocks
 - [ ] Add UI language indicator badge on result screens (optional, deferred)
 
+### Verdict calibration
+> 90 days to 2026-08-28 (PostHog): OCR verdicts 172 caution / 56 safe / 23 unsafe — **69% caution**, and only 4 of the 172 cautions at `confidence: high`. When 7 in 10 scans say caution, caution carries no information.
+- [x] Honor an explicit gluten-free label claim (`api/analyze.js` prompt, decision 003, `plans/gf-label-claim-2026-08-28.md`): a regulated claim (FDA 21 CFR 101.91 / EU 828/2014, <20 ppm) now lifts ambiguous-ingredient cautions (natural flavors, maltodextrin, modified starch, spices, hydrolyzed protein of unstated source) to `safe` with the label named as the reason; oats (unless certified), a listed gluten source, and may-contain / shared-equipment advisories still win; "hydrolyzed vegetable protein" narrowed to unstated-source only. Gated by a 16-case live eval in the repo (`web/tests/api/evals/`, `RUN_LIVE_EVALS=1`): baseline 8/16 → 16/16 on two runs, zero false-safe. `gf_claim_present` on OCR `scan` events measures the effect (2026-08-28, PR #23)
+- [ ] Read the effect (plan step 9, ~2026-09-25, weekly review): caution share among `gf_claim_present = true` OCR scans should fall sharply, `false` roughly unchanged; if labeled cautions stay high, sample explanation *reasons* (never content) and revisit T1/T3. Then close the plan with a CLOSED header
+- [ ] Barcode path (T5, deferred): mirror the claim via Open Food Facts `labels_tags` (`en:gluten-free`) in `assessGlutenSignal`, and carry the HVP narrowing into the `api/barcode.js` prompt — its 69% caution is mostly "no ingredient data", a different problem. NB until then the two prompts disagree on hydrolyzed soy protein (label path: safe; barcode path: caution) for the same product scanned two ways
+- [ ] Relaxing the ambiguous-ingredient list itself when *no* claim is present — deliberately out of scope until step 9 data is in (real false-safe downside)
+
 ### Scan History
 - [x] **iOS**: Recents screen — last 50 scans in AsyncStorage, tap reopens the saved result, Clear All, history button on the camera controls; privacy policy updated to cover local storage (2026-07-06, ships with next iOS build)
 - [ ] **Web**: Store recent scans in localStorage + show history in a simple list

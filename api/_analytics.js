@@ -21,7 +21,7 @@ const SCAN_FAILED_EVENT = 'scan_failed';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars, gfClaimPresent } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -43,6 +43,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // char COUNTS only, never content (privacy: no record of what was scanned).
   if (imageKb != null) props.image_kb = imageKb;
   if (ocrChars != null) props.ocr_chars = ocrChars;
+  // OCR path only (plans/gf-label-claim-2026-08-28.md): did the label carry a
+  // gluten-free claim phrase? Splits the caution share into labeled vs
+  // unlabeled products so the claim rule's effect is measurable. A boolean
+  // from a server-side regex — never the claim text, never the product.
+  if (gfClaimPresent != null) props.gf_claim_present = gfClaimPresent;
   // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
   // canonical $geoip_* names so the World Map insight and country/region
   // breakdowns work natively without any extra mapping.
@@ -146,6 +151,7 @@ function anonId(ip) {
  * @param {string} [input.city]             city name (edge geo)
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
+ * @param {boolean} [input.gfClaimPresent]  OCR path only: the text carried a gluten-free claim phrase
  */
 async function trackScan({ ip, ...fields } = {}) {
   return captureEvent(SCAN_EVENT, ip, buildScanProperties(fields));
