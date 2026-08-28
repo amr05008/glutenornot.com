@@ -45,8 +45,17 @@ The claim does **not** override (the plan's toggles T1–T3, defaults kept):
 - **"May contain wheat/gluten" or a shared-equipment/facility advisory** —
   `caution` (T1 — the toggle most likely to flip; legally the product is still
   GF, the community is split).
-- **Negated or unrelated phrasing** — "not gluten-free", "gluten-free options
-  available", a "gluten-free facility" line on its own — is not a claim.
+- **Negated phrasing** — "not gluten-free", "contains gluten" — is a statement
+  that the product contains gluten → `unsafe`. (The first wording, "ignore
+  'not gluten-free'", measurably demoted a self-declared non-GF product from
+  the baseline's `unsafe` to `caution`; the /grill review caught it.)
+- **Unrelated phrasing** — "gluten-free options available", a "gluten-free
+  facility" line on its own, a claim on a single ingredient ("gluten-free soy
+  sauce" covers the soy sauce, not the product) — is not a claim.
+- **Near-claims** — "wheat-free", "gluten-friendly", "low / very low gluten",
+  "gluten-reduced" — are not claims; the last two mean gluten is present.
+- **A claim with no visible ingredient list** (a front-of-pack-only capture)
+  is an incomplete read → `caution`, ask for the ingredient panel.
 
 Alongside: "hydrolyzed vegetable protein" narrowed to hydrolyzed protein *of
 unstated source* — "hydrolyzed soy protein" names its source and is not a
@@ -73,19 +82,29 @@ testable, and a flag rather than content so the privacy invariant holds.
 
 ## Validation
 
-16-case synthetic eval checked into the repo (`web/tests/api/evals/`), run
+22-case synthetic eval checked into the repo (`web/tests/api/evals/`), run
 live against Opus 4.8 through the real prompt + `callClaude` +
 `parseClaudeResponse` path, env-gated (`RUN_LIVE_EVALS=1`) so `npm test` stays
-offline. Safe cases 2×, adversarial cases 3×, **zero false-safe required**.
+offline. Safe cases 2×, adversarial cases 5×, **zero false-safe required**;
+the runner rejects the parse-failure fallback as evidence and asserts that
+every safe-with-claim explanation names the label. Adversarial cases each
+carry an ambiguous ingredient, so a mistaken claim shows up as a false safe
+instead of hiding behind the baseline caution.
 
-- **Before** (unchanged prompt): 8/16 — every labeled-GF case came back
-  `caution` (1–4, 6, 15), the HVP-narrowing case flaked (16), and the
-  negation case returned `unsafe` 3/3 (9; reclassified to `not-safe`, which is
-  what the guard actually promises).
-- **After**: 16/16 on two consecutive full runs, zero false-safe; baseline
-  cases 11–12 unchanged; every safe-with-claim explanation names the label.
+- **Before** (unchanged prompt, original 16 cases): 8/16 — every labeled-GF
+  case came back `caution` (1–4, 6, 15), the HVP-narrowing case flaked (16),
+  and the negation case returned `unsafe` 3/3 (9).
+- **After**: 16/16 on two consecutive full runs of the original set; then the
+  /grill-driven additions (negation → `unsafe`, near-claims, ingredient-level
+  claim, front-of-pack-only capture) re-run at 22 cases — see the PR and the
+  session log for the final table. Baseline cases 11–12 unchanged.
 
 The eval is the gate for any future change to this rule or its overrides.
+
+## Rollback
+
+The rule is a prompt constant in a Vercel function: `git revert` the prompt
+commit and push; Vercel redeploys in about a minute. No client involvement.
 
 ## Revisit
 

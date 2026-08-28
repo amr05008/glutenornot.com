@@ -315,6 +315,30 @@ describe('CLAUDE_PROMPT gluten-free label claims', () => {
     expect(claimsBlock()).toMatch(/"gluten-free facility"/);
   });
 
+  // /grill 2026-08-28: "Ignore 'not gluten-free'" measurably talked the model
+  // out of calling a self-declared non-GF product unsafe (baseline unsafe×3
+  // → caution×3). A negated claim is a gluten statement, not a no-op.
+  it('treats a negated claim as a statement that the product contains gluten', () => {
+    expect(claimsBlock()).toMatch(/statement that the product contains gluten/);
+    expect(claimsBlock()).toMatch(/Return "unsafe"/);
+  });
+
+  it('names the near-claims that are not gluten-free claims', () => {
+    for (const phrase of ['"wheat-free"', '"gluten-friendly"', '"gluten-reduced"', '"very low gluten"']) {
+      expect(claimsBlock()).toContain(phrase);
+    }
+  });
+
+  it('scopes an ingredient-level claim to that ingredient, not the product', () => {
+    expect(claimsBlock()).toContain('"gluten-free soy sauce"');
+    expect(claimsBlock()).toMatch(/covers only that ingredient/);
+  });
+
+  it('treats a claim with no visible ingredient list as an incomplete read', () => {
+    expect(claimsBlock()).toMatch(/no visible ingredient list/);
+    expect(claimsBlock()).toMatch(/incomplete read/);
+  });
+
   it('lists the claim phrases for every supported language (T7)', () => {
     for (const phrase of ['sin gluten', 'libre de gluten', 'glutenvrij', 'sense gluten', 'sans gluten', 'senza glutine', 'glutenfrei', 'sem glúten']) {
       expect(claimsBlock()).toContain(`"${phrase}"`);
@@ -356,6 +380,12 @@ describe('detectGlutenFreeClaim', () => {
     ['German', 'glutenfrei'],
     ['Portuguese, accented', 'Sem glúten'],
     ['Portuguese, unaccented OCR', 'sem gluten'],
+    // OCR emits typographic dashes; packaging uses the inflected forms
+    ['English, en dash', 'Gluten–Free'],
+    ['English, em dash', 'Gluten—Free'],
+    ['English, unicode hyphen', 'Gluten‐Free'],
+    ['Dutch, inflected', 'Glutenvrije koekjes'],
+    ['German, inflected', 'Glutenfreie Kekse'],
   ])('detects a claim: %s', (_label, text) => {
     expect(detectGlutenFreeClaim(text)).toBe(true);
   });
@@ -365,6 +395,10 @@ describe('detectGlutenFreeClaim', () => {
     ['the word gluten alone', 'Contains gluten'],
     ['negated English claim', 'This product is not gluten-free.'],
     ['negated, hyphen-less', 'NOT GLUTEN FREE'],
+    ['a near-claim: wheat-free', 'Wheat-Free'],
+    ['a near-claim: gluten-friendly', 'Gluten Friendly'],
+    ['a near-claim: very low gluten', 'Very low gluten'],
+    ['a near-claim: gluten-reduced', 'Gluten-Reduced'],
     ['empty string', ''],
     ['non-string', null],
   ])('returns false for %s', (_label, text) => {

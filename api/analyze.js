@@ -152,7 +152,10 @@ Note: Omit \`detected_language\` only when the text is in English.
   - Oats — still "caution", unless the claim is a third-party certification mark (GFCO, CSA, "Certified Gluten-Free"), in which case certified oats are safe.
   - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any language) — return "caution" and say that the label and the ingredient list disagree.
   - An explicit "may contain wheat/gluten" or shared-equipment/facility advisory — return "caution".
-- Only honor a claim about this product. Ignore negated or unrelated phrasing: "not gluten-free", "gluten-free options available", a "gluten-free facility" or "equipment" statement on its own, or a claim that refers to a different product.
+- Only honor an affirmative claim about this whole product. These are NOT claims: "gluten-free options available", a "gluten-free facility" or "equipment" statement on its own, a claim that refers to a different product, or a claim attached to a single ingredient ("gluten-free soy sauce", "gluten-free oats" inside the list) — that covers only that ingredient, not the product; judge the rest of the list as usual.
+- A negated phrase — "not gluten-free", "contains gluten" — is not a claim: it is a statement that the product contains gluten. Return "unsafe".
+- Near-claims are not gluten-free claims: "wheat-free", "gluten-friendly", "low gluten" / "very low gluten", "gluten-reduced" / "crafted to remove gluten". Judge the product as if it carried no claim — and "very low gluten" or "gluten-reduced" means gluten is present, so never "safe".
+- A claim with no visible ingredient list is an incomplete read — return "caution" and ask for the ingredient panel to be in frame.
 
 #### Guidelines
 - Always check for allergen statements AND "may contain" warnings—these are often separate from ingredients
@@ -299,10 +302,16 @@ function applySafeVerdictFloor(analysis, ocrChars) {
  * available" still counts as present, which is fine for a metric.
  *
  * Keep the phrase list in sync with the prompt block (toggle T7 in
- * plans/gf-label-claim-2026-08-28.md).
+ * plans/gf-label-claim-2026-08-28.md), with two deliberate differences: the
+ * separator class also takes the typographic dashes OCR emits (– — ‐), and
+ * Dutch/German accept their inflected packaging forms (glutenvrije,
+ * glutenfreie). The bare token "CSA" is left out on purpose — on a farm-stand
+ * label it is far more likely Community Supported Agriculture than the
+ * Celiac Support Association mark, and a CSA-certified product also prints
+ * "Certified Gluten-Free", which matches.
  */
 const GF_CLAIM_PATTERN =
-  /(?<!\bnot\s)\bgluten[\s-]*free\b|\bsin gluten\b|\blibre de gluten\b|\bglutenvrij\b|\bsense gluten\b|\bsans gluten\b|\bsenza glutine\b|\bglutenfrei\b|\bsem gl[uú]ten\b|\bgfco\b/i;
+  /(?<!\bnot\s)\bgluten[\s\-–—‐]*free\b|\bsin gluten\b|\blibre de gluten\b|\bglutenvrij\w*|\bsense gluten\b|\bsans gluten\b|\bsenza glutine\b|\bglutenfrei\w*|\bsem gl[uú]ten\b|\bgfco\b/i;
 
 function detectGlutenFreeClaim(text) {
   return typeof text === 'string' && GF_CLAIM_PATTERN.test(text);
