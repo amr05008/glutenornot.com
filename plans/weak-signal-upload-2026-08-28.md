@@ -50,7 +50,7 @@ Confirmed 2026-08-28:
 
 | Decision | Choice | Why | Reversibility |
 |---|---|---|---|
-| Payload cut | JPEG quality 0.7 → **0.5** at 1024px, kept only if the 10-photo Vision check (Phase B) shows no OCR loss | OCR tolerates artifacts, not resolution loss; ~40% fewer bytes on the leg that's failing | One constant |
+| Payload cut | JPEG quality 0.7 → **0.6** at 1024px — the plan said 0.5 "if the Vision check shows no OCR loss"; the check (B1 RESULT below) failed 0.5 on the densest label by 0.1 points, so the rule picked 0.6 | OCR tolerates artifacts, not resolution loss; measured ~15% fewer bytes (not the 40% hoped) | One constant |
 | Transport | Keep base64 JSON | Quality knob is bigger and doesn't touch the API contract | Toggle T2 |
 | Cancel telemetry | `scan_failed reason=cancelled` + `elapsed_ms`, via the existing `POST /api/track` beacon | A cancel is a failed attempt from the user's seat — today it's invisible everywhere | Allowlist edit; additive |
 | Server timing | `ocr_ms`, `claude_ms`, `total_ms` on `scan` (and `ocr_ms` on server-side `scan_failed` where known) | No timing exists anywhere; settles decision 002's "revisit Opus latency on scan-duration complaints" with data | Additive properties |

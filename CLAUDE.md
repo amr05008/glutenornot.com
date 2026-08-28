@@ -5,7 +5,7 @@
 - **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions, Sentry (crash reporting)
 - **APIs**: Google Cloud Vision (OCR), Claude API (Opus)
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
-- **Active plans**: `plans/` — scoped work-in-progress. **One open:** `weak-signal-upload-2026-08-28.md` (mobile upload/progress/cancel telemetry → iOS 1.4.3). `gf-label-claim-2026-08-28.md` **shipped 2026-08-28** (PR #23, decision 003) — only its step-9 effect read (~2026-09-25) remains. `ocr-capture-assist-2026-07-18.md` is closed (2026-08-13) — read its CLOSED header before reopening the capture question
+- **Active plans**: `plans/` — scoped work-in-progress. **None in build.** Two shipped 2026-08-28 with only their data reads left: `weak-signal-upload-2026-08-28.md` (PR #24 → iOS 1.4.3; D2 read ~2026-09-11, then close; next lever is toggle T2, multipart upload, as its own PR) and `gf-label-claim-2026-08-28.md` (PR #23, decision 003; step-9 read ~2026-09-25). `ocr-capture-assist-2026-07-18.md` is closed (2026-08-13) — read its CLOSED header before reopening the capture question
 - **Session history**: `.claude/sessions/`
 - **Decisions**: `.claude/decisions/`
 - **Skills**: `.claude/skills/` — `glutenornot-release` drives the iOS release (points at `mobile/RELEASE.md`)
@@ -16,7 +16,7 @@ Three deployables: `web/` (vanilla-JS PWA, vitest tests in `web/tests/`), `mobil
 
 - `api/_utils.js` — shared rate limiting, verdict normalization, and the Claude client + error classification; both endpoints (`analyze.js`, `barcode.js`) go through it.
 - `api/barcode.js` — waterfall lookup: Open Food Facts → USDA → Nutritionix → UPCitemdb.
-- `api/track.js` — client failure beacon for the two failures that die on the wire (`timeout`/`network`) and are invisible to the server; contract in `api/ANALYTICS.md`.
+- `api/track.js` — client failure beacon for the failures the server never sees as a request: `timeout`/`network` (die on the wire), `cancelled` (user tapped Cancel; carries `elapsed_ms`) and `interrupted` (app backgrounded mid-scan). `cancelled` lowers the weekly success-rate tile by design. Contract in `api/ANALYTICS.md`.
 - `mobile/app/result.tsx` — routes to `ResultCard` (ingredient labels/barcodes) vs `MenuResultCard` (restaurant menus) based on the response's `mode`.
 - `mobile/app/recents.tsx` — local-only history; a tap reopens the *saved* result, no re-scan.
 - `mobile/services/review.ts` — App Store rating prompt, at most once per install; failures are swallowed so it can never break a result.

@@ -12,6 +12,7 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 - **AI-powered analysis**: Uses OCR + Claude to identify gluten-containing ingredients
 - **Clear verdicts**: Safe, Caution, or Unsafe with explanations
 - **Flashlight assist**: torch toggle on the camera, and one-tap "turn on flashlight & retry" when a label can't be read (iOS)
+- **Honest on weak signal**: shows the photo uploading with a percentage and says when a slow connection is the wait, instead of asking you to start over (iOS 1.4.3+)
 - **Scan history**: Recent scans saved on-device (iOS) — no account, clearable anytime
 - **Multilingual**: Analyzes labels and menus in any language (dedicated Spanish, Dutch, Catalan, and French support)
 - **Offline support**: Works as a PWA with offline fallback
