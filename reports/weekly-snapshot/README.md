@@ -87,7 +87,14 @@ Sanity checks before publishing: tile 1 = Σ `DAYS[].ok` = band totals on both
 split cards; tile 2 denominator = Σ ok + Σ fail; failure rows sum to Σ fail.
 
 Verdicts render caution-heavy by design (all oats → caution, uncertain →
-caution) — a caution-majority week is normal, not a data error.
+caution) — a caution-majority week is normal, not a data error. **But since
+2026-08-28** a product with an explicit gluten-free label returns `safe`
+(decision 003, `plans/gf-label-claim-2026-08-28.md`), so the OCR caution share
+should fall from the ~69% it ran at for the prior 90 days. The plan's step 9
+(~2026-09-25) is the check: split OCR `scan` verdicts by the boolean
+`properties.gf_claim_present` over 28 days — labeled products' caution share
+should drop sharply, unlabeled roughly unchanged. Mention it in the analyst
+read once the window is in; it does not add a section to this page.
 
 Privacy: counts only. Never add product names, barcodes, or any scanned
 content — the privacy policy promises "no record of what you scanned."

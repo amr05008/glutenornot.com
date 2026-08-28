@@ -1,6 +1,13 @@
 # Honor the gluten-free label claim — a regulated claim beats ambiguous-ingredient heuristics
 
-**Status 2026-08-28: open — scoped from the weak-LTE farm-stand incident, not started.**
+**Status 2026-08-28: SHIPPED — steps 1–8 done, PR #23 merged to main (`3a4e418`), Vercel deployed. Step 9 (read the effect, ~2026-09-25) is open; close with a CLOSED header after it.**
+Executed in `.claude/sessions/2026-08-28-add-gf-label-claim-rule.md`; decision record
+`.claude/decisions/003-honor-gf-label-claim.md`. Two deviations from the text below, both
+in the conservative direction and flagged in the PR: (1) case 9 ("not gluten-free") asserts
+`unsafe`, not `caution` — the negation is a gluten statement; (2) six /grill-driven cases
+were added (17–22: near-claims "wheat-free" / "gluten-friendly" / "very low gluten" /
+"gluten-reduced", an ingredient-level claim, a front-of-pack-only capture) with matching
+prompt lines. Final eval: 22/22, zero false-safe; baseline was 8/16.
 Sibling plan: `plans/weak-signal-upload-2026-08-28.md` (mobile client, different agent
 session — see "Coordination" below). This plan is **server-only** (`api/`), ships on push to
 `main` via Vercel, and reaches both clients with no app build.
