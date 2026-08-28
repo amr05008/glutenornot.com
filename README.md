@@ -71,7 +71,7 @@ glutenornot.com/
 │   ├── _analytics.js       # PostHog scan-event logging (no-op until POSTHOG_API_KEY set)
 │   ├── analyze.js          # Serverless: OCR + Claude analysis
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
-│   ├── track.js            # Client failure beacon (timeout/network scan_failed)
+│   ├── track.js            # Client failure beacon (timeout/network/cancelled/interrupted scan_failed)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```

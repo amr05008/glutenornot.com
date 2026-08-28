@@ -52,7 +52,7 @@ async function ensureConnected(): Promise<void> {
   }
 }
 
-// Failure beacon: a timeout, a dropped connection, or the user giving up all
+// Failure beacon: a timeout, a dropped connection, or an abandoned attempt all
 // die on the client side, so the server never sees them and scan_failed
 // under-counts exactly the failures that hurt most in-store. Fire-and-forget —
 // never awaited on the user path, and a failing beacon must never alter the
@@ -60,9 +60,12 @@ async function ensureConnected(): Promise<void> {
 // check: those requests were never sent, and a hard-offline beacon can't be
 // delivered anyway. `elapsedMs` is how long the user waited — on weak signal
 // it is the only measurement of the upload leg that exists anywhere
-// (plans/weak-signal-upload-2026-08-28.md).
-type BeaconReason = 'timeout' | 'network' | 'cancelled';
-function sendFailureBeacon(method: 'ocr' | 'barcode', reason: BeaconReason, elapsedMs?: number): void {
+// (plans/weak-signal-upload-2026-08-28.md). timeout/network are sent from
+// here; `cancelled` (user) and `interrupted` (iOS resume dropped the request)
+// are sent by the screen, which is the only place that knows which one an
+// abort was.
+export type BeaconReason = 'timeout' | 'network' | 'cancelled' | 'interrupted';
+export function sendFailureBeacon(method: 'ocr' | 'barcode', reason: BeaconReason, elapsedMs?: number): void {
   try {
     const elapsed = Number.isFinite(elapsedMs) ? { elapsed_ms: Math.round(elapsedMs as number) } : {};
     fetch(TRACK_API_URL, {
@@ -81,7 +84,12 @@ function sendFailureBeacon(method: 'ocr' | 'barcode', reason: BeaconReason, elap
 // restart the very upload that was about to land. `fetch` cannot see the
 // request body going out, so the OCR request goes over XMLHttpRequest, whose
 // `upload` target reports progress (React Native wires it to
-// didSendNetworkData). "reading" = the body has fully arrived at the server.
+// didSendNetworkData). "reading" = iOS reports the whole body handed to the
+// network stack. That is NOT "received by the server": CFNetwork counts bytes
+// handed to the socket, and the kernel send buffer (~100 KB+) can still be
+// draining on a slow uplink — so the phase can run ahead of the server by a
+// few seconds on 2-bar LTE. The reading-phase copy never tells the user to
+// restart for that reason.
 export type ScanProgress = { phase: 'uploading'; pct: number } | { phase: 'reading' };
 export type ProgressCallback = (progress: ScanProgress) => void;
 
@@ -140,10 +148,14 @@ function postJsonWithProgress(
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable || e.total <= 0) return;
       if (e.loaded >= e.total) report({ phase: 'reading' });
-      else report({ phase: 'uploading', pct: Math.round((e.loaded / e.total) * 100) });
+      // Never show 100% while bytes are still going out — floor, capped at 99.
+      else report({ phase: 'uploading', pct: Math.min(99, Math.floor((e.loaded / e.total) * 100)) });
     };
     xhr.onreadystatechange = () => {
-      if (xhr.readyState >= 2) report({ phase: 'reading' }); // headers received ⇒ upload done
+      // Headers received ⇒ the upload is over, even if the final progress
+      // event never came. Only 2/3: React Native dispatches readyState 4
+      // BEFORE the abort/error event, and that must not read as "upload done".
+      if (xhr.readyState === 2 || xhr.readyState === 3) report({ phase: 'reading' });
     };
     xhr.onload = () => {
       done();
@@ -157,6 +169,13 @@ function postJsonWithProgress(
     xhr.onerror = () => {
       done();
       reject(new TypeError('Network request failed'));
+    };
+    // RN dispatches `timeout` (not `error`) on kCFURLErrorTimedOut. Unhandled,
+    // this promise would never settle and the user would sit on the spinner
+    // until they cancelled — which would then be recorded as their choice.
+    xhr.ontimeout = () => {
+      done();
+      reject(new TypeError('Network request timed out'));
     };
     xhr.onabort = () => {
       done();
@@ -175,6 +194,9 @@ export async function analyzeImage(
   onProgress?: ProgressCallback,
 ): Promise<AnalysisResult> {
   await ensureConnected();
+  // A cancel that landed during the (async) probe must not send the request
+  // anyway — the screen would then navigate to a result the user cancelled.
+  if (externalSignal?.aborted) throw abortError();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -241,10 +263,9 @@ export async function analyzeImage(
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         if (externalSignal?.aborted) {
-          // User cancelled — the one failure that used to leave no trace
-          // anywhere (the caller drops AbortError before reporting).
-          sendFailureBeacon('ocr', 'cancelled', Date.now() - startTime);
-          throw error; // preserve AbortError for caller
+          // External abort — the screen beacons it (cancelled vs interrupted);
+          // preserve the AbortError for the caller.
+          throw error;
         }
         sendFailureBeacon('ocr', 'timeout', Date.now() - startTime);
         throw new APIError(
@@ -276,6 +297,7 @@ export async function lookupBarcode(
   externalSignal?: AbortSignal,
 ): Promise<AnalysisResult> {
   await ensureConnected();
+  if (externalSignal?.aborted) throw abortError(); // see analyzeImage
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), BARCODE_TIMEOUT_MS);
@@ -341,10 +363,7 @@ export async function lookupBarcode(
 
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        if (externalSignal?.aborted) {
-          sendFailureBeacon('barcode', 'cancelled', Date.now() - startTime);
-          throw error;
-        }
+        if (externalSignal?.aborted) throw error; // the screen beacons external aborts
         sendFailureBeacon('barcode', 'timeout', Date.now() - startTime);
         throw new APIError(TIMEOUT_MESSAGE, 'timeout');
       }

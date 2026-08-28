@@ -79,7 +79,7 @@ listed below; never touch styles, fonts, or layout.
 | `MAX` (script) | smallest round number ≥ the biggest `ok + fail` day, with ~10% headroom |
 | "How people scan" band + rows | barcode vs OCR counts of successful scans (`flex` = count) |
 | "Verdicts delivered" band + rows | safe / caution / unsafe counts (`flex` = count) |
-| "Why scans miss" rows | `scan_failed` reasons desc by count; bar widths relative to the max; keep the zero row for backend errors. `cancelled` (client beacon, iOS ≥ 1.4.3) = the user gave up, almost always weak signal — read it with `elapsed_ms` (how long they waited) and `image_kb`, not as an app failure |
+| "Why scans miss" rows | `scan_failed` reasons desc by count; bar widths relative to the max; keep the zero row for backend errors. `cancelled` (client beacon, iOS ≥ 1.4.3) = the user tapped Cancel, almost always weak signal — read it with `elapsed_ms` (how long they waited) and `image_kb`, not as an app failure. `interrupted` (same build) = the app went to the background mid-scan (user switched apps, took a call); no `elapsed_ms`, and not "gave up" |
 | `.fnote` | one honest sentence about the misses |
 | Sentry card | `0 events` + `quiet` chip + "verified silence" note when clean. If events exist: use the count (drop the `quiet` class on `.num`), a `warn` chip, and replace `.sentry-note` with an issue box (CSS already present): `<div class="sentry-issue"><span class="iid">GLUTENORNOT-MOBILE-N</span><div class="ititle">Error title</div><div class="imeta">N users · date · one-line interpretation</div></div>`. Client timeouts report at `level:warning` — count warnings, not just errors. |
 

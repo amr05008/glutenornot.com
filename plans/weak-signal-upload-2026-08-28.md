@@ -1,10 +1,13 @@
 # Weak-signal OCR upload — shrink the payload, tell the truth while uploading, make cancels visible
 
-**Status 2026-08-28 (evening): Phases A and C done on branch `weak-signal-upload-2026-08-28`
-(`b770a7f` api telemetry, `c0e1a2e` client progress/copy/cancel beacon; 243 web + 78 mobile
-tests green, tsc clean). Phase B is blocked on real label photos (script ready in the
-session scratchpad — see B1); C4 needs a device under Network Link Conditioner; Phase D
-follows B. PR opens after the sibling merges.**
+**Status 2026-08-28 (night): Phases A, B and C done on branch `weak-signal-upload-2026-08-28`
+(`b770a7f` api telemetry; `c0e1a2e` client progress/copy/cancel beacon; then the /grill
+fixes + Phase B in one commit — per-phase slow clock, screen-owned `cancelled` /
+`interrupted` beacons, XHR timeout + pre-resize cancel windows closed, JPEG 0.6 by
+measurement on nine real labels in `test-cases/`). 291 web + 91 mobile tests green, tsc
+clean, merged with `main` through the sibling's PR #23. Remaining: C4 on-device check
+(Network Link Conditioner — two device-only questions listed under C4), Phase D → iOS
+1.4.3, D2 read in two weeks. T2 (multipart) queued as a separate PR.**
 Sibling plan: `plans/gf-label-claim-2026-08-28.md` (server-only, different agent session — see "Coordination" below).
 
 ## Why (the incident, in numbers)
@@ -162,6 +165,32 @@ instead. Paste the table into the session log.
   by timestamp). Mark the day for exclusion from the weekly review (data-hygiene
   precedent: `.claude/sessions/2026-07-19-*.md`).
 
+**B1 RESULT (2026-08-28) — 9 photos in `test-cases/` (6 iPhone HEIC labels + 3 June
+screenshots), 1024px wide, libjpeg via `sharp`, real Vision calls:**
+
+| photo | q70 KB / chars | q60 KB / chars (Δ%) | q50 KB / chars (Δ%) | q40 KB / chars (Δ%) |
+|---|---|---|---|---|
+| IMG_6207 | 231 / 815 | 191 / 805 (−1.2%) | 165 / 809 (−0.7%) | 140 / 811 (−0.5%) |
+| IMG_6208 | 204 / 1842 | 171 / 1778 (−3.5%) | 149 / 1748 (**−5.1%**) | 129 / 1735 (−5.8%) |
+| IMG_6209 | 182 / 1094 | 152 / 1095 (0.1%) | 132 / 1107 (1.2%) | 114 / 1100 (0.5%) |
+| IMG_6210 | 184 / 1686 | 154 / 1684 (−0.1%) | 133 / 1675 (−0.7%) | 113 / 1670 (−0.9%) |
+| IMG_6211 | 156 / 1614 | 132 / 1609 (−0.3%) | 116 / 1605 (−0.6%) | 100 / 1610 (−0.2%) |
+| IMG_6212 | 153 / 1588 | 128 / 1575 (−0.8%) | 112 / 1585 (−0.2%) | 97 / 1594 (0.4%) |
+| screenshot 1 | 110 / 963 | 97 / 961 (−0.2%) | 88 / 961 (−0.2%) | 80 / 958 (−0.5%) |
+| screenshot 2 | 69 / 572 | 61 / 572 (0%) | 56 / 572 (0%) | 50 / 572 (0%) |
+| screenshot 3 | 90 / 763 | 79 / 763 (0%) | 72 / 763 (0%) | 65 / 763 (0%) |
+
+Medians: q60 = 85% of q70 bytes, Δ −0.2%, worst −3.5% · q50 = 74%, Δ −0.2%, worst −5.1%
+· q40 = 64%, Δ −0.2%, worst −5.8%. **Rule → T1 = 0.6** (0.5 fails the worst-photo line by
+0.1 points on the densest label; the rule was pre-committed precisely so this wouldn't be
+argued after the fact). Observations: OCR is essentially quality-insensitive on 8 of 9;
+the one that moves is the densest small-print label, which is also where a wrong
+verdict costs most. The byte saving from quality alone is **~15%**, not the 40% hoped —
+which makes **T2 (multipart, a free ~25% by dropping base64)** the next lever; it is a
+separate PR (API contract + Vercel body parsing). NB the local q70 median (156 KB) is far
+below production's `image_kb` p50 (408 KB): iOS's encoder and real framing differ from
+libjpeg on these nine — C4 should read `image_kb` from a 0.6 scan and compare.
+
 **B2. Change the constant** — `mobile/app/index.tsx:223` `compress: 0.7` → T1. Check
 `mobile/app/__tests__/index.test.tsx` for an assertion on `manipulateAsync` args and update
 it. Add a one-line comment citing this plan and the B1 numbers.
@@ -198,7 +227,19 @@ contains the image; a failing beacon doesn't change the error.
 **C4. On-device check.** iPhone → Settings → Developer → Network Link Conditioner, profile
 "3G" or "Edge". Scan a label: expect "Uploading photo… N%" advancing, the uploading slow
 copy at 30 s, no timeout on "3G" after B2. Cancel once → confirm a `cancelled` beacon in
-PostHog. Record wall-clock times in the session log.
+PostHog; background the app mid-scan and resume → confirm an `interrupted` beacon (no
+`elapsed_ms`). Record wall-clock times in the session log.
+Two things only a device can answer (from the 2026-08-28 /grill):
+- **Does the final upload progress event fire with `loaded == total`?** If the last
+  `didSendBodyData` lands short, the phase never flips until the response and the
+  "still uploading" copy stays up through the whole server leg (the `readyState 2/3`
+  fallback only fires with the headers, which `/api/analyze` sends with the verdict).
+  If so, flip toggle T4 to phase-only or treat ≥ 99% as done.
+- **How far ahead of the server does "Reading ingredients…" run?** iOS counts bytes
+  handed to the socket, not bytes received; the kernel send buffer (~100 KB+) is still
+  draining on a slow uplink. Time from "100%" to the verdict vs `total_ms` in PostHog
+  for the same scan gives the gap. The reading-phase copy is deliberately
+  non-prescriptive and on a 20 s clock so this gap can't induce a retry.
 
 ### Phase D — release and read the data
 

@@ -64,6 +64,7 @@ jest.mock('../../services/api', () => {
     ...actual,
     analyzeImage: jest.fn(),
     lookupBarcode: jest.fn(),
+    sendFailureBeacon: jest.fn(),
   };
 });
 
@@ -75,8 +76,9 @@ jest.mock('../../services/storage', () => ({
   addRecentScan: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { AppState } from 'react-native';
 import CameraScreen from '../index';
-import { analyzeImage, APIError } from '../../services/api';
+import { analyzeImage, sendFailureBeacon, APIError } from '../../services/api';
 import { addRecentScan } from '../../services/storage';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -523,7 +525,7 @@ describe('CameraScreen error flow', () => {
 
       it('at 30 s while still uploading, says so instead of telling the user to restart', async () => {
         startPickedScan();
-        const { getByLabelText, getByText } = render(<CameraScreen />);
+        const { getByLabelText, getByText, queryByText } = render(<CameraScreen />);
         await act(async () => {
           fireEvent.press(getByLabelText('Choose a photo instead'));
         });
@@ -534,10 +536,186 @@ describe('CameraScreen error flow', () => {
         });
         expect(getByText('Slow connection — still uploading. Hang tight or move to better signal.')).toBeTruthy();
 
-        // Once the server has the image the wait is server-side and a retry is
-        // reasonable again — the original copy comes back.
+        // The upload lands at 35 s. The slow clock must restart with the phase:
+        // showing "cancel and try again" the instant a long upload completes
+        // would throw away that upload — the /grill finding on the first cut.
+        act(() => {
+          jest.advanceTimersByTime(5000);
+        });
         reportProgress({ phase: 'reading' });
-        expect(getByText('This is taking longer than usual. Cancel and try your scan again.')).toBeTruthy();
+        expect(getByText('Reading ingredients…')).toBeTruthy();
+        expect(queryByText(/taking longer than usual/)).toBeNull();
+
+        // A server leg over 20 s is abnormal (estimate 7–13 s) — only then
+        // does the reading-phase slow copy appear, and it doesn't prescribe.
+        act(() => {
+          jest.advanceTimersByTime(19999);
+        });
+        expect(queryByText(/taking longer than usual/)).toBeNull();
+        act(() => {
+          jest.advanceTimersByTime(1);
+        });
+        expect(getByText('Still working — this is taking longer than usual. You can keep waiting, or cancel and try again.')).toBeTruthy();
+      });
+
+      it('Cancel during the upload beacons "cancelled" with the wait, and returns to the camera', async () => {
+        // Before this, a cancel was an AbortError the screen dropped before
+        // Sentry or the beacon — the field incident's two failed attempts left
+        // no trace anywhere.
+        startPickedScan();
+        const { getByLabelText, queryByText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        reportProgress({ phase: 'uploading', pct: 20 });
+        act(() => {
+          jest.advanceTimersByTime(12000);
+        });
+
+        await act(async () => {
+          fireEvent.press(getByLabelText('Cancel scan'));
+        });
+
+        expect(sendFailureBeacon).toHaveBeenCalledTimes(1);
+        const [method, reason, elapsed] = (sendFailureBeacon as jest.Mock).mock.calls[0];
+        expect(method).toBe('ocr');
+        expect(reason).toBe('cancelled');
+        expect(elapsed).toBeGreaterThanOrEqual(12000);
+        expect(elapsed).toBeLessThan(13000);
+        expect(queryByText(/Uploading photo/)).toBeNull();
+      });
+
+      function appStateListener() {
+        return (AppState.addEventListener as jest.Mock).mock.calls.find(([evt]) => evt === 'change')![1];
+      }
+
+      it('going to the background mid-scan beacons "interrupted" (no elapsed) at that moment — not on resume', async () => {
+        // iOS suspends the process seconds after backgrounding. Aborting on
+        // *resume* (the old behavior) raced the dead socket's error and the 60 s
+        // timer, so the same event could land as network / timeout / interrupted
+        // depending on which reached JS first. The transition TO background is
+        // deterministic and precedes both. Recording it as `cancelled` would
+        // contaminate "the user gave up", and its wall-clock includes time asleep.
+        (AppState as any).currentState = 'active';
+        startPickedScan();
+        const { getByLabelText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        reportProgress({ phase: 'uploading', pct: 50 });
+
+        const onChange = appStateListener();
+        await act(async () => {
+          onChange('background');
+        });
+        expect(sendFailureBeacon).toHaveBeenCalledTimes(1);
+        expect((sendFailureBeacon as jest.Mock).mock.calls[0]).toEqual(['ocr', 'interrupted']);
+
+        await act(async () => {
+          onChange('active');
+        });
+        expect(sendFailureBeacon).toHaveBeenCalledTimes(1); // resume adds nothing
+      });
+
+      it('a transient "inactive" (Notification Center, an incoming call banner) does not kill the scan', async () => {
+        (AppState as any).currentState = 'active';
+        startPickedScan();
+        const { getByLabelText, getByText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        reportProgress({ phase: 'uploading', pct: 50 });
+
+        const onChange = appStateListener();
+        await act(async () => {
+          onChange('inactive');
+          onChange('active');
+        });
+
+        expect(sendFailureBeacon).not.toHaveBeenCalled();
+        expect(getByText('Uploading photo… 50%')).toBeTruthy(); // still scanning
+      });
+
+      it('Cancel while the photo is still being resized still aborts the scan — the request must not go out afterwards', async () => {
+        // Between the spinner appearing and the request going out there is a
+        // resize+compress step (hundreds of ms on a 12 MP capture). A cancel in
+        // that window used to find no controller: nothing aborted, nothing
+        // beaconed, and the request went out anyway — then the result screen
+        // pushed itself over the camera while the user framed the next shot.
+        mockLaunchLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file://picked.jpg' }],
+        } as any);
+        const ImageManipulator = require('expo-image-manipulator');
+        let resolveManipulate: (v: any) => void = () => {};
+        (ImageManipulator.manipulateAsync as jest.Mock).mockReturnValueOnce(
+          new Promise((r) => {
+            resolveManipulate = r;
+          })
+        );
+        // Behave like the real analyzeImage: an already-aborted signal is honored.
+        mockAnalyzeImage.mockImplementationOnce(async (_img: string, signal?: AbortSignal) => {
+          if (signal?.aborted) {
+            const e = new Error('Aborted');
+            e.name = 'AbortError';
+            throw e;
+          }
+          return { mode: 'label', verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: '', confidence: 'high' } as any;
+        });
+
+        const { getByLabelText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        await act(async () => {
+          fireEvent.press(getByLabelText('Cancel scan'));
+        });
+        await act(async () => {
+          resolveManipulate({ base64: 'mock-base64-image-data', uri: 'file://m.jpg' });
+        });
+
+        expect(sendFailureBeacon).toHaveBeenCalledTimes(1);
+        expect((sendFailureBeacon as jest.Mock).mock.calls[0].slice(0, 2)).toEqual(['ocr', 'cancelled']);
+        expect(mockPush).not.toHaveBeenCalled();
+        // Either the request was never made, or it was made with an aborted signal.
+        for (const call of mockAnalyzeImage.mock.calls) expect(call[1]?.aborted).toBe(true);
+      });
+
+      it('encodes the photo at 1024px / JPEG 0.6 — the Phase B measurement, not a guess', async () => {
+        // 9 real labels through Vision (plan B1, 2026-08-28): 0.6 reads the
+        // same text as 0.7 for ~15% fewer bytes; 0.5 lost 5.1% on the densest
+        // label. Change the number only with a new table.
+        startPickedScan();
+        const { getByLabelText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        const ImageManipulator = require('expo-image-manipulator');
+        expect(ImageManipulator.manipulateAsync).toHaveBeenCalledWith(
+          'file://picked.jpg',
+          [{ resize: { width: 1024 } }],
+          expect.objectContaining({ compress: 0.6, base64: true })
+        );
+      });
+
+      it('a scan that completes normally beacons nothing', async () => {
+        mockLaunchLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file://picked.jpg' }],
+        } as any);
+        mockAnalyzeImage.mockResolvedValueOnce({
+          mode: 'label',
+          verdict: 'safe',
+          flagged_ingredients: [],
+          allergen_warnings: [],
+          explanation: 'All clear.',
+          confidence: 'high',
+        } as any);
+        const { getByLabelText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        expect(sendFailureBeacon).not.toHaveBeenCalled();
       });
     });
 

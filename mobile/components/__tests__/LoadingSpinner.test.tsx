@@ -28,10 +28,11 @@ describe('LoadingSpinner', () => {
     expect(getByText('Still working…')).toBeTruthy();
   });
 
-  it('does not restart the slow timer when the slow message changes mid-wait', () => {
-    // The scan screen swaps the slow copy when the upload finishes and the
-    // server takes over. A phase change at 25 s must not push the 30 s slow
-    // message out to 55 s (plans/weak-signal-upload-2026-08-28.md, C2).
+  it('keeps one clock per mount — a message or slow-message change alone never restarts it', () => {
+    // Component-level invariant only. The scan screen deliberately DOES restart
+    // the clock on a phase change, by remounting this component with
+    // `key={scanPhase}` (see mobile/app/__tests__/index.test.tsx, "at 30 s while
+    // still uploading…") — prop changes must not be a second, hidden restart.
     const { getByText, rerender } = render(
       <LoadingSpinner message="Uploading photo… 12%" slowMessage="Slow connection — still uploading." slowThresholdMs={30000} />
     );

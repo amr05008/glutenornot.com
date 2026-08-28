@@ -68,9 +68,10 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
 /**
  * Build the PostHog event properties for a failed scan attempt.
  * `reason` is one of: not_found | ocr_failed | rate_limited | claude_error |
- * server_error (server-emitted), or timeout | network | cancelled (client
- * beacon via /api/track — failures that die on the wire, or that the user
- * abandoned, and so never reach the server as a request).
+ * server_error (server-emitted), or timeout | network | cancelled | interrupted
+ * (client beacon via /api/track — failures that die on the wire, or that the
+ * user abandoned / iOS dropped on resume, and so never reach the server as a
+ * request).
  * Pure — no I/O.
  */
 function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars, elapsedMs, ocrMs } = {}) {
@@ -182,7 +183,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {object} input
  * @param {string} [input.ip]               client IP, hashed into the distinct ID
  * @param {'barcode'|'ocr'} input.method    how the scan was initiated
- * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'|'cancelled'} input.reason
+ * @param {'not_found'|'ocr_failed'|'rate_limited'|'claude_error'|'server_error'|'timeout'|'network'|'cancelled'|'interrupted'} input.reason
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.appVersion]       client app version (absent on older clients)
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)

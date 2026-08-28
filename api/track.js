@@ -8,16 +8,19 @@
  *
  * Deliberately narrow: only the reasons the server can never observe are
  * accepted — `timeout`, `network`, and (since plans/weak-signal-upload-2026-08-28.md)
- * `cancelled`, the user giving up on a slow attempt, which used to leave no
- * trace anywhere — so server-emitted reasons (ocr_failed, not_found, …) can't
- * be spoofed into analytics through an open endpoint. This endpoint must never
- * emit `scan` — that event is success-only by contract and every existing
- * dashboard insight counts on it.
+ * `cancelled` (the user gave up on a slow attempt, which used to leave no trace
+ * anywhere) and `interrupted` (the app went to the background mid-scan and the
+ * in-flight request was dropped — kept separate so it can't contaminate "the
+ * user gave up") — so
+ * server-emitted reasons (ocr_failed, not_found, …) can't be spoofed into
+ * analytics through an open endpoint. This endpoint must never emit `scan` —
+ * that event is success-only by contract and every existing dashboard insight
+ * counts on it.
  */
 import { getClientIP, getClientGeo } from './_utils.js';
 import { trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
 
-const CLIENT_REASONS = new Set(['timeout', 'network', 'cancelled']);
+const CLIENT_REASONS = new Set(['timeout', 'network', 'cancelled', 'interrupted']);
 const METHODS = new Set(['ocr', 'barcode']);
 
 // Optional `elapsed_ms`: how long the client waited before the failure. It is

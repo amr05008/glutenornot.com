@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-ca
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { analyzeImage, lookupBarcode, APIError } from '../services/api';
+import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError } from '../services/api';
 import { reportError } from '../services/errorReporting';
 import { incrementLifetimeScanCount, addRecentScan } from '../services/storage';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -22,11 +22,17 @@ type SystemState = 'offline' | 'error' | null;
 // is trusted to reach the LED (see the torch-application effect).
 const TORCH_SETTLE_MS = 750;
 
-// 30 s slow copy, by scan phase (plans/weak-signal-upload-2026-08-28.md). On a
-// weak uplink the upload itself is the wait, and restarting it has the same
-// odds — so say what is happening instead of prescribing a retry.
+// Slow copy, by scan phase (plans/weak-signal-upload-2026-08-28.md). On a weak
+// uplink the upload itself is the wait, and restarting it has the same odds —
+// so say what is happening instead of prescribing a retry. The slow clock is
+// per phase (the spinner is keyed on it): a 35 s upload must not land on a
+// "cancel and try again" screen the instant it completes. A server leg over
+// 20 s is abnormal (estimate 7–13 s); only then does the reading copy appear,
+// and it offers rather than instructs — a retry re-uploads.
 const SLOW_UPLOADING_MESSAGE = 'Slow connection — still uploading. Hang tight or move to better signal.';
-const SLOW_READING_MESSAGE = 'This is taking longer than usual. Cancel and try your scan again.';
+const SLOW_UPLOADING_THRESHOLD_MS = 30000;
+const SLOW_READING_MESSAGE = 'Still working — this is taking longer than usual. You can keep waiting, or cancel and try again.';
+const SLOW_READING_THRESHOLD_MS = 20000;
 
 function Wordmark() {
   return (
@@ -84,29 +90,56 @@ export default function CameraScreen() {
   const router = useRouter();
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  // What the in-flight request is and when it went out — for the beacon an
+  // abandoned scan sends. The API layer can't tell a user cancel from a
+  // system abort (both are the same AbortSignal), so the screen reports it.
+  const scanMethodRef = useRef<'ocr' | 'barcode'>('ocr');
+  const scanStartedAtRef = useRef(0);
   const appState = useRef(AppState.currentState);
   const resumedFromBackground = useRef(false);
   const recentNotFound = useRef<Set<string>>(new Set());
 
+  // Abandon the in-flight scan and say why. `cancelled` = the user gave up
+  // (with how long they waited — on weak signal the only measurement of the
+  // upload leg); `interrupted` = iOS resumed the app and the request was
+  // dropped, which is not the user giving up and whose wall-clock includes
+  // time asleep, so it carries no elapsed. Before this a cancel left no trace
+  // anywhere (plans/weak-signal-upload-2026-08-28.md).
+  const abandonScan = useCallback((reason: 'cancelled' | 'interrupted') => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      if (reason === 'cancelled') {
+        sendFailureBeacon(scanMethodRef.current, 'cancelled', Date.now() - scanStartedAtRef.current);
+      } else {
+        sendFailureBeacon(scanMethodRef.current, 'interrupted');
+      }
+    }
+    setIsAnalyzing(false);
+    setBarcodeScanned(false);
+  }, []);
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
+      // Drop an in-flight scan the moment the app goes to the background. iOS
+      // suspends the process seconds later; aborting on *resume* (the old
+      // behavior) raced the dead socket's error and the 60 s timer, so the same
+      // event could land as network / timeout / interrupted depending on which
+      // reached JS first. `inactive` alone (Notification Center, a call banner)
+      // is transient and no longer kills the scan.
+      if (nextState === 'background') {
+        abandonScan('interrupted');
+      }
       if (
         appState.current.match(/inactive|background/) &&
         nextState === 'active'
       ) {
         resumedFromBackground.current = true;
-        // Cancel any stuck request on resume
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-          abortControllerRef.current = null;
-        }
-        setIsAnalyzing(false);
-        setBarcodeScanned(false);
       }
       appState.current = nextState;
     });
     return () => sub.remove();
-  }, []);
+  }, [abandonScan]);
 
   // The camera unmounts whenever the spinner or a system state replaces it —
   // reset the ready gate so the torch is re-applied as a false→true prop
@@ -155,14 +188,7 @@ export default function CameraScreen() {
     return () => clearTimeout(timeout);
   }, [cameraReady, isAnalyzing, systemState]);
 
-  const handleCancel = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setIsAnalyzing(false);
-    setBarcodeScanned(false);
-  }, []);
+  const handleCancel = useCallback(() => abandonScan('cancelled'), [abandonScan]);
 
   const navigateToResult = useCallback(async (result: AnalysisResult) => {
     const scanCount = await incrementLifetimeScanCount();
@@ -228,11 +254,26 @@ export default function CameraScreen() {
       setScanPhase('uploading');
       setLoadingMessage('Uploading photo…');
 
-      // Resize and compress image - smaller for faster upload
+      // The abort handle exists from the first frame of the spinner, BEFORE the
+      // resize: a Cancel during those hundreds of ms used to find no controller,
+      // so nothing aborted, nothing beaconed, and the request went out anyway —
+      // then the result pushed itself over the camera. analyzeImage honors an
+      // already-aborted signal and throws AbortError, which is swallowed as usual.
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      scanMethodRef.current = 'ocr';
+      scanStartedAtRef.current = Date.now();
+
+      // Resize and compress image - smaller for faster upload. Quality 0.6 was
+      // picked by measurement, not taste (plans/weak-signal-upload-2026-08-28.md
+      // B1, 2026-08-28): on 9 real labels Vision extracted the same text at
+      // 0.6 (median Δ −0.2%, worst −3.5%) for ~15% fewer bytes; 0.5 lost 5.1%
+      // on the densest label, over the plan's 5% line. Resolution stays at
+      // 1024 — OCR is sensitive to resolution, tolerant of compression.
       const manipulated = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: 1024 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
 
       if (!manipulated.base64) {
@@ -243,9 +284,7 @@ export default function CameraScreen() {
       // builds — scan content (results, barcodes) must never reach it.
       if (__DEV__) console.log('Image size (bytes):', manipulated.base64.length);
 
-      // Analyze with API, passing abort signal for cancellation
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+      // Analyze with API, passing the abort signal for cancellation
       const result = await analyzeImage(manipulated.base64, controller.signal, (progress) => {
         if (progress.phase === 'uploading') {
           setLoadingMessage(`Uploading photo… ${progress.pct}%`);
@@ -293,6 +332,8 @@ export default function CameraScreen() {
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
+      scanMethodRef.current = 'barcode';
+      scanStartedAtRef.current = Date.now();
       const result = await lookupBarcode(barcodeData, controller.signal);
       abortControllerRef.current = null;
       if (__DEV__) console.log('Barcode result:', result);
@@ -364,9 +405,10 @@ export default function CameraScreen() {
   if (isAnalyzing) {
     return (
       <LoadingSpinner
+        key={scanPhase} // remount on phase change so the slow clock restarts with it
         message={loadingMessage}
         slowMessage={scanPhase === 'uploading' ? SLOW_UPLOADING_MESSAGE : SLOW_READING_MESSAGE}
-        slowThresholdMs={30000}
+        slowThresholdMs={scanPhase === 'uploading' ? SLOW_UPLOADING_THRESHOLD_MS : SLOW_READING_THRESHOLD_MS}
         onCancel={handleCancel}
       />
     );

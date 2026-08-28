@@ -12,7 +12,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 import * as Network from 'expo-network';
-import { analyzeImage, lookupBarcode, APIError, ScanProgress } from '../api';
+import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError, ScanProgress } from '../api';
 
 const mockedGetNetworkState = Network.getNetworkStateAsync as jest.Mock;
 
@@ -22,12 +22,16 @@ const mockedGetNetworkState = Network.getNetworkStateAsync as jest.Mock;
 // the upload is the leg that takes 10–45 s, and the UI has to say so
 // (plans/weak-signal-upload-2026-08-28.md). Scriptable per test via `xhrScript`.
 // Everything fires asynchronously, as in the real thing: handlers are attached
-// after send() returns.
+// after send() returns. Event ORDER follows RN 0.81's XMLHttpRequest.js: on
+// abort and on a network error, readystatechange(4) is dispatched BEFORE the
+// abort/error event — an implementation that treats "readyState advanced" as
+// "upload done" would report a phantom "reading" on every cancel.
 // ---------------------------------------------------------------------------
 type UploadEvent = [loaded: number, total: number];
 type XhrScript =
   | { kind: 'respond'; status: number; body?: unknown; uploadEvents?: UploadEvent[] }
   | { kind: 'networkError' }
+  | { kind: 'timeout' } // RN dispatches `timeout` (not `error`) on kCFURLErrorTimedOut
   | { kind: 'hang'; uploadEvents?: UploadEvent[] };
 
 let xhrScript: XhrScript = { kind: 'respond', status: 200, body: { verdict: 'safe' } };
@@ -46,6 +50,7 @@ class MockXHR {
   onload: null | (() => void) = null;
   onerror: null | (() => void) = null;
   onabort: null | (() => void) = null;
+  ontimeout: null | (() => void) = null;
   onreadystatechange: null | (() => void) = null;
   upload: { onprogress: null | ProgressHandler } = { onprogress: null };
   private settled = false;
@@ -78,9 +83,12 @@ class MockXHR {
         this.upload.onprogress?.({ lengthComputable: true, loaded, total });
       }
       if (script.kind === 'hang' || this.settled) return;
-      if (script.kind === 'networkError') {
+      if (script.kind === 'networkError' || script.kind === 'timeout') {
         this.settled = true;
-        this.onerror?.();
+        this.readyState = 4; // RN: DONE is dispatched before the error/timeout event
+        this.onreadystatechange?.();
+        if (script.kind === 'timeout') this.ontimeout?.();
+        else this.onerror?.();
         return;
       }
       this.readyState = 2;
@@ -97,6 +105,8 @@ class MockXHR {
   abort() {
     if (this.settled) return;
     this.settled = true;
+    this.readyState = 4; // RN: DONE is dispatched before the abort event
+    this.onreadystatechange?.();
     this.onabort?.();
   }
 }
@@ -244,6 +254,26 @@ describe('analyzeImage upload progress', () => {
     ]);
   });
 
+  it('never shows 100% while still uploading — the last byte is what flips the phase', async () => {
+    xhrScript = { kind: 'respond', status: 200, body: { verdict: 'safe' }, uploadEvents: [[999, 1000]] };
+    const seen: ScanProgress[] = [];
+
+    await analyzeImage('base64data', undefined, (p) => seen.push(p));
+
+    expect(seen).toEqual([{ phase: 'uploading', pct: 99 }, { phase: 'reading' }]);
+  });
+
+  it('does not report "reading" when the request dies mid-upload (RN advances readyState before the error)', async () => {
+    xhrScript = { kind: 'networkError' };
+    // networkError has no uploadEvents field, so script a partial upload by hand:
+    const seen: ScanProgress[] = [];
+    (xhrScript as any).uploadEvents = [[300, 1000]];
+
+    await expect(analyzeImage('base64data', undefined, (p) => seen.push(p))).rejects.toMatchObject({ type: 'network' });
+
+    expect(seen).toEqual([{ phase: 'uploading', pct: 30 }]);
+  });
+
   it('reports "reading" exactly once even when the response arrives without a final upload event', async () => {
     // Headers arriving (readyState 2) also mean the upload is done — but a
     // second "reading" after a 100% progress event would flicker the UI.
@@ -308,6 +338,19 @@ describe('failure beacon (timeout/network/cancelled → POST /api/track)', () =>
     expect(beaconBody(fetchMock)).toMatchObject({ method: 'ocr', reason: 'network', elapsed_ms: expect.any(Number) });
   });
 
+  it('treats an OS-level timeout (RN dispatches `timeout`, not `error`) as a network failure — never a hang', async () => {
+    // Unhandled, the XHR promise never settles: the user sits on the spinner
+    // until they tap Cancel, which would then beacon `cancelled` for what was
+    // a dead connection.
+    const fetchMock = mockFetch();
+    xhrScript = { kind: 'timeout' };
+
+    await expect(analyzeImage('base64data')).rejects.toMatchObject({ type: 'network' });
+
+    expect(beaconCalls(fetchMock)).toHaveLength(1);
+    expect(beaconBody(fetchMock)).toMatchObject({ method: 'ocr', reason: 'network' });
+  });
+
   it('fires a barcode/network beacon when the barcode lookup hits a network error', async () => {
     const fetchMock = mockFetch({ barcode: Promise.reject(new Error('Network request failed')) });
 
@@ -325,29 +368,28 @@ describe('failure beacon (timeout/network/cancelled → POST /api/track)', () =>
     expect(beaconCalls(fetchMock)).toHaveLength(0);
   });
 
-  it('fires an ocr/cancelled beacon with how long the user waited, and still surfaces the AbortError', async () => {
-    // Before plans/weak-signal-upload-2026-08-28.md a cancel left no trace
-    // anywhere — the 2026-08-28 field incident (three attempts, one verdict)
-    // recorded as one clean success.
+  it('does not beacon an external abort itself — only the screen knows whether the user cancelled or the app was backgrounded', async () => {
+    // The screen fires `cancelled` (user) or `interrupted` (AppState resume)
+    // via sendFailureBeacon; api.ts cannot tell the two apart from the signal.
     const fetchMock = mockFetch();
     xhrScript = { kind: 'hang', uploadEvents: [[200, 1000]] };
     const controller = new AbortController();
+    const seen: ScanProgress[] = [];
 
-    const pending = analyzeImage('base64data', controller.signal);
+    const pending = analyzeImage('base64data', controller.signal, (p) => seen.push(p));
     const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     await flush();
     controller.abort();
     await rejection;
 
-    expect(beaconCalls(fetchMock)).toHaveLength(1);
-    const body = beaconBody(fetchMock);
-    expect(body).toMatchObject({ method: 'ocr', reason: 'cancelled' });
-    expect(body.elapsed_ms).toBeGreaterThanOrEqual(0);
-    // The beacon must never carry the image (privacy: no record of what you scanned).
-    expect(JSON.stringify(body)).not.toContain('base64data');
+    expect(beaconCalls(fetchMock)).toHaveLength(0);
+    expect(lastXhr().isSettled).toBe(true);
+    // RN advances readyState to DONE before dispatching abort — that must not
+    // read as "upload finished" on the screen.
+    expect(seen).toEqual([{ phase: 'uploading', pct: 20 }]);
   });
 
-  it('fires a barcode/cancelled beacon when a barcode lookup is cancelled', async () => {
+  it('does not beacon an external abort of a barcode lookup either', async () => {
     let rejectBarcode: (e: Error) => void = () => {};
     const barcode = new Promise((_, reject) => {
       rejectBarcode = reject;
@@ -364,8 +406,25 @@ describe('failure beacon (timeout/network/cancelled → POST /api/track)', () =>
     rejectBarcode(e);
     await rejection;
 
-    expect(beaconCalls(fetchMock)).toHaveLength(1);
-    expect(beaconBody(fetchMock)).toMatchObject({ method: 'barcode', reason: 'cancelled', elapsed_ms: expect.any(Number) });
+    expect(beaconCalls(fetchMock)).toHaveLength(0);
+  });
+
+  it('honors a signal that was aborted during the pre-flight probe — nothing is sent, nothing is beaconed', async () => {
+    // The probe is async; a cancel that lands inside it used to be ignored and
+    // the request went out anyway (then the screen navigated to a result the
+    // user had cancelled).
+    const fetchMock = mockFetch();
+    const controller = new AbortController();
+    mockedGetNetworkState.mockImplementation(async () => {
+      controller.abort();
+      return { isConnected: true, isInternetReachable: true };
+    });
+
+    await expect(analyzeImage('base64data', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(lookupBarcode('012345678905', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(MockXHR.instances).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('a failing beacon never changes the error surfaced to the user', async () => {
@@ -384,5 +443,31 @@ describe('failure beacon (timeout/network/cancelled → POST /api/track)', () =>
     xhrScript = { kind: 'networkError' };
 
     await expect(analyzeImage('base64data')).rejects.toMatchObject({ type: 'network' });
+  });
+});
+
+describe('sendFailureBeacon (used by the screen for cancelled / interrupted)', () => {
+  it('sends method, reason and a rounded elapsed_ms with the client headers', () => {
+    const fetchMock = mockFetch();
+
+    sendFailureBeacon('ocr', 'cancelled', 31449.6);
+
+    expect(beaconCalls(fetchMock)).toHaveLength(1);
+    expect(beaconBody(fetchMock)).toEqual({ method: 'ocr', reason: 'cancelled', elapsed_ms: 31450 });
+    expect(beaconCalls(fetchMock)[0][1].headers['X-Client']).toBe('ios');
+    expect(beaconCalls(fetchMock)[0][1].headers['X-Client-Version']).toBe(APP_VERSION);
+  });
+
+  it('omits elapsed_ms when none is given — an interrupted scan has no meaningful wait', () => {
+    const fetchMock = mockFetch();
+
+    sendFailureBeacon('barcode', 'interrupted');
+
+    expect(beaconBody(fetchMock)).toEqual({ method: 'barcode', reason: 'interrupted' });
+  });
+
+  it('never throws, even with no fetch at all', () => {
+    (global as any).fetch = undefined;
+    expect(() => sendFailureBeacon('ocr', 'cancelled', 10)).not.toThrow();
   });
 });

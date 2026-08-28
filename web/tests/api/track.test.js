@@ -189,6 +189,23 @@ describe('POST /api/track — cancelled attempts (plans/weak-signal-upload-2026-
     expect(trackScan).not.toHaveBeenCalled();
   });
 
+  it('accepts interrupted — the app went to background mid-scan — which is not the user giving up', async () => {
+    // iOS resume aborts any in-flight scan (mobile/app/index.tsx). Recording
+    // that as `cancelled` would contaminate the "user gave up" metric; and its
+    // wall-clock includes time asleep, so the client sends no elapsed_ms.
+    const res = mockRes();
+    await handler(
+      { method: 'POST', body: { method: 'ocr', reason: 'interrupted' }, headers: { 'x-client': 'ios' } },
+      res
+    );
+    expect(res.statusCode).toBe(204);
+    expect(trackScanFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'ocr', reason: 'interrupted', platform: 'ios' })
+    );
+    expect(trackScanFailure.mock.calls[0][0].elapsedMs).toBeUndefined();
+    expect(trackScan).not.toHaveBeenCalled();
+  });
+
   it('accepts elapsed_ms on the existing timeout/network reasons too', async () => {
     const res = mockRes();
     await handler(
