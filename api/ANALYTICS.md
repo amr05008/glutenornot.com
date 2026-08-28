@@ -14,6 +14,12 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
 - `confidence` (both paths)
 - `had_ingredient_data` (barcode only)
 - `image_kb`, `ocr_chars` (OCR only — capture metrics; counts only, never content)
+- `gf_claim_present` (OCR only) — boolean: the OCR text carried a gluten-free
+  claim phrase (`detectGlutenFreeClaim` in `api/analyze.js`, a server-side regex
+  over the prompt's claim-phrase list — not Claude's judgement). Splits the
+  caution share into labeled vs unlabeled products so the claim rule (decision
+  003, `plans/gf-label-claim-2026-08-28.md`) is measurable. A flag, never the
+  text — the privacy invariant below holds. Omitted on barcode scans.
 - `model` — the Claude model that produced the verdict. Omitted when no Claude
   call happened (barcode hit with no ingredient data). Makes a model swap
   attributable at the time it happens: `claude-opus-4-8` went out the same day
