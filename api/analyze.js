@@ -139,16 +139,25 @@ Note: Omit \`detected_language\` only when the text is in English.
 #### Verdict Criteria
 - **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum) — or their equivalents in any language (e.g., Spanish: harina de trigo, cebada, centeno, malta, sémola, espelta; Dutch: tarwe, gerst, rogge, mout, griesmeel, spelt, tarwegluten, tarwezetmeel; Catalan: blat, ordi, sègol, malt, sèmola, espelta, midó de blat; French: blé, farine de blé, orge, seigle, malt, semoule, épeautre, amidon de blé)
 - **caution:**
-  - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
+  - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable/plant protein of unstated source (a named non-gluten source such as "hydrolyzed soy protein" or "hydrolyzed corn protein" is not ambiguous), soy sauce without GF label)
   - Has "may contain" warnings for gluten sources (in any language, e.g., "puede contener trazas de trigo")
   - Has "processed in facility" warnings for wheat/gluten
   - OCR text is unclear/incomplete
-- **safe:** No gluten-containing ingredients, no ambiguous ingredients, no concerning allergen warnings
+- **safe:** No gluten-containing ingredients, no ambiguous ingredients (or a gluten-free claim that covers them — see below), no concerning allergen warnings
+
+#### Gluten-free label claims
+- If the text contains an explicit, affirmative gluten-free claim about this product — "gluten-free" / "gluten free", "sin gluten" / "libre de gluten", "glutenvrij", "sense gluten", "sans gluten", "senza glutine", "glutenfrei", "sem glúten", or a certification mark such as GFCO, CSA, or "Certified Gluten-Free" — treat it as the strongest evidence on the label. In the US and EU that claim is regulated (under 20 ppm gluten, manufacturer liable) and covers every ingredient, including flavors, starches, and hydrolyzed proteins.
+- With such a claim present, the ambiguous ingredients listed under "caution" (natural flavors, maltodextrin, modified food starch, dextrin, spices, hydrolyzed protein of unstated source) do NOT lower the verdict. Return "safe", and say in the explanation that the gluten-free label is what covers those ingredients.
+- The claim does NOT override:
+  - Oats — still "caution", unless the claim is a third-party certification mark (GFCO, CSA, "Certified Gluten-Free"), in which case certified oats are safe.
+  - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any language) — return "caution" and say that the label and the ingredient list disagree.
+  - An explicit "may contain wheat/gluten" or shared-equipment/facility advisory — return "caution".
+- Only honor a claim about this product. Ignore negated or unrelated phrasing: "not gluten-free", "gluten-free options available", a "gluten-free facility" or "equipment" statement on its own, or a claim that refers to a different product.
 
 #### Guidelines
 - Always check for allergen statements AND "may contain" warnings—these are often separate from ingredients
 - Be conservative—when uncertain, use "caution"
-- Flag ALL oats as "caution" even if the product claims to be gluten-free. Oats require third-party certification (like GFCO logo) to be considered safe—manufacturer "gluten-free" labels alone are not sufficient due to cross-contamination risks
+- Flag oats as "caution" even if the product claims to be gluten-free — a manufacturer's "gluten-free" label alone is not sufficient due to cross-contamination risks. Only a third-party certification mark on the product (GFCO, CSA, "Certified Gluten-Free") makes oats safe
 - Common hidden gluten: soy sauce, malt vinegar, some seasonings
 - If OCR is garbled, return "caution" explaining image quality issue
 - Keep explanations to 1-2 sentences
@@ -202,6 +211,7 @@ Write explanations in a warm, supportive tone. Remember: you're helping someone 
 Start with reassurance. Examples:
 - "Good news! This product contains no gluten ingredients..."
 - "You're good to go. The ingredients are all gluten-free..."
+- "Labeled gluten-free — that's a regulated claim, so the natural flavors are covered. You're good to go."
 
 **For caution products:**
 Be helpful and specific about next steps. Examples:
@@ -274,6 +284,28 @@ function applySafeVerdictFloor(analysis, ocrChars) {
 
   if (floored) analysis.confidence = 'low';
   return analysis;
+}
+
+/**
+ * Presence signal for the `gf_claim_present` analytics property: does the OCR
+ * text carry a gluten-free claim phrase in any supported language?
+ *
+ * This is NOT the verdict rule — Claude reads the text and applies the
+ * "Gluten-free label claims" block of CLAUDE_PROMPT, including its negation
+ * guard. This regex exists so the rule's effect on the caution share is
+ * measurable with a deterministic, testable flag: a boolean, never the claim
+ * text or the product (privacy invariant, api/ANALYTICS.md). Only the English
+ * form is guarded against a directly preceding "not"; "gluten-free options
+ * available" still counts as present, which is fine for a metric.
+ *
+ * Keep the phrase list in sync with the prompt block (toggle T7 in
+ * plans/gf-label-claim-2026-08-28.md).
+ */
+const GF_CLAIM_PATTERN =
+  /(?<!\bnot\s)\bgluten[\s-]*free\b|\bsin gluten\b|\blibre de gluten\b|\bglutenvrij\b|\bsense gluten\b|\bsans gluten\b|\bsenza glutine\b|\bglutenfrei\b|\bsem gl[uú]ten\b|\bgfco\b/i;
+
+function detectGlutenFreeClaim(text) {
+  return typeof text === 'string' && GF_CLAIM_PATTERN.test(text);
 }
 
 /**
@@ -357,6 +389,9 @@ export default async function handler(req, res) {
       detectedLanguage: analysis.detected_language,
       imageKb,
       ocrChars,
+      // Did the label carry a gluten-free claim? Measures the claim rule's
+      // effect on the caution share (a flag, never the text).
+      gfClaimPresent: detectGlutenFreeClaim(ocrText),
       ...geo,
     });
 
@@ -548,6 +583,8 @@ export {
   applySafeVerdictFloor,
   MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
+  analyzeWithClaude, // real prompt + callClaude + parse path, for the live evals in tests/api/evals
+  detectGlutenFreeClaim,
   performOCR,
   checkRateLimit,
   incrementRateLimit,
