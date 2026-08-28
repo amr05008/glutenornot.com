@@ -5,9 +5,13 @@
 fixes + Phase B in one commit — per-phase slow clock, screen-owned `cancelled` /
 `interrupted` beacons, XHR timeout + pre-resize cancel windows closed, JPEG 0.6 by
 measurement on nine real labels in `test-cases/`). 291 web + 91 mobile tests green, tsc
-clean, merged with `main` through the sibling's PR #23. Remaining: C4 on-device check
-(Network Link Conditioner — two device-only questions listed under C4), Phase D → iOS
-1.4.3, D2 read in two weeks. T2 (multipart) queued as a separate PR.**
+clean, merged with `main` through the sibling's PR #23. **Shipped:** PR #24 merged
+(`3adef89`, api half live on Vercel and verified with a production scan — `total_ms`
+4217 ms); **iOS 1.4.3 submitted 2026-08-28** (build 1, tag `v1.4.3`). TestFlight scans:
+`app_version 1.4.3`, `image_kb` 339/347 (vs 408 p50 at 0.7), `total_ms` 3.4–4.2 s. NOT
+exercised on device: the `cancelled`/`interrupted` beacons and the 3G copy (C4's two
+device-only questions remain open — watch them in the first post-release review).
+Remaining: **D2 read ~2026-09-11**, then close this plan. T2 (multipart) is a separate PR.**
 Sibling plan: `plans/gf-label-claim-2026-08-28.md` (server-only, different agent session — see "Coordination" below).
 
 ## Why (the incident, in numbers)

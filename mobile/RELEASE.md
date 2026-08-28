@@ -6,25 +6,39 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.4.2 — Analytics attribution (2026-08-13)
+## ✅ Last shipped: v1.4.3 — Weak-signal upload (2026-08-28)
 
-Submitted to App Store review on 2026-08-13 (**build 1**): a deliberate
-one-change release. The app sends `X-Client-Version` on all three endpoints so
-`scan` events carry `app_version` — previously every event reported
-`$lib_version: posthog-node`, the SDK's version, which is why 1.4.1's capture
-work could not be attributed. Keeping the release to this one change means the
-build that introduces attribution is not also the build that changes capture
-behaviour, so 1.4.3 can be measured against a version-tagged baseline. No
-user-visible changes. Version examples below still read `1.2.0` — substitute
-your new version.
+Submitted to App Store review on 2026-08-28 (**build 1**), the day it was scoped
+— `plans/weak-signal-upload-2026-08-28.md`, from a field incident on 2-bar LTE.
+What changed on the phone: the OCR request goes over XHR so the reading screen
+shows **"Uploading photo… N%"** and only says "Reading ingredients…" once iOS
+reports the body sent; the slow copy is per phase with its own clock (30 s
+uploading → "Slow connection — still uploading…", 20 s server-side → a
+non-prescriptive "still working"); a Cancel tap beacons `scan_failed
+reason=cancelled` + `elapsed_ms`, backgrounding mid-scan beacons `interrupted`;
+photos are encoded at **JPEG 0.6** (was 0.7 — measured on nine real labels in
+the gitignored `test-cases/`, table in the plan under B1). The api half (server
+`ocr_ms`/`claude_ms`/`total_ms`, the new beacon reasons) went live via Vercel at
+the PR #24 merge, before this build.
 
-**Post-release check that matters for this one:** confirm a real scan from an
-updated install reports `app_version: 1.4.2` (step 8). This release is a single
-header whose failure mode is silent — if `Constants.expoConfig` returned empty
-in a production build, the app would send nothing, the server would log nothing,
-and every event would look like a pre-1.4.2 client. Pre-submission the generated
-`EXConstants.bundle/app.config` was verified to carry `1.4.2`, but only a live
-scan proves the whole path.
+**TestFlight evidence (2026-08-28, this build):** two OCR scans arrived with
+`app_version: 1.4.3`, `platform: ios`, timing populated (`total_ms` 3.4 s / 4.2 s),
+and `image_kb` **339 / 347** vs the 0.7-era p50 of 408 — the projected ~15%. Not
+exercised on device: the `cancelled` / `interrupted` beacons and the 3G copy
+(unit-tested only) — the first weekly review after release should look for
+`cancelled` events at all before reading the failure rows.
+
+**Post-release checks that matter for this one:** (1) `cancelled` and
+`interrupted` appear in PostHog from real installs, with `elapsed_ms` on the
+former only; (2) `image_kb` p50 among `app_version ≥ 1.4.3` lands near 340 KB;
+(3) no rise in `ocr_failed` from 1.4.3 builds (the 0.6 guard); (4) decision 002's
+Opus-latency question: the server leg is now measured — first reads say ~3–4 s,
+well under the 7–13 s estimate. The plan's D2 read is due ~2026-09-11.
+
+Previous: v1.4.2 (2026-08-13, build 1): a deliberate one-change release — the
+`X-Client-Version` header, so `scan` events carry `app_version`. The generated
+`EXConstants.bundle/app.config` carried `1.4.2`; this time it was checked for
+`1.4.3` in the smoke build's DerivedData before the archive.
 
 Previous: v1.4.1 (2026-07-27, build 1): the mobile fixes from
 `reports/2026-07-27-pre-release-review.md` — permission-gate render order
@@ -53,20 +67,29 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.4.2 (2026-08-13).
-- **No next iOS release is scheduled.** The capture-assist plan was closed on
-  2026-08-13 (goal met at a 7.4% clean OCR failure rate against a <15% target,
-  and 9 of the 11 residual failures come from installs too old to receive a
-  client fix) — so the framing guidance that was going to be 1.4.3 is not being
-  built. See the plan's CLOSED header.
-- A holistic data review is scheduled for ~2026-08-27 to decide what, if
-  anything, the next release should carry. Until then there is no queued mobile
-  work; auto-retry-with-backoff remains on the ROADMAP on its own merits
-  (connectivity, not capture).
+- Nothing — main is fully shipped as of v1.4.3 (2026-08-28).
+- **No next iOS release is scheduled.** The next lever for weak-signal uploads
+  is plan toggle T2 (multipart instead of base64 JSON, ~25% fewer bytes on the
+  wire) — an api-contract change, its own PR, and a client build when it lands.
+  Auto-retry-with-backoff stays on the ROADMAP on its own merits.
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the
   `readySignal` effect in `app/index.tsx` before raising `TORCH_SETTLE_MS`.
+
+**Agent-driven release notes (learned 2026-08-28, 1.4.3):**
+- Use `npm ci` (not `npm install`) in step 1 — `npm install` prunes ~22 stale
+  optional entries from the lockfile and dirties the tree for no reason.
+- `npx expo run:ios --configuration Release --no-bundler` is the right smoke
+  build when an agent drives it; `xcrun simctl io booted screenshot <png>`
+  proves the launch. Check the generated version with
+  `find ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator -name app.config`.
+- Verifying the Vercel deploy: the Vercel MCP's deployment list can be blocked
+  by the permission classifier — a real scan against production (the plan's A5
+  script) proves the api is live and is the check that matters anyway.
+- PostHog's query API **caches results**; when checking for an event you just
+  created, send `"refresh": "force_blocking"` in the query body or you will
+  read a stale page and conclude the event never arrived.
 
 > **First build on a new machine?** See **Troubleshooting** at the bottom — the M3
 > hit several one-time setup issues the M1 never did.
@@ -107,7 +130,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (63 tests as of the 1.4.2 version header)
+npm test             # jest — all green (91 tests as of the 1.4.3 version header)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
