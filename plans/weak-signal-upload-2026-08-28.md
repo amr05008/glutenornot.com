@@ -1,6 +1,10 @@
 # Weak-signal OCR upload — shrink the payload, tell the truth while uploading, make cancels visible
 
-**Status 2026-08-28: open — scoped from the weak-LTE farm-stand incident, not started.**
+**Status 2026-08-28 (evening): Phases A and C done on branch `weak-signal-upload-2026-08-28`
+(`b770a7f` api telemetry, `c0e1a2e` client progress/copy/cancel beacon; 243 web + 78 mobile
+tests green, tsc clean). Phase B is blocked on real label photos (script ready in the
+session scratchpad — see B1); C4 needs a device under Network Link Conditioner; Phase D
+follows B. PR opens after the sibling merges.**
 Sibling plan: `plans/gf-label-claim-2026-08-28.md` (server-only, different agent session — see "Coordination" below).
 
 ## Why (the incident, in numbers)
