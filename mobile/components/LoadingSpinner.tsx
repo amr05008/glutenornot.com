@@ -20,11 +20,14 @@ export function LoadingSpinner({
 }: LoadingSpinnerProps) {
   const [isSlow, setIsSlow] = useState(false);
 
+  // One slow clock per mount, independent of the copy: changing `slowMessage`
+  // or `message` never restarts it. The scan screen wants a fresh clock per
+  // phase (upload vs server-side), and gets it by keying this component on
+  // the phase — remount, not prop change, is the restart.
   useEffect(() => {
-    if (!slowMessage) return;
     const timer = setTimeout(() => setIsSlow(true), slowThresholdMs);
     return () => clearTimeout(timer);
-  }, [slowMessage, slowThresholdMs]);
+  }, [slowThresholdMs]);
 
   return (
     <View style={styles.container}>

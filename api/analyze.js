@@ -348,6 +348,11 @@ export default async function handler(req, res) {
   // whether OCR failures are an aiming problem or a blur/light problem.
   let imageKb;
   let ocrChars;
+  // Server-leg timing (plans/weak-signal-upload-2026-08-28.md): the clock
+  // starts once the body has arrived, so this is Vision + Claude, not the
+  // upload — the upload leg is only visible from the client (elapsed_ms).
+  const startedAt = Date.now();
+  let ocrMs;
 
   try {
     const { image } = req.body;
@@ -364,11 +369,17 @@ export default async function handler(req, res) {
     imageKb = Math.round((image.length * 3) / 4 / 1024);
 
     // Step 1: OCR with Google Cloud Vision
-    const ocrText = await performOCR(image);
+    const ocrStart = Date.now();
+    let ocrText;
+    try {
+      ocrText = await performOCR(image);
+    } finally {
+      ocrMs = Date.now() - ocrStart; // known even when Vision throws
+    }
     ocrChars = ocrText ? ocrText.trim().length : 0;
 
     if (!ocrText || ocrText.trim().length === 0) {
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ocrMs, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -377,7 +388,9 @@ export default async function handler(req, res) {
     }
 
     // Step 2: Analyze with Claude
+    const claudeStart = Date.now();
     const analysis = await analyzeWithClaude(ocrText);
+    const claudeMs = Date.now() - claudeStart;
 
     // Step 3: safety floor — a near-empty read can never come back "safe".
     // Applied before tracking so analytics records the delivered verdict.
@@ -401,6 +414,9 @@ export default async function handler(req, res) {
       // Did the label carry a gluten-free claim? Measures the claim rule's
       // effect on the caution share (a flag, never the text).
       gfClaimPresent: detectGlutenFreeClaim(ocrText),
+      ocrMs,
+      claudeMs,
+      totalMs: Date.now() - startedAt,
       ...geo,
     });
 
@@ -410,7 +426,7 @@ export default async function handler(req, res) {
     console.error('Analysis error:', error);
 
     if (error.message === 'OCR_EMPTY') {
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ocrMs, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -420,12 +436,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ocrMs, ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ocrMs, ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'

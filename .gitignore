@@ -42,3 +42,8 @@ PROJECT_IDEAS.md
 # App Store assets (screenshots, previews)
 # V2 design source / handoff package — local reference only, not shipped
 GlutenOrNot - V2 Designs/
+
+# Real ingredient-label photos for the OCR quality check
+# (plans/weak-signal-upload-2026-08-28.md B1) — ~10 MB of HEICs, local only.
+# The results table lives in the plan; the photos never ship.
+test-cases/
