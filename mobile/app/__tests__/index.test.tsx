@@ -473,7 +473,8 @@ describe('CameraScreen error flow', () => {
         fireEvent.press(getByLabelText('Choose a photo instead'));
       });
 
-      expect(getByText('Reading ingredients…')).toBeTruthy();
+      // Honest from t=0: nothing has been read until the upload lands.
+      expect(getByText('Uploading photo…')).toBeTruthy();
 
       await act(async () => {
         resolveAnalyze({
@@ -484,6 +485,59 @@ describe('CameraScreen error flow', () => {
           explanation: 'All clear.',
           confidence: 'high',
         });
+      });
+    });
+
+    describe('upload progress (plans/weak-signal-upload-2026-08-28.md)', () => {
+      // On 2-bar LTE the 500 KB upload is 10–45 s during which the old screen
+      // said "Reading ingredients…" and, at 30 s, told the user to cancel and
+      // restart the very upload that was about to land.
+      function startPickedScan() {
+        mockLaunchLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file://picked.jpg' }],
+        } as any);
+        mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}) as any); // never settles
+      }
+
+      function reportProgress(progress: { phase: 'uploading'; pct: number } | { phase: 'reading' }) {
+        const onProgress = mockAnalyzeImage.mock.calls[0][2]!;
+        act(() => {
+          onProgress(progress);
+        });
+      }
+
+      it('shows the upload percentage, then "Reading ingredients…" once the body is sent', async () => {
+        startPickedScan();
+        const { getByLabelText, getByText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+
+        reportProgress({ phase: 'uploading', pct: 42 });
+        expect(getByText('Uploading photo… 42%')).toBeTruthy();
+
+        reportProgress({ phase: 'reading' });
+        expect(getByText('Reading ingredients…')).toBeTruthy();
+      });
+
+      it('at 30 s while still uploading, says so instead of telling the user to restart', async () => {
+        startPickedScan();
+        const { getByLabelText, getByText } = render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(getByLabelText('Choose a photo instead'));
+        });
+        reportProgress({ phase: 'uploading', pct: 30 });
+
+        act(() => {
+          jest.advanceTimersByTime(30000);
+        });
+        expect(getByText('Slow connection — still uploading. Hang tight or move to better signal.')).toBeTruthy();
+
+        // Once the server has the image the wait is server-side and a retry is
+        // reasonable again — the original copy comes back.
+        reportProgress({ phase: 'reading' });
+        expect(getByText('This is taking longer than usual. Cancel and try your scan again.')).toBeTruthy();
       });
     });
 

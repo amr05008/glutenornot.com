@@ -22,6 +22,12 @@ type SystemState = 'offline' | 'error' | null;
 // is trusted to reach the LED (see the torch-application effect).
 const TORCH_SETTLE_MS = 750;
 
+// 30 s slow copy, by scan phase (plans/weak-signal-upload-2026-08-28.md). On a
+// weak uplink the upload itself is the wait, and restarting it has the same
+// odds — so say what is happening instead of prescribing a retry.
+const SLOW_UPLOADING_MESSAGE = 'Slow connection — still uploading. Hang tight or move to better signal.';
+const SLOW_READING_MESSAGE = 'This is taking longer than usual. Cancel and try your scan again.';
+
 function Wordmark() {
   return (
     <View style={styles.wordmark}>
@@ -53,6 +59,10 @@ export default function CameraScreen() {
   const [systemState, setSystemState] = useState<SystemState>(null);
   const [barcodeScanned, setBarcodeScanned] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Reading ingredients…');
+  // Which leg a scan is on, for the 30 s slow copy: while the photo is still
+  // uploading, "cancel and retry" is bad advice (it restarts the same upload
+  // on the same signal); once the server has the image, a retry is reasonable.
+  const [scanPhase, setScanPhase] = useState<'uploading' | 'reading'>('reading');
   // Where the last analyzed photo came from — the couldn't-read screen only
   // offers the flashlight retry for camera captures (a torch can't fix a
   // blurry screenshot from the photo library).
@@ -214,7 +224,9 @@ export default function CameraScreen() {
 
     try {
       setIsAnalyzing(true);
-      setLoadingMessage('Reading ingredients…');
+      // Honest from t=0: nothing has been read until the upload lands.
+      setScanPhase('uploading');
+      setLoadingMessage('Uploading photo…');
 
       // Resize and compress image - smaller for faster upload
       const manipulated = await ImageManipulator.manipulateAsync(
@@ -234,7 +246,14 @@ export default function CameraScreen() {
       // Analyze with API, passing abort signal for cancellation
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const result = await analyzeImage(manipulated.base64, controller.signal);
+      const result = await analyzeImage(manipulated.base64, controller.signal, (progress) => {
+        if (progress.phase === 'uploading') {
+          setLoadingMessage(`Uploading photo… ${progress.pct}%`);
+        } else {
+          setScanPhase('reading');
+          setLoadingMessage('Reading ingredients…');
+        }
+      });
       abortControllerRef.current = null;
       if (__DEV__) console.log('API result:', result);
 
@@ -269,6 +288,7 @@ export default function CameraScreen() {
 
     try {
       setIsAnalyzing(true);
+      setScanPhase('reading'); // no upload leg on a barcode lookup
       setLoadingMessage(`Looking up barcode ${barcodeData}…`);
 
       const controller = new AbortController();
@@ -345,7 +365,7 @@ export default function CameraScreen() {
     return (
       <LoadingSpinner
         message={loadingMessage}
-        slowMessage="This is taking longer than usual. Cancel and try your scan again."
+        slowMessage={scanPhase === 'uploading' ? SLOW_UPLOADING_MESSAGE : SLOW_READING_MESSAGE}
         slowThresholdMs={30000}
         onCancel={handleCancel}
       />
