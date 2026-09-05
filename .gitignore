@@ -35,6 +35,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local reports and plans (previously tracked files remain tracked)
+/reports/
+/plans/
+
 # Project ideas (personal notes)
 PROJECT_IDEAS.md
 .env*.local
