@@ -205,9 +205,9 @@ category definitions before saving):
 Live state checked 2026-09-05: App Store Connect already declared Product
 Interaction + Coarse Location (not linked, Analytics) — the "No analytics
 tracking" note that used to sit here was wrong, not the questionnaire.
-Recommended additions at the 1.5.0 submission: Diagnostics → Crash Data (Sentry,
-not linked, App Functionality) and Performance Data (scan timings / failure
-reasons, not linked, Analytics).
+Added at the 1.5.0 submission: Diagnostics → Crash Data (Sentry, not linked,
+App Functionality) and Performance Data (scan timings / failure reasons, not
+linked, Analytics). The labels now match the events in `api/ANALYTICS.md`.
 
 ---
 
