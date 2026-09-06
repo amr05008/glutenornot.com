@@ -5,15 +5,32 @@ import { ResultCard } from '../components/ResultCard';
 import { MenuResultCard } from '../components/MenuResultCard';
 import { reportError } from '../services/errorReporting';
 import { maybeRequestReview, REVIEW_PROMPT_DELAY_MS } from '../services/review';
-import { AnalysisResult } from '../constants/verdicts';
+import { sendRecoveryEvent } from '../services/recovery';
+import { AnalysisResult, Verdict, Confidence } from '../constants/verdicts';
 import { theme } from '../constants/theme';
 import { sans } from '../constants/fonts';
 
+const VERDICTS: ReadonlySet<string> = new Set<Verdict>(['safe', 'caution', 'unsafe']);
+const CONFIDENCES: ReadonlySet<string> = new Set<Confidence>(['high', 'medium', 'low']);
+
+function isMenuResult(r: AnalysisResult): boolean {
+  return (
+    r.mode?.toLowerCase() === 'menu' ||
+    (Array.isArray(r.menu_items) && r.menu_items.length > 0)
+  );
+}
+
 export default function ResultScreen() {
-  const { result, scanCount, fromHistory } = useLocalSearchParams<{
+  // recoveryFlowId / recoveryReason (plans/barcode-recovery-2026-09-05.md):
+  // transient route metadata from the camera screen when this result completes
+  // a barcode-to-photo recovery flow. Route params only — never part of the
+  // result object, never persisted to Recents (a reopen carries neither).
+  const { result, scanCount, fromHistory, recoveryFlowId, recoveryReason } = useLocalSearchParams<{
     result: string;
     scanCount: string;
     fromHistory?: string;
+    recoveryFlowId?: string;
+    recoveryReason?: string;
   }>();
   const router = useRouter();
   const count = scanCount ? parseInt(scanCount, 10) : 0;
@@ -24,11 +41,29 @@ export default function ResultScreen() {
   // (hooks rules), so it re-checks validity.
   useEffect(() => {
     if (!result || fromHistory === '1') return;
+    let parsed: AnalysisResult;
     try {
-      JSON.parse(result);
+      parsed = JSON.parse(result);
     } catch {
       return;
     }
+
+    // Recovery funnel: a validated, fresh result is on screen. Bounded enums
+    // only — never the explanation, the product, or anything from the result
+    // beyond its verdict class. Once per flow (the service dedupes remounts).
+    if (
+      recoveryFlowId &&
+      (recoveryReason === 'not_found' || recoveryReason === 'missing_context') &&
+      parsed &&
+      VERDICTS.has(parsed.verdict)
+    ) {
+      sendRecoveryEvent(recoveryFlowId, recoveryReason, 'result_displayed', {
+        resultMode: isMenuResult(parsed) ? 'menu' : 'label',
+        verdict: parsed.verdict,
+        ...(CONFIDENCES.has(parsed.confidence) ? { confidence: parsed.confidence } : {}),
+      });
+    }
+
     const timer = setTimeout(() => { maybeRequestReview(count); }, REVIEW_PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
@@ -56,9 +91,7 @@ export default function ResultScreen() {
   const handleClose = () => router.back();
   const handleFeedback = () => Linking.openURL('https://forms.gle/ZtSwSTuhCpAGwsHKA');
 
-  const isMenu =
-    analysisResult.mode?.toLowerCase() === 'menu' ||
-    (Array.isArray(analysisResult.menu_items) && analysisResult.menu_items.length > 0);
+  const isMenu = isMenuResult(analysisResult);
 
   return (
     <View style={styles.container}>

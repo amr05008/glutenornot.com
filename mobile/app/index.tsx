@@ -4,19 +4,59 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError } from '../services/api';
 import { reportError } from '../services/errorReporting';
 import { incrementLifetimeScanCount, addRecentScan } from '../services/storage';
+import { newRecoveryFlowId, sendRecoveryEvent, RecoveryReason } from '../services/recovery';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Toast } from '../components/Toast';
 import { StateScreen } from '../components/StateScreen';
+import { BarcodeRecoveryState } from '../components/BarcodeRecoveryState';
 import { Icon, Reticle } from '../components/Icon';
 import { AnalysisResult, FOOD_BARCODE_TYPES } from '../constants/verdicts';
 import { theme } from '../constants/theme';
-import { sans } from '../constants/fonts';
+import { sans, mono } from '../constants/fonts';
 
 type SystemState = 'offline' | 'error' | null;
+
+// Barcode-to-photo recovery (plans/barcode-recovery-2026-09-05.md). One flow
+// per barcode dead end: `prompt` is the neutral "Product not found" / "Not
+// enough information" state, `capture` is the photo-only camera it leads to.
+// Everything here is transient — in memory for the life of this screen, never
+// persisted, never sent except as the content-free funnel beacons (`id` +
+// `reason` + stage). `barcode` is kept only so an explicit exit can suppress
+// the same code for a while; it never leaves the device.
+interface RecoveryFlow {
+  id: string;
+  reason: RecoveryReason;
+  barcode: string;
+  productName: string | null;
+  phase: 'prompt' | 'capture';
+}
+
+// When a flow ends — explicit exit, or a photo result — the same barcode is
+// usually still in frame. Ignore that one code silently (no toast, no lookup,
+// no new flow) for a bounded window so the prompt can't reopen from the frame
+// the user just left, and hold the scanner off for a beat after an exit.
+// Different codes work after the re-arm; the same code is retryable after
+// the TTL. In memory only.
+const SCANNER_REARM_MS = 2000;
+const DISMISSED_CODE_TTL_MS = 60000;
+// A barcode the server just said it doesn't have won't be there a moment
+// later — a cached miss reopens the recovery prompt without a lookup. With
+// equal TTLs the dismissal window normally outlasts this cache; it is the
+// backstop for any path that ends a flow without dismissing the code.
+const RECENT_MISS_TTL_MS = 60000;
+
+// Photo-only capture copy (design addendum §2, state C). Names the physical
+// action so nobody waits for automatic detection the way they do with barcodes.
+const RECOVERY_CAPTURE_COPY = {
+  eyebrow: 'PHOTO ONLY',
+  title: 'Scan the ingredient label',
+  guidance: 'Include the ingredient list and allergen statement, then tap the capture button.',
+  exit: 'Scan another product',
+};
 
 // How long the native camera session gets to settle before a torch transition
 // is trusted to reach the LED (see the torch-application effect).
@@ -88,6 +128,56 @@ export default function CameraScreen() {
   const capturingRef = useRef(false);
   const scanningRef = useRef(false);
   const router = useRouter();
+
+  // Recovery flow state, mirrored in a ref: expo-camera can deliver a queued
+  // barcode callback after the UI has already moved on, so the handler guards
+  // on the ref (synchronous truth), not just on the prop being unset.
+  const [recovery, setRecovery] = useState<RecoveryFlow | null>(null);
+  const recoveryRef = useRef<RecoveryFlow | null>(null);
+  const setRecoveryFlow = useCallback((flow: RecoveryFlow | null) => {
+    recoveryRef.current = flow;
+    setRecovery(flow);
+  }, []);
+  // Suppressed codes (dismissed or just answered) → their expiry timer.
+  const dismissedCodes = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // The post-lookup scanner re-arm, so an exit can replace it with its own.
+  const rearmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Is this screen the focused route? The camera stays mounted under Results
+  // and Recents; a barcode must never start a lookup from under them.
+  const [isFocused, setIsFocused] = useState(true);
+  const focusedRef = useRef(true);
+  // Every timer this screen sets, so unmount can clear them — a stale timer
+  // must not re-arm the scanner or touch state on a screen that's gone.
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const after = useCallback((ms: number, fn: () => void) => {
+    const t = setTimeout(() => {
+      timersRef.current.delete(t);
+      fn();
+    }, ms);
+    timersRef.current.add(t);
+    return t;
+  }, []);
+  useEffect(() => {
+    const timers = timersRef.current;
+    const dismissed = dismissedCodes.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+      dismissed.forEach(clearTimeout);
+      dismissed.clear();
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true;
+      setIsFocused(true);
+      return () => {
+        focusedRef.current = false;
+        setIsFocused(false);
+      };
+    }, [])
+  );
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // What the in-flight request is and when it went out — for the beacon an
@@ -190,15 +280,93 @@ export default function CameraScreen() {
 
   const handleCancel = useCallback(() => abandonScan('cancelled'), [abandonScan]);
 
+  // Enter a recovery flow. Idempotent while one is open: a cached-miss
+  // callback during the same flow must not mint a second ID or re-show.
+  const beginRecovery = useCallback((reason: RecoveryReason, barcode: string, productName: string | null) => {
+    if (recoveryRef.current) return;
+    setOcrError(null);
+    setRecoveryFlow({ id: newRecoveryFlowId(), reason, barcode, productName, phase: 'prompt' });
+  }, [setRecoveryFlow]);
+
+  const startRecoveryCapture = useCallback(() => {
+    const flow = recoveryRef.current;
+    if (!flow) return;
+    setRecoveryFlow({ ...flow, phase: 'capture' });
+  }, [setRecoveryFlow]);
+
+  const suppressCode = useCallback((barcode: string) => {
+    const existing = dismissedCodes.current.get(barcode);
+    if (existing) clearTimeout(existing);
+    dismissedCodes.current.set(
+      barcode,
+      setTimeout(() => dismissedCodes.current.delete(barcode), DISMISSED_CODE_TTL_MS)
+    );
+  }, []);
+
+  const rearmScannerAfter = useCallback((ms: number) => {
+    if (rearmTimerRef.current) {
+      clearTimeout(rearmTimerRef.current);
+      timersRef.current.delete(rearmTimerRef.current);
+    }
+    scanningRef.current = true;
+    setBarcodeScanned(true);
+    rearmTimerRef.current = after(ms, () => {
+      rearmTimerRef.current = null;
+      scanningRef.current = false;
+      setBarcodeScanned(false);
+    });
+  }, [after]);
+
+  // Explicit exit — "Scan another product", or opening Recents. Beacons
+  // `exited`, suppresses the dismissed code, and re-arms the scanner after a
+  // beat. Picker cancel, couldn't-read, offline and Cancel are NOT exits.
+  const exitRecovery = useCallback(() => {
+    const flow = recoveryRef.current;
+    if (!flow) return;
+    sendRecoveryEvent(flow.id, flow.reason, 'exited');
+    suppressCode(flow.barcode);
+    rearmScannerAfter(SCANNER_REARM_MS);
+    setSystemState(null);
+    setRecoveryFlow(null);
+  }, [suppressCode, rearmScannerAfter, setRecoveryFlow]);
+
+  const openRecents = useCallback(() => {
+    exitRecovery(); // no-op outside a flow
+    router.push('/recents');
+  }, [exitRecovery, router]);
+
+  // `shown` fires when the prompt is actually on screen — not when the
+  // response arrived — once per flow (the service dedupes remounts).
+  const promptVisible = !isAnalyzing && !systemState && recovery?.phase === 'prompt';
+  useEffect(() => {
+    if (promptVisible && recovery) sendRecoveryEvent(recovery.id, recovery.reason, 'shown');
+  }, [promptVisible, recovery]);
+
   const navigateToResult = useCallback(async (result: AnalysisResult) => {
+    // A result completes any open recovery flow: hand its ID to the result
+    // screen (which beacons `result_displayed` once it's actually on screen)
+    // and clear it here, so Back lands on normal capture and the next
+    // product can't inherit this flow's telemetry. The answered product is
+    // still in the user's hand — suppress its code like a dismissal, or Back
+    // would re-open the prompt (and, for missing_context, re-run the lookup)
+    // for a question the photo just answered.
+    const flow = recoveryRef.current;
+    if (flow) {
+      suppressCode(flow.barcode);
+      setRecoveryFlow(null);
+    }
     const scanCount = await incrementLifetimeScanCount();
     await addRecentScan(result); // never throws — history can't break a scan
     resumedFromBackground.current = false;
     router.push({
       pathname: '/result',
-      params: { result: JSON.stringify(result), scanCount: String(scanCount) },
+      params: {
+        result: JSON.stringify(result),
+        scanCount: String(scanCount),
+        ...(flow ? { recoveryFlowId: flow.id, recoveryReason: flow.reason } : {}),
+      },
     });
-  }, [router]);
+  }, [router, setRecoveryFlow, suppressCode]);
 
   const handleToastHide = useCallback(() => setOcrError(null), []);
 
@@ -226,12 +394,6 @@ export default function CameraScreen() {
       return;
     }
 
-    // For barcode not_found, show as toast banner so user can try photo
-    if (error instanceof APIError && error.type === 'not_found') {
-      setOcrError(error.message);
-      return;
-    }
-
     // timeout / rate_limit / server_error keep the alert
     let message = 'Something went wrong. Please try again.';
     if (error instanceof APIError) {
@@ -247,6 +409,11 @@ export default function CameraScreen() {
     setOcrError(null);
     setSystemState(null);
     setScanSource(source);
+
+    // The user committed a photo to analysis — the funnel's second step. A
+    // retry after couldn't-read fires again; the read counts unique flows.
+    const flow = recoveryRef.current;
+    if (flow) sendRecoveryEvent(flow.id, flow.reason, 'photo_started', { source });
 
     try {
       setIsAnalyzing(true);
@@ -306,15 +473,26 @@ export default function CameraScreen() {
   };
 
   const handleBarcodeScanned = async (scanResult: BarcodeScanningResult) => {
+    // Refs, not state: a native callback queued before the last render can
+    // arrive after the prop was unset. No lookups inside a recovery flow
+    // (photo-only means photo-only, including retries), and none from under
+    // a Results/Recents route.
+    if (recoveryRef.current || !focusedRef.current) return;
     // Synchronous ref check prevents duplicate calls before state updates
     if (scanningRef.current || capturingRef.current) return;
 
     const { data: barcodeData } = scanResult;
     if (!barcodeData) return;
 
-    // Skip API call for recently-failed barcodes to prevent frustration retry loops
+    // The code the user just explicitly walked away from: silence, not a
+    // reopened prompt. Checked before the miss cache so a dismissed cached
+    // miss can't resurrect the state.
+    if (dismissedCodes.current.has(barcodeData)) return;
+
+    // A recent miss won't be found a moment later — same recovery affordance,
+    // no lookup, no toast.
     if (recentNotFound.current.has(barcodeData)) {
-      setOcrError('Product not in database — scan the ingredient label instead');
+      beginRecovery('not_found', barcodeData, null);
       return;
     }
 
@@ -325,34 +503,49 @@ export default function CameraScreen() {
     setBarcodeScanned(true);
     setOcrError(null);
 
+    const controller = new AbortController();
     try {
       setIsAnalyzing(true);
       setScanPhase('reading'); // no upload leg on a barcode lookup
       setLoadingMessage(`Looking up barcode ${barcodeData}…`);
 
-      const controller = new AbortController();
       abortControllerRef.current = controller;
       scanMethodRef.current = 'barcode';
       scanStartedAtRef.current = Date.now();
       const result = await lookupBarcode(barcodeData, controller.signal);
+      // Ownership check: if this request was cancelled or interrupted while
+      // in flight, a response that still lands must not push a result or
+      // open a recovery state over whatever the user is doing now.
+      if (abortControllerRef.current !== controller) return;
       abortControllerRef.current = null;
       if (__DEV__) console.log('Barcode result:', result);
 
+      // Known marker only — anything unmarked is a normal result, never
+      // reinterpreted from the explanation text.
+      if (result.result_reason === 'missing_context') {
+        beginRecovery('missing_context', barcodeData, result.product_name ?? null);
+        return;
+      }
+
       await navigateToResult(result);
     } catch (error) {
+      // A 404 whose body read raced a Cancel/background still surfaces as
+      // not_found — it must not open the prompt over what the user did next.
+      if (controller.signal.aborted) return;
       if (error instanceof APIError && error.type === 'not_found') {
         recentNotFound.current.add(barcodeData);
-        setTimeout(() => recentNotFound.current.delete(barcodeData), 60000);
+        after(RECENT_MISS_TTL_MS, () => recentNotFound.current.delete(barcodeData));
+        // A persistent recovery state, not a toast (and not a Sentry event —
+        // an empty database is a normal user flow).
+        beginRecovery('not_found', barcodeData, null);
+        return;
       }
       handleError(error, 'barcode_scan');
     } finally {
       abortControllerRef.current = null;
       setIsAnalyzing(false);
       // Reset barcode scan state after a delay to prevent rapid re-scanning
-      setTimeout(() => {
-        setBarcodeScanned(false);
-        scanningRef.current = false;
-      }, 2000);
+      rearmScannerAfter(SCANNER_REARM_MS);
     }
   };
 
@@ -428,13 +621,18 @@ export default function CameraScreen() {
   }
 
   if (systemState === 'error') {
+    const fromPicker = scanSource === 'picker';
     return (
       <StateScreen
         icon="alert"
         iconColor={theme.verdict.caution.accent}
         iconBg={theme.verdict.caution.surface}
         title="Couldn't read that"
-        body="The text was too blurry or small to read. Hold steady and fill the frame with the label."
+        body={
+          fromPicker
+            ? 'The text in that photo was too small or blurry to read. Try a closer photo of the ingredient list.'
+            : 'The text was too blurry or small to read. Hold steady and fill the frame with the label.'
+        }
         primary={scanSource === 'camera' && !torch ? 'Turn on flashlight & retry' : 'Try again'}
         onPrimary={() => {
           // Dim light is the likeliest fixable cause of an unreadable camera
@@ -443,11 +641,25 @@ export default function CameraScreen() {
           if (scanSource === 'camera') setTorch(true);
           setSystemState(null);
         }}
-        secondary="Choose a photo instead"
+        secondary={fromPicker ? 'Choose another photo' : 'Choose a photo instead'}
         onSecondary={() => {
           setSystemState(null);
           handlePickImage();
         }}
+      />
+    );
+  }
+
+  // Barcode dead end → persistent neutral recovery state (never a toast, never
+  // a verdict). Nothing is saved or counted here: no analysis was delivered.
+  if (recovery?.phase === 'prompt') {
+    return (
+      <BarcodeRecoveryState
+        reason={recovery.reason}
+        productName={recovery.productName}
+        barcode={recovery.barcode}
+        onPrimary={startRecoveryCapture}
+        onSecondary={exitRecovery}
       />
     );
   }
@@ -467,6 +679,65 @@ export default function CameraScreen() {
     );
   }
 
+  const photoOnly = recovery?.phase === 'capture';
+  // Barcode detection is off for the whole recovery flow (including retries)
+  // and whenever this screen isn't the focused route. The handler guards on
+  // the same facts via refs — see handleBarcodeScanned.
+  const scannerActive = isFocused && !barcodeScanned && !recovery;
+
+  // Shared controls: torch top-right; library / shutter / Recents along the
+  // bottom — the same positions in normal and photo-only capture.
+  const torchButton = (floating: boolean) => (
+    <TouchableOpacity
+      style={[
+        styles.torchButton,
+        floating && [styles.torchFloating, { top: insets.top + theme.space[4] }],
+        torch && styles.torchButtonActive,
+      ]}
+      onPress={() => setTorch((t) => !t)}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'}
+      accessibilityHint="Lights up the label in dim surroundings"
+    >
+      <Icon name="torch" size={20} color={torch ? '#0E0E0F' : '#fff'} stroke={1.7} />
+    </TouchableOpacity>
+  );
+  const bottomControls = (captureLabel: string, captureHint: string) => (
+    <>
+      <TouchableOpacity
+        style={styles.galleryButton}
+        onPress={handlePickImage}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Upload photo from library"
+        accessibilityHint="Pick a screenshot or photo to scan for gluten"
+      >
+        <Icon name="image" size={24} color="#fff" stroke={1.7} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
+        onPress={handleCapture}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={captureLabel}
+        accessibilityHint={captureHint}
+      >
+        <View style={[styles.captureButtonInner, !cameraReady && styles.captureButtonInnerDisabled]} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.galleryButton}
+        onPress={openRecents}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="View recent scans"
+        accessibilityHint="Shows your scan history, stored on this device"
+      >
+        <Icon name="history" size={24} color="#fff" stroke={1.7} />
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <CameraView
@@ -485,35 +756,72 @@ export default function CameraScreen() {
         barcodeScannerSettings={{
           barcodeTypes: [...FOOD_BARCODE_TYPES],
         }}
-        onBarcodeScanned={barcodeScanned ? undefined : handleBarcodeScanned}
+        onBarcodeScanned={scannerActive ? handleBarcodeScanned : undefined}
       />
 
-      {/* Viewfinder overlay — outside CameraView to avoid children warning */}
-      <View style={styles.overlay} pointerEvents="box-none">
-        <View style={[styles.wordmarkWrap, { top: insets.top + theme.space[4] }]}>
-          <Wordmark />
-        </View>
-        <View style={styles.viewfinder}>
-          <Corners />
-        </View>
-        <Text style={[styles.hint, { bottom: insets.bottom + 132 }]}>
-          Point at a label, menu, or barcode
-        </Text>
-        <TouchableOpacity
+      {photoOnly ? (
+        /* Photo-only recovery capture (state C): a stacked column — top bar /
+           viewfinder / instruction / controls — so large text pushes the
+           layout instead of colliding with the shutter. */
+        <View
           style={[
-            styles.torchButton,
-            { top: insets.top + theme.space[4] },
-            torch && styles.torchButtonActive,
+            styles.recoveryOverlay,
+            { paddingTop: insets.top + theme.space[4], paddingBottom: insets.bottom + theme.space[6] },
           ]}
-          onPress={() => setTorch((t) => !t)}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'}
-          accessibilityHint="Lights up the label in dim surroundings"
+          pointerEvents="box-none"
         >
-          <Icon name="torch" size={20} color={torch ? '#0E0E0F' : '#fff'} stroke={1.7} />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.recoveryTopBar}>
+            <TouchableOpacity
+              style={styles.exitPill}
+              onPress={exitRecovery}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={RECOVERY_CAPTURE_COPY.exit}
+              accessibilityHint="Leaves photo-only mode and turns barcode scanning back on"
+            >
+              <Icon name="close" size={17} color="#fff" stroke={2.1} />
+              <Text style={styles.exitPillText}>{RECOVERY_CAPTURE_COPY.exit}</Text>
+            </TouchableOpacity>
+            {torchButton(false)}
+          </View>
+          <View style={styles.recoveryViewfinderWrap}>
+            <View style={styles.recoveryViewfinder}>
+              <Corners />
+            </View>
+          </View>
+          <View style={styles.recoveryInstruction}>
+            <Text style={styles.recoveryEyebrow}>{RECOVERY_CAPTURE_COPY.eyebrow}</Text>
+            <Text style={styles.recoveryTitle} accessibilityRole="header">
+              {RECOVERY_CAPTURE_COPY.title}
+            </Text>
+            <Text style={styles.recoveryGuidance}>{RECOVERY_CAPTURE_COPY.guidance}</Text>
+          </View>
+          <View style={styles.controlsRow}>
+            {bottomControls('Capture photo of the ingredient label', 'Takes a photo of the label to scan for gluten')}
+          </View>
+        </View>
+      ) : (
+        <>
+          {/* Viewfinder overlay — outside CameraView to avoid children warning */}
+          <View style={styles.overlay} pointerEvents="box-none">
+            <View style={[styles.wordmarkWrap, { top: insets.top + theme.space[4] }]}>
+              <Wordmark />
+            </View>
+            <View style={styles.viewfinder}>
+              <Corners />
+            </View>
+            <Text style={[styles.hint, { bottom: insets.bottom + 132 }]}>
+              Point at a label, menu, or barcode
+            </Text>
+            {torchButton(true)}
+          </View>
+
+          {/* Controls: gallery picker + capture button */}
+          <View style={[styles.controlsRow, styles.controlsFloating, { bottom: insets.bottom + theme.space[6] }]}>
+            {bottomControls('Capture photo of ingredients', 'Takes a photo to scan for gluten')}
+          </View>
+        </>
+      )}
 
       {/* OCR error toast */}
       <Toast
@@ -521,40 +829,6 @@ export default function CameraScreen() {
         visible={!!ocrError}
         onHide={handleToastHide}
       />
-
-      {/* Controls: gallery picker + capture button */}
-      <View style={[styles.controls, { bottom: insets.bottom + theme.space[6] }]}>
-        <TouchableOpacity
-          style={styles.galleryButton}
-          onPress={handlePickImage}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Upload photo from library"
-          accessibilityHint="Pick a screenshot or photo to scan for gluten"
-        >
-          <Icon name="image" size={24} color="#fff" stroke={1.7} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.captureButton, !cameraReady && styles.captureButtonDisabled]}
-          onPress={handleCapture}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Capture photo of ingredients"
-          accessibilityHint="Takes a photo to scan for gluten"
-        >
-          <View style={[styles.captureButtonInner, !cameraReady && styles.captureButtonInnerDisabled]} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.galleryButton}
-          onPress={() => router.push('/recents')}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="View recent scans"
-          accessibilityHint="Shows your scan history, stored on this device"
-        >
-          <Icon name="history" size={24} color="#fff" stroke={1.7} />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -641,14 +915,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.82)',
     fontSize: 14.5,
   },
-  controls: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  controlsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 40,
+  },
+  controlsFloating: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
   captureButton: {
     width: 78,
@@ -680,8 +956,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   torchButton: {
-    position: 'absolute',
-    right: theme.space[4],
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -689,7 +963,83 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  torchFloating: {
+    position: 'absolute',
+    right: theme.space[4],
+  },
   torchButtonActive: {
     backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  // Photo-only recovery capture
+  recoveryOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'column',
+    paddingHorizontal: theme.space[4],
+  },
+  recoveryTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: theme.space[3],
+  },
+  exitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    minHeight: theme.touchMin,
+    paddingLeft: 11,
+    paddingRight: 15,
+    paddingVertical: 10,
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    flexShrink: 1, // yields to the torch at large text sizes
+  },
+  exitPillText: {
+    fontFamily: sans('600'),
+    fontSize: 14.5,
+    color: '#fff',
+    flexShrink: 1, // wraps rather than pushing the torch off-screen
+  },
+  recoveryViewfinderWrap: {
+    flex: 1,
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: theme.space[4],
+    paddingBottom: theme.space[2] + 2,
+  },
+  recoveryViewfinder: {
+    width: '74%',
+    aspectRatio: 3 / 4,
+    maxHeight: '100%',
+  },
+  recoveryInstruction: {
+    alignItems: 'center',
+    paddingHorizontal: theme.space[2],
+    paddingBottom: theme.space[5],
+  },
+  recoveryEyebrow: {
+    fontFamily: mono('400'),
+    fontSize: 10,
+    letterSpacing: 1.6,
+    color: 'rgba(255,255,255,0.62)',
+    marginBottom: 7,
+  },
+  recoveryTitle: {
+    fontFamily: sans('700'),
+    fontSize: 17,
+    lineHeight: 21,
+    letterSpacing: -0.2,
+    color: '#fff',
+    textAlign: 'center',
+  },
+  recoveryGuidance: {
+    fontFamily: sans('400'),
+    fontSize: 13.5,
+    lineHeight: 19.5,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    maxWidth: 296,
+    marginTop: 6,
   },
 });

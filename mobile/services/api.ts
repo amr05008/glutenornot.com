@@ -10,7 +10,7 @@ import { API_URL, BARCODE_API_URL, TRACK_API_URL, AnalysisResult } from '../cons
 const APP_VERSION = Constants.expoConfig?.version;
 
 // Server whitelists this header, so a missing/odd value is simply omitted.
-const clientHeaders = (): Record<string, string> => ({
+export const clientHeaders = (): Record<string, string> => ({
   'Content-Type': 'application/json',
   'X-Client': 'ios',
   ...(APP_VERSION ? { 'X-Client-Version': APP_VERSION } : {}),

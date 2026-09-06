@@ -53,8 +53,43 @@ jest.mock('expo-image-picker', () => ({
 }));
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
+// Focus control: the camera screen stays mounted under Results/Recents, and
+// must not scan from under them. Tests blur/refocus it by hand.
+const focusControl = {
+  focused: true,
+  effect: null as null | (() => void | (() => void)),
+  cleanup: null as null | void | (() => void),
+  blur() {
+    if (typeof this.cleanup === 'function') this.cleanup();
+    this.cleanup = null;
+    this.focused = false;
+  },
+  focus() {
+    this.focused = true;
+    this.cleanup = this.effect?.();
+  },
+};
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react');
+  return {
+    useRouter: () => ({ push: mockPush }),
+    useFocusEffect: (effect: () => void | (() => void)) => {
+      useEffect(() => {
+        focusControl.effect = effect;
+        if (focusControl.focused) focusControl.cleanup = effect();
+        return () => {
+          if (typeof focusControl.cleanup === 'function') focusControl.cleanup();
+          focusControl.cleanup = null;
+        };
+      }, [effect]);
+    },
+  };
+});
+
+let mockFlowSeq = 0;
+jest.mock('../../services/recovery', () => ({
+  newRecoveryFlowId: jest.fn(() => `flow-${++mockFlowSeq}`),
+  sendRecoveryEvent: jest.fn(() => true),
 }));
 
 // Keep APIError real, only mock the async functions
@@ -78,11 +113,14 @@ jest.mock('../../services/storage', () => ({
 
 import { AppState } from 'react-native';
 import CameraScreen from '../index';
-import { analyzeImage, sendFailureBeacon, APIError } from '../../services/api';
-import { addRecentScan } from '../../services/storage';
+import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError } from '../../services/api';
+import { addRecentScan, incrementLifetimeScanCount } from '../../services/storage';
+import { sendRecoveryEvent } from '../../services/recovery';
 import * as ImagePicker from 'expo-image-picker';
 
 const mockAnalyzeImage = analyzeImage as jest.MockedFunction<typeof analyzeImage>;
+const mockLookupBarcode = lookupBarcode as jest.MockedFunction<typeof lookupBarcode>;
+const mockSendRecoveryEvent = sendRecoveryEvent as jest.Mock;
 const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
   typeof ImagePicker.launchImageLibraryAsync
 >;
@@ -95,6 +133,10 @@ beforeEach(() => {
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
   cameraReadyControl.auto = true;
   permissionControl.granted = true;
+  focusControl.focused = true;
+  focusControl.effect = null;
+  focusControl.cleanup = null;
+  mockFlowSeq = 0;
 });
 
 afterEach(() => {
@@ -781,5 +823,572 @@ describe('CameraScreen error flow', () => {
     });
 
     expect(mockLaunchLibrary).toHaveBeenCalled();
+  });
+});
+
+describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
+  // A barcode that comes up empty — 404 not_found, or a 200 the server marked
+  // result_reason: missing_context — used to be a toast or an amber verdict.
+  // Both are now a persistent neutral state that leads to a photo-only camera.
+  const BARCODE = '7311041088219';
+  const SENTINEL_NAME = 'SENTINEL Ostrahagen Crispbread';
+  const MISSING_CONTEXT = {
+    mode: 'label',
+    verdict: 'caution',
+    flagged_ingredients: [],
+    allergen_warnings: [],
+    explanation: `Found "${SENTINEL_NAME}" but no ingredient data is available.`,
+    confidence: 'low',
+    product_name: SENTINEL_NAME,
+    barcode: BARCODE,
+    data_source: 'openfoodfacts',
+    result_reason: 'missing_context',
+  } as const;
+  const UNMARKED_CAUTION = {
+    mode: 'label',
+    verdict: 'caution',
+    flagged_ingredients: ['natural flavors'],
+    allergen_warnings: [],
+    explanation: 'Ambiguous ingredient.',
+    confidence: 'low',
+    product_name: SENTINEL_NAME,
+    barcode: BARCODE,
+  } as const;
+  const LABEL_RESULT = {
+    mode: 'label',
+    verdict: 'unsafe',
+    flagged_ingredients: ['wheat flour'],
+    allergen_warnings: [],
+    explanation: 'Contains wheat.',
+    confidence: 'high',
+  } as const;
+
+  async function scan(getByTestId: any, code = BARCODE) {
+    await act(async () => {
+      await getByTestId('camera-view').props.onBarcodeScanned({ data: code, type: 'ean13' });
+    });
+  }
+
+  function recoveryEvents(stage?: string) {
+    return mockSendRecoveryEvent.mock.calls.filter((c: any[]) => !stage || c[2] === stage);
+  }
+
+  describe('entering recovery', () => {
+    it('a 404 not_found lands on the persistent "Product not found" state — no toast, no result, no history', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByText, queryByText, getByLabelText } = render(<CameraScreen />);
+
+      await scan(getByTestId);
+
+      expect(getByText('Product not found')).toBeTruthy();
+      expect(getByLabelText('Scan ingredient label')).toBeTruthy();
+      expect(getByLabelText('Scan another product')).toBeTruthy();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(addRecentScan).not.toHaveBeenCalled();
+      expect(incrementLifetimeScanCount).not.toHaveBeenCalled();
+    });
+
+    it('a marked missing_context 200 lands on "Not enough information" with the product identity, and is not saved or counted', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      const { getByTestId, getByText, queryByText } = render(<CameraScreen />);
+
+      await scan(getByTestId);
+
+      expect(getByText('Not enough information')).toBeTruthy();
+      expect(getByText(SENTINEL_NAME)).toBeTruthy();
+      expect(getByText('BARCODE · 7 311041 088219')).toBeTruthy();
+      // Missing information is not a verdict
+      expect(queryByText('Caution')).toBeNull();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(addRecentScan).not.toHaveBeenCalled();
+      expect(incrementLifetimeScanCount).not.toHaveBeenCalled();
+    });
+
+    it('a missing_context response without a product name still shows the state, just without the name line', async () => {
+      mockLookupBarcode.mockResolvedValueOnce({ ...MISSING_CONTEXT, product_name: null } as any);
+      const { getByTestId, getByText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      expect(getByText('Not enough information')).toBeTruthy();
+      expect(queryByText(SENTINEL_NAME)).toBeNull();
+    });
+
+    it('an unmarked low-confidence caution is a normal result — never reinterpreted as missing data', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(UNMARKED_CAUTION as any);
+      const { getByTestId, queryByText } = render(<CameraScreen />);
+
+      await scan(getByTestId);
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledWith(UNMARKED_CAUTION);
+      expect(queryByText('Not enough information')).toBeNull();
+      expect(queryByText('Product not found')).toBeNull();
+      expect(mockSendRecoveryEvent).not.toHaveBeenCalled();
+      // No recovery metadata rides along on a normal result
+      expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('recoveryFlowId');
+    });
+
+    it('beacons `shown` once per flow with a fresh flow ID — and nothing about the product', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      const { getByTestId, rerender } = render(<CameraScreen />);
+
+      await scan(getByTestId);
+      rerender(<CameraScreen />);
+
+      expect(recoveryEvents('shown')).toHaveLength(1);
+      expect(recoveryEvents('shown')[0]).toEqual(['flow-1', 'missing_context', 'shown']);
+      expect(JSON.stringify(mockSendRecoveryEvent.mock.calls)).not.toContain('SENTINEL');
+      expect(JSON.stringify(mockSendRecoveryEvent.mock.calls)).not.toContain(BARCODE);
+    });
+
+    it('a queued barcode callback arriving after recovery began does nothing', async () => {
+      // expo-camera can deliver a callback that was already in flight when the
+      // prop was unset. The handler must guard on its own, not just via the prop.
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByText } = render(<CameraScreen />);
+      const staleHandler = getByTestId('camera-view').props.onBarcodeScanned;
+
+      await scan(getByTestId);
+      expect(getByText('Product not found')).toBeTruthy();
+
+      await act(async () => {
+        await staleHandler({ data: '0012345678905', type: 'upc_a' });
+      });
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(1);
+      expect(recoveryEvents('shown')).toHaveLength(1);
+    });
+  });
+
+  describe('photo-only capture', () => {
+    async function enterCapture(reject = true) {
+      if (reject) mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      else mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      const utils = render(<CameraScreen />);
+      await scan(utils.getByTestId);
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText('Scan ingredient label'));
+      });
+      return utils;
+    }
+
+    it('"Scan ingredient label" opens the camera with barcode detection off and the approved copy', async () => {
+      const { getByText, getByTestId, getByLabelText, queryByText } = await enterCapture();
+
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(getByText('Scan the ingredient label')).toBeTruthy();
+      expect(getByText('Include the ingredient list and allergen statement, then tap the capture button.')).toBeTruthy();
+      expect(queryByText('Point at a label, menu, or barcode')).toBeNull();
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+      // Shipped control positions preserved: torch, library, shutter, Recents
+      expect(getByLabelText('Turn on flashlight')).toBeTruthy();
+      expect(getByLabelText('Upload photo from library')).toBeTruthy();
+      expect(getByLabelText('Capture photo of the ingredient label')).toBeTruthy();
+      expect(getByLabelText('View recent scans')).toBeTruthy();
+      expect(getByLabelText('Scan another product')).toBeTruthy();
+      // Merely opening the camera is not a photo start
+      expect(recoveryEvents('photo_started')).toHaveLength(0);
+    });
+
+    it('barcode detection stays off through the whole flow — the re-arm timer must not turn it back on', async () => {
+      const { getByTestId } = await enterCapture();
+      await act(async () => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+    });
+
+    it('the shutter beacons photo_started (camera), and the result carries the flow to the result screen', async () => {
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByLabelText } = await enterCapture();
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+
+      expect(recoveryEvents('photo_started')).toEqual([['flow-1', 'not_found', 'photo_started', { source: 'camera' }]]);
+      expect(mockPush.mock.calls[0][0].params).toMatchObject({
+        recoveryFlowId: 'flow-1',
+        recoveryReason: 'not_found',
+        result: JSON.stringify(LABEL_RESULT),
+      });
+      // The recovered result is counted and saved once, as the photo result only
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledWith(LABEL_RESULT);
+      // The result screen owns result_displayed — the camera never sends it
+      expect(recoveryEvents('result_displayed')).toHaveLength(0);
+      expect(recoveryEvents('exited')).toHaveLength(0);
+    });
+
+    it('after a completed flow the camera is back to normal capture — Back never lands on the missing-data screen', async () => {
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByLabelText, getByText, queryByText, getByTestId } = await enterCapture(false);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+
+      expect(queryByText('PHOTO ONLY')).toBeNull();
+      expect(queryByText('Not enough information')).toBeNull();
+      expect(getByText('Point at a label, menu, or barcode')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeDefined();
+    });
+
+    it('a completed flow does not attach to the next product', async () => {
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByLabelText, getByTestId } = await enterCapture();
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+
+      // Next product: a normal barcode result
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      mockLookupBarcode.mockResolvedValueOnce(UNMARKED_CAUTION as any);
+      await scan(getByTestId, '0012345678905');
+      expect(mockPush).toHaveBeenCalledTimes(2);
+      expect(mockPush.mock.calls[1][0].params).not.toHaveProperty('recoveryFlowId');
+      expect(recoveryEvents()).toHaveLength(2); // shown + photo_started only
+    });
+
+    it('a library pick beacons photo_started (picker); a picker cancel keeps the flow open and is not an exit', async () => {
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: true } as any);
+      const { getByLabelText, getByText } = await enterCapture();
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(recoveryEvents('photo_started')).toHaveLength(0);
+      expect(recoveryEvents('exited')).toHaveLength(0);
+
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://picked.jpg' }] } as any);
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+      expect(recoveryEvents('photo_started')).toEqual([['flow-1', 'not_found', 'photo_started', { source: 'picker' }]]);
+    });
+
+    it("couldn't-read keeps recovery intent: Try again returns to photo-only, and the retry beacons photo_started again on the same flow", async () => {
+      mockAnalyzeImage.mockRejectedValueOnce(new APIError("Couldn't read", 'ocr_failed'));
+      const { getByLabelText, getByText, getByTestId } = await enterCapture();
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+      expect(recoveryEvents('exited')).toHaveLength(0);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Turn on flashlight & retry'));
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+      expect(recoveryEvents('photo_started')).toHaveLength(2);
+      expect(recoveryEvents('photo_started').every((c: any[]) => c[0] === 'flow-1')).toBe(true);
+    });
+
+    it('a library photo that fails to read gets the photo-specific copy and never a flashlight fix', async () => {
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://picked.jpg' }] } as any);
+      mockAnalyzeImage.mockRejectedValueOnce(new APIError("Couldn't read", 'ocr_failed'));
+      const { getByLabelText, getByText, queryByLabelText } = await enterCapture();
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+      expect(getByText('The text in that photo was too small or blurry to read. Try a closer photo of the ingredient list.')).toBeTruthy();
+      expect(queryByLabelText('Turn on flashlight & retry')).toBeNull();
+      expect(getByLabelText('Choose another photo')).toBeTruthy();
+    });
+
+    it('offline during the photo keeps recovery: Try again returns to photo-only', async () => {
+      mockAnalyzeImage.mockRejectedValueOnce(new APIError('Offline', 'network'));
+      const { getByLabelText, getByText } = await enterCapture();
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(getByText("You're offline")).toBeTruthy());
+      await act(async () => {
+        fireEvent.press(getByLabelText('Try again'));
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(recoveryEvents('exited')).toHaveLength(0);
+    });
+
+    it('Cancel during analysis returns to photo-only capture, not the prompt and not normal scanning', async () => {
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}) as any);
+      const { getByLabelText, getByText, queryByText } = await enterCapture();
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      expect(getByText('Uploading photo…')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(getByText('Cancel'));
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(queryByText('Product not found')).toBeNull();
+      expect(sendFailureBeacon).toHaveBeenCalledWith('ocr', 'cancelled', expect.any(Number));
+      expect(recoveryEvents('exited')).toHaveLength(0);
+    });
+
+    it('backgrounding mid-photo drops the request and resumes on a usable photo-only camera — no auto-retry', async () => {
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}) as any);
+      const { getByLabelText, getByText } = await enterCapture();
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+
+      const listener = (AppState.addEventListener as jest.Mock).mock.calls.at(-1)[1];
+      await act(async () => {
+        listener('background');
+      });
+      await act(async () => {
+        listener('active');
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+      expect(mockAnalyzeImage).toHaveBeenCalledTimes(1);
+      expect(sendFailureBeacon).toHaveBeenCalledWith('ocr', 'interrupted');
+    });
+
+    it('with camera permission denied, the library route still works inside recovery', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByLabelText, getByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      permissionControl.granted = false;
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan ingredient label'));
+      });
+      expect(getByText('Camera access')).toBeTruthy();
+
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://picked.jpg' }] } as any);
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Choose a photo instead'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+      expect(recoveryEvents('photo_started')).toEqual([['flow-1', 'not_found', 'photo_started', { source: 'picker' }]]);
+      expect(mockPush.mock.calls[0][0].params).toMatchObject({ recoveryFlowId: 'flow-1' });
+    });
+  });
+
+  describe('exiting recovery', () => {
+    it('"Scan another product" from the prompt beacons exited and returns to normal scanning', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByLabelText, getByText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan another product'));
+      });
+
+      expect(queryByText('Product not found')).toBeNull();
+      expect(getByText('Point at a label, menu, or barcode')).toBeTruthy();
+      expect(recoveryEvents('exited')).toEqual([['flow-1', 'not_found', 'exited']]);
+    });
+
+    it('the exit pill in photo-only capture does the same', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      const { getByTestId, getByLabelText, getByText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan ingredient label'));
+      });
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan another product'));
+      });
+      expect(queryByText('PHOTO ONLY')).toBeNull();
+      expect(getByText('Point at a label, menu, or barcode')).toBeTruthy();
+      expect(recoveryEvents('exited')).toEqual([['flow-1', 'missing_context', 'exited']]);
+    });
+
+    it('does not immediately reopen on the same barcode: 2 s re-arm, then the dismissed code is silently ignored for 60 s', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByLabelText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan another product'));
+      });
+
+      // Scanner is disarmed for the re-arm window
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeDefined();
+
+      // Same code, still in frame: silence — no lookup, no prompt, no toast
+      await scan(getByTestId);
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(1);
+      expect(queryByText('Product not found')).toBeNull();
+      expect(recoveryEvents('shown')).toHaveLength(1);
+
+      // A different code works right away
+      mockLookupBarcode.mockResolvedValueOnce(UNMARKED_CAUTION as any);
+      await scan(getByTestId, '0012345678905');
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(2);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+
+      // After the TTL the same code is retryable — as a fresh flow
+      await act(async () => {
+        jest.advanceTimersByTime(60000);
+      });
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      await scan(getByTestId);
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(3);
+      expect(recoveryEvents('shown')).toEqual([
+        ['flow-1', 'not_found', 'shown'],
+        ['flow-2', 'not_found', 'shown'],
+      ]);
+    });
+
+    it('a completed flow suppresses its barcode too — Back with the product still in frame does not reopen the question the photo just answered', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByTestId, getByLabelText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan ingredient label'));
+      });
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of the ingredient label'));
+      });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      // Same code: no lookup (which would also be a server scan event), no prompt
+      await scan(getByTestId);
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(1);
+      expect(queryByText('Not enough information')).toBeNull();
+      expect(recoveryEvents('shown')).toHaveLength(1);
+
+      // A different product scans normally
+      mockLookupBarcode.mockResolvedValueOnce(UNMARKED_CAUTION as any);
+      await scan(getByTestId, '0012345678905');
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(2);
+      expect(mockPush).toHaveBeenCalledTimes(2);
+    });
+
+    it('an exit within the lookup re-arm window still holds the scanner for the full 2 s', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByLabelText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+        fireEvent.press(getByLabelText('Scan another product'));
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1000); // the lookup's own timer would have fired here
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeDefined();
+    });
+
+    it('opening Recents from photo-only capture exits the flow', async () => {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const { getByTestId, getByLabelText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Scan ingredient label'));
+      });
+      await act(async () => {
+        fireEvent.press(getByLabelText('View recent scans'));
+      });
+      expect(mockPush).toHaveBeenCalledWith('/recents');
+      expect(recoveryEvents('exited')).toEqual([['flow-1', 'not_found', 'exited']]);
+      expect(queryByText('PHOTO ONLY')).toBeNull();
+    });
+
+    it('Recents outside a flow beacons nothing', async () => {
+      const { getByLabelText } = render(<CameraScreen />);
+      await act(async () => {
+        fireEvent.press(getByLabelText('View recent scans'));
+      });
+      expect(mockPush).toHaveBeenCalledWith('/recents');
+      expect(mockSendRecoveryEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stale and unfocused callbacks', () => {
+    it('a barcode response that lands after Cancel neither pushes a result nor opens recovery', async () => {
+      let resolveLookup: (r: any) => void = () => {};
+      mockLookupBarcode.mockReturnValueOnce(new Promise((r) => { resolveLookup = r; }) as any);
+      const { getByTestId, getByText, queryByText } = render(<CameraScreen />);
+
+      await act(async () => {
+        getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      expect(getByText(`Looking up barcode ${BARCODE}…`)).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(getByText('Cancel'));
+      });
+      expect(sendFailureBeacon).toHaveBeenCalledWith('barcode', 'cancelled', expect.any(Number));
+
+      await act(async () => {
+        resolveLookup(MISSING_CONTEXT);
+      });
+      expect(queryByText('Not enough information')).toBeNull();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockSendRecoveryEvent).not.toHaveBeenCalled();
+    });
+
+    it('a 404 that lands after Cancel does not open the recovery prompt', async () => {
+      let rejectLookup: (e: any) => void = () => {};
+      mockLookupBarcode.mockReturnValueOnce(new Promise((_, r) => { rejectLookup = r; }) as any);
+      const { getByTestId, getByText, queryByText } = render(<CameraScreen />);
+      await act(async () => {
+        getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      await act(async () => {
+        fireEvent.press(getByText('Cancel'));
+      });
+      await act(async () => {
+        rejectLookup(new APIError('Product not found', 'not_found'));
+      });
+      expect(queryByText('Product not found')).toBeNull();
+      expect(mockSendRecoveryEvent).not.toHaveBeenCalled();
+    });
+
+    it('never starts a lookup while the screen is under Results or Recents', async () => {
+      const { getByTestId } = render(<CameraScreen />);
+      const handler = getByTestId('camera-view').props.onBarcodeScanned;
+      expect(handler).toBeDefined();
+
+      await act(async () => {
+        focusControl.blur();
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+      await act(async () => {
+        await handler({ data: BARCODE, type: 'ean13' }); // queued callback
+      });
+      expect(mockLookupBarcode).not.toHaveBeenCalled();
+
+      await act(async () => {
+        focusControl.focus();
+      });
+      expect(getByTestId('camera-view').props.onBarcodeScanned).toBeDefined();
+    });
   });
 });
