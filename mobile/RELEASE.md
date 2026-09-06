@@ -133,7 +133,12 @@ Context still worth knowing:
   `auth.token` from this file in both upload phases regardless of how Xcode launched.
   Validate with `SENTRY_PROPERTIES=ios/sentry.properties npx sentry-cli info`.
   Note: `ios/` is gitignored and **wiped by `prebuild` (step 4)**, so add the token
-  *after* prebuild. Without it the build still succeeds but ships without source maps
+  *after* prebuild. **Append — never overwrite.** Prebuild's Sentry plugin writes
+  `defaults.url` / `defaults.org=aaron-roy` / `defaults.project=glutenornot-mobile`
+  into that file; replacing it with only the token makes every build fail in the
+  "Bundle React Native code" phase with `A project ID or slug is required`
+  (1.5.0, 2026-09-05). Safe form:
+  `echo "auth.token=$(grep ^token= ~/.sentryclirc | cut -d= -f2-)" >> ios/sentry.properties`. Without it the build still succeeds but ships without source maps
   (Sentry stack traces stay minified).
   **As of 1.3.0 the token also lives permanently in `~/.sentryclirc`** (`[auth]`
   `token=…`, perms 600) — sentry-cli reads that global file from Xcode build phases
