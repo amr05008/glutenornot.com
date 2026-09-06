@@ -22,3 +22,5 @@ Claude does everything scriptable: preflight (`tsc`, jest, clean `main`), the 4-
 ## Close-out (part of the release, not optional)
 
 After submission: update `mobile/RELEASE.md`'s "Last shipped" header, write the session log + index entry, tag `vX.Y.Z` (runbook step 7), and record the post-release watch items (Sentry `glutenornot-mobile`, PostHog `scan` platform attribution). If reality diverged from the runbook at any step, fix the runbook in the same commit — that's how it stays trustworthy.
+
+**Then re-run the doc pass, even if `/wrap-up` already ran this session.** A release changes project state after any earlier wrap-up: the root `CLAUDE.md` "Active plans" line ("in build" → shipped, with the post-release read), the `README.md` feature list, the runbook's step-1 test count, the plan file's status header and §D checkboxes, and the release-state memory. Grep for the stale phrases rather than trusting what you wrote earlier — on 1.5.0 (2026-09-05) the wrap-up ran between merge and release and all four were missed until Aaron asked.
