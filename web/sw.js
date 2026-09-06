@@ -12,7 +12,8 @@
 // PRECACHE_FILES — the fetch handler is cache-first and runtime-caches every
 // same-origin page, so a visited policy is pinned until CACHE_NAME changes.
 // Any user-facing HTML edit needs this bump, not just the precached assets.
-const CACHE_NAME = 'glutenornot-v7';
+// v8: privacy policy discloses the barcode-recovery funnel events + flow ID.
+const CACHE_NAME = 'glutenornot-v8';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

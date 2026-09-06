@@ -25,6 +25,13 @@ export interface AnalysisResult {
   menu_items?: MenuItem[];
   product_name?: string;
   barcode?: string;
+  // Barcode path only (plans/barcode-recovery-2026-09-05.md): the server found
+  // a product but had no ingredient/allergen context to analyze — the caution
+  // verdict is "we can't tell", not a judgement on ingredients. Set from
+  // context construction server-side, never from prose. Absent on every
+  // evidence-backed result; a new client branches only on this known value
+  // and treats anything else as a normal result.
+  result_reason?: 'missing_context';
 }
 
 // Verdict display metadata. Colors come from verdictColors (theme.ts); `glyph`
@@ -45,6 +52,7 @@ export const CONFIDENCE_LEVEL: Record<Confidence, number> = {
 export const API_URL = 'https://www.glutenornot.com/api/analyze';
 export const BARCODE_API_URL = 'https://www.glutenornot.com/api/barcode';
 export const TRACK_API_URL = 'https://www.glutenornot.com/api/track';
+export const RECOVERY_API_URL = 'https://www.glutenornot.com/api/recovery';
 
 // Barcode types relevant for food products
 export const FOOD_BARCODE_TYPES = [

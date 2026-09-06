@@ -16,6 +16,11 @@ const SCAN_EVENT = 'scan';
 // Failures get their own event (not a property on `scan`) so every existing
 // insight counting `scan` keeps meaning "successful scans".
 const SCAN_FAILED_EVENT = 'scan_failed';
+// Barcode-to-photo recovery funnel (plans/barcode-recovery-2026-09-05.md §7):
+// a few interaction/outcome events per recovery flow, tied together by a
+// random flow ID that lives only in the client's memory. Its own event so it
+// can never inflate `scan` or `scan_failed`.
+const BARCODE_RECOVERY_EVENT = 'barcode_recovery';
 
 /**
  * Build the PostHog event properties for a scan, omitting absent optional fields.
@@ -93,6 +98,32 @@ function buildScanFailureProperties({ method, reason, platform, appVersion, coun
   // of what you scanned" and no product names in analytics, and a UPC resolves
   // to a product name. Missed barcodes are visible only in ephemeral Vercel
   // runtime logs (see the not_found console.log in barcode.js).
+  if (country != null) props.$geoip_country_code = country;
+  if (region != null) props.$geoip_subdivision_1_code = region;
+  if (city != null) props.$geoip_city_name = city;
+  return props;
+}
+
+/**
+ * Build the PostHog event properties for one stage of a barcode recovery flow.
+ * Bounded enums only — the endpoint (api/recovery.js) has already rebuilt the
+ * payload from an allowlist, so nothing here can carry a barcode, product
+ * name, ingredient text, or explanation. `flow_id` is a random UUID minted by
+ * the client when a recovery state is first shown; it identifies the flow,
+ * not a product, a person, or a device.
+ * Pure — no I/O.
+ */
+function buildRecoveryProperties({ flowId, reason, stage, source, resultMode, verdict, confidence, platform, appVersion, country, region, city } = {}) {
+  const props = { flow_id: flowId, reason, stage };
+  // photo_started only: shutter vs library pick
+  if (source != null) props.source = source;
+  // result_displayed only: what the recovered photo turned into. A menu result
+  // is tracked as a menu, not counted as a successful label recovery.
+  if (resultMode != null) props.result_mode = resultMode;
+  if (verdict != null) props.verdict = verdict;
+  if (confidence != null) props.confidence = confidence;
+  if (platform != null) props.platform = platform;
+  if (appVersion != null) props.app_version = appVersion;
   if (country != null) props.$geoip_country_code = country;
   if (region != null) props.$geoip_subdivision_1_code = region;
   if (city != null) props.$geoip_city_name = city;
@@ -198,6 +229,29 @@ async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));
 }
 
+/**
+ * Fire-and-forget: record one stage of a barcode recovery flow. Same safety
+ * contract as {@link trackScan} — a failure is logged and swallowed.
+ *
+ * @param {object} input
+ * @param {string} [input.ip]               client IP, hashed into the distinct ID
+ * @param {string} input.flowId             random v4 UUID for this recovery flow
+ * @param {'not_found'|'missing_context'} input.reason  why the barcode came up empty
+ * @param {'shown'|'photo_started'|'result_displayed'|'exited'} input.stage
+ * @param {'camera'|'picker'} [input.source]           photo_started only
+ * @param {'label'|'menu'} [input.resultMode]          result_displayed only
+ * @param {'safe'|'caution'|'unsafe'} [input.verdict]  result_displayed only
+ * @param {'high'|'medium'|'low'} [input.confidence]   result_displayed only
+ * @param {'ios'|'web'|'unknown'} [input.platform]
+ * @param {string} [input.appVersion]
+ * @param {string} [input.country]
+ * @param {string} [input.region]
+ * @param {string} [input.city]
+ */
+async function trackBarcodeRecovery({ ip, ...fields } = {}) {
+  return captureEvent(BARCODE_RECOVERY_EVENT, ip, buildRecoveryProperties(fields));
+}
+
 async function captureEvent(event, ip, properties) {
   const apiKey = process.env.POSTHOG_API_KEY;
   if (!apiKey) return; // not configured — no-op
@@ -247,11 +301,14 @@ function getWaitUntil() {
 export {
   SCAN_EVENT,
   SCAN_FAILED_EVENT,
+  BARCODE_RECOVERY_EVENT,
   buildScanProperties,
   buildScanFailureProperties,
+  buildRecoveryProperties,
   anonId,
   normalizeClient,
   normalizeAppVersion,
   trackScan,
   trackScanFailure,
+  trackBarcodeRecovery,
 };

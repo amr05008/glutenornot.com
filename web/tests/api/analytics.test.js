@@ -17,13 +17,16 @@ vi.mock('posthog-node', () => ({
 import {
   buildScanProperties,
   buildScanFailureProperties,
+  buildRecoveryProperties,
   anonId,
   normalizeClient,
   normalizeAppVersion,
   trackScan,
   trackScanFailure,
+  trackBarcodeRecovery,
   SCAN_EVENT,
   SCAN_FAILED_EVENT,
+  BARCODE_RECOVERY_EVENT,
 } from '../../../api/_analytics.js';
 
 describe('SCAN_EVENT', () => {
@@ -441,5 +444,72 @@ describe('timing properties (plans/weak-signal-upload-2026-08-28.md)', () => {
     const props = buildScanFailureProperties({ method: 'barcode', reason: 'not_found' });
     expect(props).not.toHaveProperty('elapsed_ms');
     expect(props).not.toHaveProperty('ocr_ms');
+  });
+});
+
+describe('barcode_recovery event (plans/barcode-recovery-2026-09-05.md §7)', () => {
+  it('BARCODE_RECOVERY_EVENT is the stable event name "barcode_recovery"', () => {
+    expect(BARCODE_RECOVERY_EVENT).toBe('barcode_recovery');
+  });
+
+  it('buildRecoveryProperties carries flow_id, reason, stage and the optional bounded fields', () => {
+    const props = buildRecoveryProperties({
+      flowId: '9f1c2c9e-3f0a-4d1b-8e6a-2b7f0c5d9e11',
+      reason: 'missing_context',
+      stage: 'result_displayed',
+      resultMode: 'label',
+      verdict: 'caution',
+      confidence: 'low',
+      platform: 'ios',
+      appVersion: '1.5.0',
+      country: 'US',
+      region: 'MA',
+      city: 'Boston',
+    });
+    expect(props).toEqual({
+      flow_id: '9f1c2c9e-3f0a-4d1b-8e6a-2b7f0c5d9e11',
+      reason: 'missing_context',
+      stage: 'result_displayed',
+      result_mode: 'label',
+      verdict: 'caution',
+      confidence: 'low',
+      platform: 'ios',
+      app_version: '1.5.0',
+      $geoip_country_code: 'US',
+      $geoip_subdivision_1_code: 'MA',
+      $geoip_city_name: 'Boston',
+    });
+  });
+
+  it('buildRecoveryProperties omits absent optionals and has no method — it is not a scan', () => {
+    const props = buildRecoveryProperties({ flowId: 'f', reason: 'not_found', stage: 'shown', source: 'camera' });
+    expect(props).toEqual({ flow_id: 'f', reason: 'not_found', stage: 'shown', source: 'camera' });
+    expect(props).not.toHaveProperty('method');
+  });
+
+  describe('trackBarcodeRecovery', () => {
+    const originalKey = process.env.POSTHOG_API_KEY;
+    afterEach(() => {
+      if (originalKey === undefined) delete process.env.POSTHOG_API_KEY;
+      else process.env.POSTHOG_API_KEY = originalKey;
+      posthogControl.captured = [];
+    });
+
+    it('no-ops without throwing when POSTHOG_API_KEY is unset', async () => {
+      delete process.env.POSTHOG_API_KEY;
+      await expect(trackBarcodeRecovery({ ip: '1.2.3.4', flowId: 'f', reason: 'not_found', stage: 'shown' })).resolves.toBeUndefined();
+      expect(posthogControl.captured).toHaveLength(0);
+    });
+
+    it('captures a barcode_recovery event under the hashed IP, never the raw IP', async () => {
+      process.env.POSTHOG_API_KEY = 'phc_test';
+      await trackBarcodeRecovery({ ip: '203.0.113.9', flowId: 'f', reason: 'not_found', stage: 'exited' });
+      expect(posthogControl.captured).toHaveLength(1);
+      const [ev] = posthogControl.captured;
+      expect(ev.event).toBe('barcode_recovery');
+      expect(ev.distinctId).toBe(anonId('203.0.113.9'));
+      expect(ev.properties).toEqual({ flow_id: 'f', reason: 'not_found', stage: 'exited' });
+      expect(JSON.stringify(ev)).not.toContain('203.0.113.9');
+    });
   });
 });
