@@ -170,16 +170,36 @@ Made for the celiac community. Stay safe out there!
 
 ### App Privacy Section (Data Collection)
 
-Based on the privacy policy, select:
-- **Data Not Collected** for most categories
-- Under "Data Linked to You": None
-- Under "Data Used to Track You": None
+Must match `web/privacy-policy.html` (the "Anonymous Analytics" section) and
+`api/ANALYTICS.md`. As of 2026-09-05 the app sends anonymous, server-side
+analytics: one `scan` / `scan_failed` event per scan attempt (verdict, scan
+type, outcome, confidence, platform, app version, model, detected language,
+photo size / readable-character counts, and a city-level region derived from
+the IP at the edge — the IP itself is only hashed), plus a few `barcode_recovery`
+events when a barcode lookup comes up empty (step reached, reason, photo
+source, result kind/verdict/confidence, and a temporary random flow ID that is
+not derived from the device or the product). Nothing is linked to an identity
+and nothing is used for tracking.
 
-When completing Apple's privacy questionnaire:
-- No analytics tracking
-- No user accounts
-- No advertising
-- Photos processed but not stored
+Suggested answers in App Store Connect (confirm against Apple's current
+category definitions before saving):
+- **Data Collected, not linked to you, used for Analytics:** "Product
+  Interaction" (scan attempts/outcomes, recovery steps) and "Other Usage Data"
+  / "Other Diagnostic Data" (photo size, character counts, timings, failure
+  reasons).
+- **Coarse Location:** the server derives a city-level region from the IP for
+  analytics. Apple counts server-side derivation as collection — declare it
+  (not linked, analytics) unless you first remove the `$geoip_*` properties.
+- **Data Linked to You:** None. **Data Used to Track You:** None. No accounts,
+  no advertising, no device/advertising identifiers.
+- Photos are processed and discarded, never stored (the App Store listing's
+  "photos never leave your device" line is inaccurate — the photo is uploaded
+  for analysis — and should be reworded).
+- Crash reports go to Sentry (Diagnostics → Crash Data, not linked).
+
+The earlier "No analytics tracking" answer here was wrong from the day
+analytics shipped (2026-06); if the live questionnaire still says that, fix it
+with this release.
 
 ---
 

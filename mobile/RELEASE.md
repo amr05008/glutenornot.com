@@ -67,11 +67,34 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.4.3 (2026-08-28).
-- **No next iOS release is scheduled.** The next lever for weak-signal uploads
-  is plan toggle T2 (multipart instead of base64 JSON, ~25% fewer bytes on the
-  wire) — an api-contract change, its own PR, and a client build when it lands.
-  Auto-retry-with-backoff stays on the ROADMAP on its own merits.
+- **Barcode recovery** — PR #25, merged 2026-09-05 (`a216417`), plan
+  `plans/barcode-recovery-2026-09-05.md`. The api half is already live
+  (Vercel): `result_reason: "missing_context"` on the barcode no-data branch
+  and `POST /api/recovery` (verified 2026-09-05: 204 on a valid beacon, 400 on
+  an invalid one, 413 on an oversize body). **Needs an iOS build** for: the
+  neutral "Product not found" / "Not enough information" states (no more
+  toast / amber verdict on a barcode dead end), the photo-only recovery camera
+  (barcode detection off for the whole flow, labelled exit, torch/library/
+  shutter/Recents in the shipped positions), and the `barcode_recovery`
+  funnel beacons. Privacy policy already re-dated 2026-09-05 (sw.js v8).
+- **Before the build (step 2 smoke, on a physical device):** the two grills
+  agreed the one thing tests can't prove is react-navigation focus under the
+  modal result — confirm one real flow produces exactly one `shown`, one
+  `photo_started`, one `result_displayed` in PostHog (tag the build `-rc` so
+  it's excludable) and that no barcode lookup fires while the result modal is
+  up; then the plan's §10 list: hold a missing barcode in frame → recovery →
+  photograph the label without the barcode taking over; exit with the same
+  code in frame stays quiet; largest Dynamic Type + VoiceOver on A/B/C; small
+  iPhone safe areas; camera denied + library allowed; torch through remount.
+- **App Store Connect at submission:** update the privacy questionnaire — see
+  `APP_STORE_SUBMISSION.md` §"App Privacy" (it said "No analytics tracking",
+  which has been wrong since June).
+- **After public release:** day-14 funnel read (day-28 if under 20 started
+  flows) — query in `api/ANALYTICS.md` under `barcode_recovery`; count from the
+  App Store release date, not submission.
+- The next weak-signal lever remains plan toggle T2 (multipart instead of
+  base64 JSON) — its own PR and build. Auto-retry-with-backoff stays on the
+  ROADMAP on its own merits.
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the
