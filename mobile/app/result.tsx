@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
 import { MenuResultCard } from '../components/MenuResultCard';
 import { reportError } from '../services/errorReporting';
@@ -41,13 +41,24 @@ export default function ResultScreen() {
   // (hooks rules), so it re-checks validity.
   useEffect(() => {
     if (!result || fromHistory === '1') return;
+    try {
+      JSON.parse(result);
+    } catch {
+      return;
+    }
+    const timer = setTimeout(() => { maybeRequestReview(count); }, REVIEW_PROMPT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    if (!result || fromHistory === '1') return;
     let parsed: AnalysisResult;
     try {
       parsed = JSON.parse(result);
     } catch {
       return;
     }
-
+    // Mount alone is not proof of display: the route must also be focused.
     // Recovery funnel: a validated, fresh result is on screen. Bounded enums
     // only — never the explanation, the product, or anything from the result
     // beyond its verdict class. Once per flow (the service dedupes remounts).
@@ -63,10 +74,7 @@ export default function ResultScreen() {
         ...(CONFIDENCES.has(parsed.confidence) ? { confidence: parsed.confidence } : {}),
       });
     }
-
-    const timer = setTimeout(() => { maybeRequestReview(count); }, REVIEW_PROMPT_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [result, fromHistory, recoveryFlowId, recoveryReason]));
 
   if (!result) {
     return (

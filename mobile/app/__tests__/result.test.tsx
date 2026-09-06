@@ -4,10 +4,19 @@ import { render, act } from '@testing-library/react-native';
 // --- Mocks ---
 
 let mockParams: Record<string, string | undefined> = {};
-jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => mockParams,
-  useRouter: () => ({ back: jest.fn() }),
-}));
+let mockFocused = true;
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react');
+  return {
+    useLocalSearchParams: () => mockParams,
+    useRouter: () => ({ back: jest.fn() }),
+    useFocusEffect: (effect: () => void | (() => void)) => {
+      useEffect(() => {
+        if (mockFocused) return effect();
+      }, [effect, mockFocused]);
+    },
+  };
+});
 
 jest.mock('react-native-safe-area-context', () => {
   const inset = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -49,6 +58,7 @@ const SAFE_RESULT = JSON.stringify({
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  mockFocused = true;
 });
 
 afterEach(() => {
@@ -152,6 +162,16 @@ describe('ResultScreen recovery funnel (plans/barcode-recovery-2026-09-05.md)', 
       jest.advanceTimersByTime(2000);
     });
     expect(mockMaybeRequestReview).toHaveBeenCalledWith(4);
+  });
+
+  it('does not claim display for a mounted but unfocused result', () => {
+    mockParams = { result: LABEL, scanCount: '4', recoveryFlowId: FLOW, recoveryReason: 'not_found' };
+    mockFocused = false;
+    const { rerender } = render(<ResultScreen />);
+    expect(mockSendRecoveryEvent).not.toHaveBeenCalled();
+    mockFocused = true;
+    rerender(<ResultScreen />);
+    expect(mockSendRecoveryEvent).toHaveBeenCalledTimes(1);
   });
 
   it('tracks a menu result as a menu — not a successful label recovery', () => {

@@ -113,6 +113,7 @@ jest.mock('../../services/storage', () => ({
 
 import { AppState } from 'react-native';
 import CameraScreen from '../index';
+import type { AnalysisResult } from '../../constants/verdicts';
 import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError } from '../../services/api';
 import { addRecentScan, incrementLifetimeScanCount } from '../../services/storage';
 import { sendRecoveryEvent } from '../../services/recovery';
@@ -128,6 +129,9 @@ const mockLaunchLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunc
 beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
+  mockAnalyzeImage.mockReset();
+  mockLookupBarcode.mockReset();
+  mockLaunchLibrary.mockReset();
   jest.spyOn(console, 'log').mockImplementation();
   jest.spyOn(console, 'warn').mockImplementation();
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
@@ -843,7 +847,7 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
     barcode: BARCODE,
     data_source: 'openfoodfacts',
     result_reason: 'missing_context',
-  } as const;
+  } satisfies AnalysisResult & { data_source: string };
   const UNMARKED_CAUTION = {
     mode: 'label',
     verdict: 'caution',
@@ -853,7 +857,7 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
     confidence: 'low',
     product_name: SENTINEL_NAME,
     barcode: BARCODE,
-  } as const;
+  } satisfies AnalysisResult;
   const LABEL_RESULT = {
     mode: 'label',
     verdict: 'unsafe',
@@ -861,7 +865,7 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
     allergen_warnings: [],
     explanation: 'Contains wheat.',
     confidence: 'high',
-  } as const;
+  } satisfies AnalysisResult;
 
   async function scan(getByTestId: any, code = BARCODE) {
     await act(async () => {
@@ -1332,6 +1336,142 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
   });
 
   describe('stale and unfocused callbacks', () => {
+    it('does not beacon shown for a recovery prompt under an unfocused route', async () => {
+      let resolveLookup!: (r: typeof MISSING_CONTEXT) => void;
+      mockLookupBarcode.mockReturnValueOnce(new Promise((resolve) => { resolveLookup = resolve; }));
+      const { getByTestId } = render(<CameraScreen />);
+      await act(async () => {
+        getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      await act(async () => { focusControl.blur(); });
+      await act(async () => { resolveLookup(MISSING_CONTEXT); });
+      expect(recoveryEvents('shown')).toHaveLength(0);
+      await act(async () => { focusControl.focus(); });
+      expect(recoveryEvents('shown')).toHaveLength(1);
+    });
+
+    it('rapid double shutter presses start only one recovery photo', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT);
+      mockTakePictureAsync.mockReturnValueOnce(new Promise(() => {}));
+      const { getByTestId, getByLabelText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => { fireEvent.press(getByLabelText('Scan ingredient label')); });
+      await act(async () => {
+        const shutter = getByLabelText('Capture photo of the ingredient label');
+        fireEvent.press(shutter);
+        fireEvent.press(shutter);
+      });
+      expect(mockTakePictureAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('late photo errors and progress cannot disturb a replacement scan', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT);
+      let rejectOld!: (e: Error) => void;
+      mockAnalyzeImage.mockReturnValueOnce(new Promise((_, reject) => { rejectOld = reject; }));
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file://photo.jpg' }] } as any);
+      const { getByTestId, getByLabelText, getByText, queryByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => { fireEvent.press(getByLabelText('Scan ingredient label')); });
+      await act(async () => { fireEvent.press(getByLabelText('Upload photo from library')); });
+      const oldProgress = mockAnalyzeImage.mock.calls[0][2]!;
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      await act(async () => { fireEvent.press(getByLabelText('Upload photo from library')); });
+      await act(async () => {
+        oldProgress({ phase: 'reading' });
+        rejectOld(new APIError('Offline', 'network'));
+      });
+      expect(getByText('Uploading photo…')).toBeTruthy();
+      expect(queryByText("You're offline")).toBeNull();
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      expect(mockAnalyzeImage.mock.calls[1][1]!.aborted).toBe(true);
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+    });
+
+    it('does not pre-apply the torch after waiting on the recovery prompt', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT);
+      const { getByTestId, getByLabelText } = render(<CameraScreen />);
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        fireEvent.press(getByLabelText('Turn on flashlight'));
+      });
+      await scan(getByTestId);
+      await act(async () => { jest.advanceTimersByTime(2000); });
+      await act(async () => { jest.advanceTimersByTime(750); });
+      cameraReadyControl.auto = false;
+      await act(async () => { fireEvent.press(getByLabelText('Scan ingredient label')); });
+      expect(getByTestId('camera-view').props.enableTorch).toBe(false);
+      await act(async () => { cameraReadyControl.fire(); });
+      await act(async () => { jest.advanceTimersByTime(750); });
+      expect(getByTestId('camera-view').props.enableTorch).toBe(true);
+    });
+
+    it.each(['200', '404'])('a cancelled barcode %s cannot clear a newer photo request', async (outcome) => {
+      let resolveLookup!: (r: typeof MISSING_CONTEXT) => void;
+      let rejectLookup!: (e: Error) => void;
+      mockLookupBarcode.mockReturnValueOnce(new Promise((resolve, reject) => {
+        resolveLookup = resolve;
+        rejectLookup = reject;
+      }));
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://new.jpg' }] } as any);
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      const { getByTestId, getByLabelText, getByText } = render(<CameraScreen />);
+      await act(async () => {
+        getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      await act(async () => { fireEvent.press(getByLabelText('Upload photo from library')); });
+      const newerSignal = mockAnalyzeImage.mock.calls[0][1]!;
+      await act(async () => {
+        if (outcome === '200') resolveLookup(MISSING_CONTEXT);
+        else rejectLookup(new APIError('Product not found', 'not_found'));
+      });
+      expect(getByText('Uploading photo…')).toBeTruthy();
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      expect(newerSignal.aborted).toBe(true);
+      expect(sendFailureBeacon).toHaveBeenLastCalledWith('ocr', 'cancelled', expect.any(Number));
+    });
+
+    it('a cancelled recovery photo cannot complete the flow after its replacement started', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      let resolveOld!: (r: typeof LABEL_RESULT) => void;
+      mockAnalyzeImage.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file://photo.jpg' }] } as any);
+      const { getByTestId, getByLabelText, getByText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => { fireEvent.press(getByLabelText('Scan ingredient label')); });
+      await act(async () => { fireEvent.press(getByLabelText('Upload photo from library')); });
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      await act(async () => { fireEvent.press(getByLabelText('Upload photo from library')); });
+      await act(async () => { resolveOld(LABEL_RESULT); });
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(addRecentScan).not.toHaveBeenCalled();
+      expect(getByText('Uploading photo…')).toBeTruthy();
+      await act(async () => { fireEvent.press(getByLabelText('Cancel scan')); });
+      expect(mockAnalyzeImage.mock.calls[1][1]!.aborted).toBe(true);
+      expect(getByText('PHOTO ONLY')).toBeTruthy();
+    });
+
+    it('leaving recovery for Recents while the shutter is pending discards the late photo', async () => {
+      mockLookupBarcode.mockResolvedValueOnce(MISSING_CONTEXT as any);
+      let resolvePhoto!: (photo: { uri: string }) => void;
+      mockTakePictureAsync.mockReturnValueOnce(new Promise((resolve) => { resolvePhoto = resolve; }));
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByTestId, getByLabelText } = render(<CameraScreen />);
+      await scan(getByTestId);
+      await act(async () => { fireEvent.press(getByLabelText('Scan ingredient label')); });
+      await act(async () => { fireEvent.press(getByLabelText('Capture photo of the ingredient label')); });
+      await act(async () => {
+        fireEvent.press(getByLabelText('View recent scans'));
+        focusControl.blur();
+      });
+      await act(async () => { resolvePhoto({ uri: 'file://late.jpg' }); });
+      expect(mockAnalyzeImage).not.toHaveBeenCalled();
+      expect(mockPush.mock.calls).toEqual([['/recents']]);
+      expect(addRecentScan).not.toHaveBeenCalled();
+    });
+
     it('a barcode response that lands after Cancel neither pushes a result nor opens recovery', async () => {
       let resolveLookup: (r: any) => void = () => {};
       mockLookupBarcode.mockReturnValueOnce(new Promise((r) => { resolveLookup = r; }) as any);

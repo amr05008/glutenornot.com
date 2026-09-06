@@ -173,6 +173,15 @@ describe('POST /api/recovery (barcode recovery funnel, plans/barcode-recovery-20
       expect(trackBarcodeRecovery).not.toHaveBeenCalled();
     });
 
+    it('measures UTF-8 bytes, not UTF-16 characters, without content-length', async () => {
+      const body = { flow_id: FLOW, reason: 'not_found', stage: 'shown', pad: '界'.repeat(400) };
+      expect(JSON.stringify(body).length).toBeLessThan(MAX_BODY_BYTES);
+      expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeGreaterThan(MAX_BODY_BYTES);
+      const res = await post(body);
+      expect(res.statusCode).toBe(413);
+      expect(trackBarcodeRecovery).not.toHaveBeenCalled();
+    });
+
     it('oversized body is caught by the serialized size even without a content-length header', async () => {
       const res = await post({ flow_id: FLOW, reason: 'not_found', stage: 'shown', pad: 'x'.repeat(MAX_BODY_BYTES) });
       expect(res.statusCode).toBe(413);

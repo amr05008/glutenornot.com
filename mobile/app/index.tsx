@@ -126,6 +126,13 @@ export default function CameraScreen() {
   const cameraReadyAtRef = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
+  // Native shutter/picker promises cannot be aborted. Invalidate their owner
+  // on Cancel, exit, blur, or unmount so a late photo cannot start a new scan.
+  const photoSelectionRef = useRef<object | null>(null);
+  const invalidatePhotoSelection = useCallback(() => {
+    photoSelectionRef.current = null;
+    capturingRef.current = false;
+  }, []);
   const scanningRef = useRef(false);
   const router = useRouter();
 
@@ -168,15 +175,30 @@ export default function CameraScreen() {
     };
   }, []);
 
+  const rearmScannerAfter = useCallback((ms: number) => {
+    if (rearmTimerRef.current) {
+      clearTimeout(rearmTimerRef.current);
+      timersRef.current.delete(rearmTimerRef.current);
+    }
+    scanningRef.current = true;
+    setBarcodeScanned(true);
+    rearmTimerRef.current = after(ms, () => {
+      rearmTimerRef.current = null;
+      scanningRef.current = false;
+      setBarcodeScanned(false);
+    });
+  }, [after]);
+
   useFocusEffect(
     useCallback(() => {
       focusedRef.current = true;
       setIsFocused(true);
       return () => {
         focusedRef.current = false;
+        invalidatePhotoSelection();
         setIsFocused(false);
       };
-    }, [])
+    }, [invalidatePhotoSelection])
   );
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -196,6 +218,8 @@ export default function CameraScreen() {
   // time asleep, so it carries no elapsed. Before this a cancel left no trace
   // anywhere (plans/weak-signal-upload-2026-08-28.md).
   const abandonScan = useCallback((reason: 'cancelled' | 'interrupted') => {
+    invalidatePhotoSelection();
+    const wasBarcode = abortControllerRef.current && scanMethodRef.current === 'barcode';
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -207,7 +231,15 @@ export default function CameraScreen() {
     }
     setIsAnalyzing(false);
     setBarcodeScanned(false);
-  }, []);
+    scanningRef.current = false;
+    if (wasBarcode) rearmScannerAfter(SCANNER_REARM_MS);
+  }, [invalidatePhotoSelection, rearmScannerAfter]);
+
+  useEffect(() => () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    invalidatePhotoSelection();
+  }, [invalidatePhotoSelection]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -231,13 +263,15 @@ export default function CameraScreen() {
     return () => sub.remove();
   }, [abandonScan]);
 
-  // The camera unmounts whenever the spinner or a system state replaces it —
+  const cameraMounted = !!permission?.granted && !isAnalyzing && !systemState && recovery?.phase !== 'prompt';
+
+  // The camera unmounts whenever the spinner, recovery prompt, or a system state replaces it —
   // reset the ready gate so the torch is re-applied as a false→true prop
   // transition on the remounted live camera (the manual-toggle path) instead
   // of being pre-set at mount, which expo-camera has fumbled on iOS.
   useEffect(() => {
-    if (isAnalyzing || systemState) setCameraReady(false);
-  }, [isAnalyzing, systemState]);
+    if (!cameraMounted) setCameraReady(false);
+  }, [cameraMounted]);
 
   // Apply the torch only after the camera has been ready for a settle period.
   // On-device (1.4.0 TestFlight): a transition fired right at onCameraReady is
@@ -270,13 +304,13 @@ export default function CameraScreen() {
   // after 2s. Only while the camera is actually mounted — otherwise the timer
   // would mark an unmounted camera ready and defeat the remount gate above.
   useEffect(() => {
-    if (cameraReady || isAnalyzing || systemState) return;
+    if (cameraReady || !cameraMounted) return;
     const timeout = setTimeout(() => {
       cameraReadyAtRef.current = Date.now();
       setCameraReady(true);
     }, 2000);
     return () => clearTimeout(timeout);
-  }, [cameraReady, isAnalyzing, systemState]);
+  }, [cameraReady, cameraMounted]);
 
   const handleCancel = useCallback(() => abandonScan('cancelled'), [abandonScan]);
 
@@ -303,32 +337,19 @@ export default function CameraScreen() {
     );
   }, []);
 
-  const rearmScannerAfter = useCallback((ms: number) => {
-    if (rearmTimerRef.current) {
-      clearTimeout(rearmTimerRef.current);
-      timersRef.current.delete(rearmTimerRef.current);
-    }
-    scanningRef.current = true;
-    setBarcodeScanned(true);
-    rearmTimerRef.current = after(ms, () => {
-      rearmTimerRef.current = null;
-      scanningRef.current = false;
-      setBarcodeScanned(false);
-    });
-  }, [after]);
-
   // Explicit exit — "Scan another product", or opening Recents. Beacons
   // `exited`, suppresses the dismissed code, and re-arms the scanner after a
   // beat. Picker cancel, couldn't-read, offline and Cancel are NOT exits.
   const exitRecovery = useCallback(() => {
     const flow = recoveryRef.current;
     if (!flow) return;
+    invalidatePhotoSelection();
     sendRecoveryEvent(flow.id, flow.reason, 'exited');
     suppressCode(flow.barcode);
     rearmScannerAfter(SCANNER_REARM_MS);
     setSystemState(null);
     setRecoveryFlow(null);
-  }, [suppressCode, rearmScannerAfter, setRecoveryFlow]);
+  }, [suppressCode, rearmScannerAfter, setRecoveryFlow, invalidatePhotoSelection]);
 
   const openRecents = useCallback(() => {
     exitRecovery(); // no-op outside a flow
@@ -337,12 +358,12 @@ export default function CameraScreen() {
 
   // `shown` fires when the prompt is actually on screen — not when the
   // response arrived — once per flow (the service dedupes remounts).
-  const promptVisible = !isAnalyzing && !systemState && recovery?.phase === 'prompt';
+  const promptVisible = isFocused && !isAnalyzing && !systemState && recovery?.phase === 'prompt';
   useEffect(() => {
     if (promptVisible && recovery) sendRecoveryEvent(recovery.id, recovery.reason, 'shown');
   }, [promptVisible, recovery]);
 
-  const navigateToResult = useCallback(async (result: AnalysisResult) => {
+  const navigateToResult = useCallback(async (result: AnalysisResult, controller: AbortController) => {
     // A result completes any open recovery flow: hand its ID to the result
     // screen (which beacons `result_displayed` once it's actually on screen)
     // and clear it here, so Back lands on normal capture and the next
@@ -351,12 +372,16 @@ export default function CameraScreen() {
     // would re-open the prompt (and, for missing_context, re-run the lookup)
     // for a question the photo just answered.
     const flow = recoveryRef.current;
+    const stillCurrent = () => abortControllerRef.current === controller && !controller.signal.aborted && focusedRef.current;
+    if (!stillCurrent()) return;
+    const scanCount = await incrementLifetimeScanCount();
+    if (!stillCurrent()) return;
+    await addRecentScan(result); // never throws — history can't break a scan
+    if (!stillCurrent()) return;
     if (flow) {
       suppressCode(flow.barcode);
       setRecoveryFlow(null);
     }
-    const scanCount = await incrementLifetimeScanCount();
-    await addRecentScan(result); // never throws — history can't break a scan
     resumedFromBackground.current = false;
     router.push({
       pathname: '/result',
@@ -415,6 +440,8 @@ export default function CameraScreen() {
     const flow = recoveryRef.current;
     if (flow) sendRecoveryEvent(flow.id, flow.reason, 'photo_started', { source });
 
+    const controller = new AbortController();
+    const ownsRequest = () => abortControllerRef.current === controller && !controller.signal.aborted;
     try {
       setIsAnalyzing(true);
       // Honest from t=0: nothing has been read until the upload lands.
@@ -424,9 +451,8 @@ export default function CameraScreen() {
       // The abort handle exists from the first frame of the spinner, BEFORE the
       // resize: a Cancel during those hundreds of ms used to find no controller,
       // so nothing aborted, nothing beaconed, and the request went out anyway —
-      // then the result pushed itself over the camera. analyzeImage honors an
-      // already-aborted signal and throws AbortError, which is swallowed as usual.
-      const controller = new AbortController();
+      // then the result pushed itself over the camera. Check ownership after
+      // the resize as well as after analysis; stale work never reaches the API.
       abortControllerRef.current = controller;
       scanMethodRef.current = 'ocr';
       scanStartedAtRef.current = Date.now();
@@ -443,6 +469,7 @@ export default function CameraScreen() {
         { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
 
+      if (!ownsRequest()) return;
       if (!manipulated.base64) {
         throw new Error('Failed to process image');
       }
@@ -453,6 +480,7 @@ export default function CameraScreen() {
 
       // Analyze with API, passing the abort signal for cancellation
       const result = await analyzeImage(manipulated.base64, controller.signal, (progress) => {
+        if (!ownsRequest()) return;
         if (progress.phase === 'uploading') {
           setLoadingMessage(`Uploading photo… ${progress.pct}%`);
         } else {
@@ -460,15 +488,19 @@ export default function CameraScreen() {
           setLoadingMessage('Reading ingredients…');
         }
       });
-      abortControllerRef.current = null;
+      if (!ownsRequest()) return;
       if (__DEV__) console.log('API result:', result);
 
-      await navigateToResult(result);
+      await navigateToResult(result, controller);
     } catch (error) {
-      handleError(error, resumedFromBackground.current ? 'scan_after_resume' : 'normal_scan');
+      if (ownsRequest()) handleError(error, resumedFromBackground.current ? 'scan_after_resume' : 'normal_scan');
     } finally {
-      abortControllerRef.current = null;
-      setIsAnalyzing(false);
+      // Returning from try/catch still runs finally. A stale operation must
+      // not clear its replacement's spinner or steal its Cancel controller.
+      if (ownsRequest()) {
+        abortControllerRef.current = null;
+        setIsAnalyzing(false);
+      }
     }
   };
 
@@ -479,7 +511,7 @@ export default function CameraScreen() {
     // a Results/Recents route.
     if (recoveryRef.current || !focusedRef.current) return;
     // Synchronous ref check prevents duplicate calls before state updates
-    if (scanningRef.current || capturingRef.current) return;
+    if (scanningRef.current || capturingRef.current || abortControllerRef.current) return;
 
     const { data: barcodeData } = scanResult;
     if (!barcodeData) return;
@@ -516,8 +548,7 @@ export default function CameraScreen() {
       // Ownership check: if this request was cancelled or interrupted while
       // in flight, a response that still lands must not push a result or
       // open a recovery state over whatever the user is doing now.
-      if (abortControllerRef.current !== controller) return;
-      abortControllerRef.current = null;
+      if (abortControllerRef.current !== controller || controller.signal.aborted) return;
       if (__DEV__) console.log('Barcode result:', result);
 
       // Known marker only — anything unmarked is a normal result, never
@@ -527,11 +558,11 @@ export default function CameraScreen() {
         return;
       }
 
-      await navigateToResult(result);
+      await navigateToResult(result, controller);
     } catch (error) {
       // A 404 whose body read raced a Cancel/background still surfaces as
       // not_found — it must not open the prompt over what the user did next.
-      if (controller.signal.aborted) return;
+      if (abortControllerRef.current !== controller || controller.signal.aborted) return;
       if (error instanceof APIError && error.type === 'not_found') {
         recentNotFound.current.add(barcodeData);
         after(RECENT_MISS_TTL_MS, () => recentNotFound.current.delete(barcodeData));
@@ -542,16 +573,20 @@ export default function CameraScreen() {
       }
       handleError(error, 'barcode_scan');
     } finally {
-      abortControllerRef.current = null;
-      setIsAnalyzing(false);
-      // Reset barcode scan state after a delay to prevent rapid re-scanning
-      rearmScannerAfter(SCANNER_REARM_MS);
+      if (abortControllerRef.current === controller && !controller.signal.aborted) {
+        abortControllerRef.current = null;
+        setIsAnalyzing(false);
+        // Only the owner may reset the scanner or replace its re-arm timer.
+        rearmScannerAfter(SCANNER_REARM_MS);
+      }
     }
   };
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isAnalyzing) return;
+    if (!cameraRef.current || isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current) return;
 
+    const selection = {};
+    photoSelectionRef.current = selection;
     capturingRef.current = true;
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -559,6 +594,7 @@ export default function CameraScreen() {
         base64: false,
       });
 
+      if (photoSelectionRef.current !== selection) return;
       if (!photo?.uri) {
         Alert.alert('Error', 'Failed to capture photo');
         return;
@@ -567,24 +603,33 @@ export default function CameraScreen() {
       await processAndAnalyze(photo.uri, 'camera');
     } catch (error) {
       // Camera can unmount if a barcode scan triggers navigation mid-capture
-      console.warn('Photo capture failed:', error);
+      if (photoSelectionRef.current === selection) console.warn('Photo capture failed:', error);
     } finally {
-      capturingRef.current = false;
+      if (photoSelectionRef.current === selection) invalidatePhotoSelection();
     }
   };
 
   const handlePickImage = async () => {
-    if (isAnalyzing) return;
+    if (isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
+    const selection = {};
+    photoSelectionRef.current = selection;
+    capturingRef.current = true;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
 
-    if (result.canceled) return;
+      if (photoSelectionRef.current !== selection || result.canceled) return;
 
-    await processAndAnalyze(result.assets[0].uri, 'picker');
+      await processAndAnalyze(result.assets[0].uri, 'picker');
+    } catch (error) {
+      if (photoSelectionRef.current === selection) handleError(error, 'photo_picker');
+    } finally {
+      if (photoSelectionRef.current === selection) invalidatePhotoSelection();
+    }
   };
 
   if (!permission) {

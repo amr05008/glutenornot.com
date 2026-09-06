@@ -76,7 +76,7 @@ function bodyTooLarge(req) {
   // Vercel has already parsed the JSON; measure what it produced so a missing
   // or lying content-length can't sneak a large payload past the cap.
   try {
-    return JSON.stringify(req.body).length > MAX_BODY_BYTES;
+    return Buffer.byteLength(JSON.stringify(req.body), 'utf8') > MAX_BODY_BYTES;
   } catch {
     return true;
   }
