@@ -885,6 +885,22 @@ describe('barcode handler analytics', () => {
       expect(res.body).not.toHaveProperty('result_reason');
     });
 
+    it('strips a result_reason the model itself emits — only the handler may set the marker', async () => {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const analysis = { verdict: 'unsafe', flagged_ingredients: ['wheat'], allergen_warnings: [], explanation: 'Wheat.', confidence: 'high', result_reason: 'missing_context' };
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return { ok: true, json: async () => ({ status: 1, product: { product_name: 'Bread', ingredients_text: 'wheat flour, water' } }) };
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.verdict).toBe('unsafe');
+      expect(res.body).not.toHaveProperty('result_reason');
+    });
+
     it('never marks a not_found — that stays a 404 failure, not a fabricated result', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OFF_MISS));
       const res = mockRes();

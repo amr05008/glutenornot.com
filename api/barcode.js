@@ -683,6 +683,12 @@ function parseClaudeResponse(content) {
     result.verdict = normalizeVerdict(result.verdict);
 
     result.mode = 'label';
+    // The missing-context marker is set by the handler from context
+    // construction only. Whatever the model emits — including a stray
+    // "result_reason" if crowd-edited ingredient text reads like an
+    // instruction — must not reach the client as an evidence-backed result
+    // wearing the missing-data flag.
+    delete result.result_reason;
     result.flagged_ingredients = result.flagged_ingredients || [];
     result.allergen_warnings = result.allergen_warnings || [];
     result.explanation = result.explanation || '';
