@@ -73,6 +73,7 @@ glutenornot.com/
 │   ├── analyze.js          # Serverless: OCR + Claude analysis
 │   ├── barcode.js          # Barcode lookup (waterfall: Open Food Facts → USDA → Nutritionix → UPCitemdb)
 │   ├── track.js            # Client failure beacon (timeout/network/cancelled/interrupted scan_failed)
+│   ├── recovery.js         # Barcode-recovery funnel beacon (barcode_recovery: flow_id + reason + stage, content-free)
 │   └── health.js           # Health check
 └── package.json            # Monorepo root
 ```
@@ -92,6 +93,7 @@ glutenornot.com/
 2. Barcode is sent to `/api/barcode`
 3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix (paid key only) → UPCitemdb (keyless)
 4. Claude analyzes the retrieved ingredients and returns verdict
+5. If the product isn't found, or is found without ingredient/allergen data (the response is marked `result_reason: "missing_context"`), the iOS app shows a neutral "we can't tell" state instead of a verdict and offers a photo-only capture of the ingredient label, which then goes through the photo path above
 
 ## Deployment
 
@@ -130,6 +132,7 @@ Tests cover:
 - Safety floor on low-text OCR reads
 - The gluten-free label-claim rule (prompt text + claim detection), plus a live eval against the real prompt and model — `web/tests/api/evals/`, opt-in with `RUN_LIVE_EVALS=1` and an `ANTHROPIC_API_KEY`, ~86 calls per run
 - Analytics event properties (app version, model, capture metrics, label-claim presence)
+- The barcode missing-context marker and the recovery funnel endpoint (allowlist, size cap, rate cap, no product content)
 - Rate limiting logic
 - API error handling
 
