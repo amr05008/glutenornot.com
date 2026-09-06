@@ -160,7 +160,13 @@ export default async function handler(req, res) {
       ? `${product.brand} - ${product.product_name}`
       : product.product_name;
 
-    // If we have no useful data at all, return a caution result directly
+    // If we have no useful data at all, return a caution result directly.
+    // `result_reason: 'missing_context'` (plans/barcode-recovery-2026-09-05.md)
+    // is the additive marker a new client uses to show a neutral "not enough
+    // information" recovery state instead of an amber verdict. It is set here
+    // and only here — from context construction, never from Claude prose — so
+    // an evidence-backed low-confidence caution is never mistaken for missing
+    // data. Old clients ignore the field and keep rendering the caution.
     if (!ingredientContext) {
       incrementRateLimit(clientIP);
       await trackScan({
@@ -185,6 +191,7 @@ export default async function handler(req, res) {
         product_name: displayName || null,
         barcode: cleanBarcode,
         data_source: product.source,
+        result_reason: 'missing_context',
       });
     }
 

@@ -48,9 +48,55 @@ version to send — a stale web build is already visible as `platform: unknown`)
 - `elapsed_ms` (`timeout` / `network` / `cancelled` only) — how long the user waited before the attempt died or they cancelled. Untrusted input: whitelisted to a finite number and clamped to `[0, 120000]`, dropped otherwise. This is the only measurement of the upload leg. `interrupted` deliberately carries none — it fires on the transition to the background, and would otherwise include time asleep. For `cancelled` the clock starts with the spinner (before the photo resize and the connectivity probe), so it matches what the user experienced; for `timeout` / `network` it starts after the probe, ~1–2 s later.
 - `ocr_ms` (server-side OCR-path failures, when known) — Vision round-trip before the failure.
 
+**`barcode_recovery`** — the barcode-to-photo recovery funnel
+(`plans/barcode-recovery-2026-09-05.md` §7). When a barcode lookup comes up
+empty — HTTP 404 `not_found`, or HTTP 200 carrying `result_reason:
+"missing_context"` (the additive marker `api/barcode.js` sets only on the
+no-ingredient-data branch) — the iOS client shows a neutral recovery state
+that offers photographing the label, and beacons the stages of that flow via
+`POST /api/recovery`. Its own event so it can never inflate `scan` or
+`scan_failed`; those keep their existing semantics (a no-context 200 is still
+a `scan` with `had_ingredient_data=false`, a 404 is still `scan_failed`
+`not_found`). Properties:
+
+- `flow_id` — random v4 UUID minted by the client when a recovery state is
+  first shown; shared by every stage of that one flow and nothing else. Lives
+  only in the client's memory and transient route params — never in Recents,
+  never a device/user ID, never derived from the barcode. A new recovery
+  journey gets a new ID. **Funnel queries count unique `flow_id`s per stage,
+  not raw events** — `photo_started` can repeat on retries.
+- `reason` — `not_found` | `missing_context`.
+- `stage` — `shown` (the state actually rendered, once per flow) |
+  `photo_started` (the user committed a photo to analysis — a shutter press or
+  a library pick, *not* merely tapping "Scan ingredient label") |
+  `result_displayed` (a validated fresh result screen is on screen, once per
+  flow) | `exited` (explicit close / "Scan another product" / opening Recents
+  before completion). Picker cancel, offline, couldn't-read and Cancel are
+  *not* exits — the flow stays open. A flow that ends without `exited` or
+  `result_displayed` (process death, lost beacon) is unknown, not synthesized
+  as abandonment.
+- `source` (`photo_started` only) — `camera` | `picker`.
+- `result_mode`, `verdict`, `confidence` (`result_displayed` only) — bounded
+  enums. A `menu` result is tracked as a menu and is **not** a successful
+  label recovery.
+- `platform`, `app_version`, `$geoip_*` — same normalization as the other events.
+
+The endpoint rebuilds the payload from an allowlist: unknown `stage` /
+`reason` / non-v4 `flow_id` → 400; an invalid optional is dropped, never
+bucketed; bodies over 1 KB → 413; any other property is discarded. Its own
+per-IP cap (200/day, sized for several events per scan) — separate from the
+scan quota and from `/api/track`'s 50/day, with the same per-instance caveat.
+
+**Primary read** (first at day 14 after public release, day 28 if under 20
+started flows): unique flows with a displayed *label* result ÷ unique flows
+that started a photo, split by `reason` and `app_version`; also shown →
+photo_started and shown → displayed-label conversion. Report the
+low-confidence share and menu outcomes separately — a displayed result is not
+proof the evidence was complete.
+
 ## Privacy invariant
 
-**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second.
+**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
 
 ## Excluding non-user traffic
 

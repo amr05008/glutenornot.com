@@ -790,6 +790,111 @@ describe('barcode handler analytics', () => {
     );
   });
 
+  describe('missing-context marker (plans/barcode-recovery-2026-09-05.md)', () => {
+    // The client needs a deterministic way to tell "the database had nothing
+    // to analyze" from a genuine low-confidence caution — without parsing the
+    // explanation prose. The marker is set from context construction only.
+    it('marks a name-only record with result_reason: missing_context, keeping the legacy shape', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: 1, product: { product_name: 'Mystery Snack' } }),
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.result_reason).toBe('missing_context');
+      // Everything an old client reads is untouched
+      expect(res.body).toMatchObject({
+        mode: 'label',
+        verdict: 'caution',
+        confidence: 'low',
+        flagged_ingredients: [],
+        allergen_warnings: [],
+        product_name: 'Mystery Snack',
+        barcode: '12345678',
+        data_source: 'openfoodfacts',
+      });
+      expect(res.body.explanation).toContain('no ingredient data');
+      // scan telemetry is unchanged: still a scan, not a scan_failed
+      expect(trackScan).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'barcode', confidence: 'low', hadIngredientData: false })
+      );
+      expect(trackScanFailure).not.toHaveBeenCalled();
+    });
+
+    it('marks a labels-tags-only record (gluten-free label but no ingredients/allergens) as missing_context', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: 1,
+          product: { product_name: 'Rice Crackers', labels_tags: ['en:no-gluten'], allergens_tags: [] },
+        }),
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.result_reason).toBe('missing_context');
+      expect(res.body.verdict).toBe('caution');
+    });
+
+    it('marks a name-only UPCitemdb hit as missing_context too', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('upcitemdb')) {
+          return {
+            ok: true,
+            json: async () => ({ code: 'OK', total: 1, items: [{ ean: '0012345678905', title: 'Corn Chips', brand: 'BrandCo' }] }),
+          };
+        }
+        return OFF_MISS;
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '012345678905' }, headers: {} }, res);
+      expect(res.body.result_reason).toBe('missing_context');
+      expect(res.body.data_source).toBe('upcitemdb');
+    });
+
+    it('does not mark an allergen-tags-only record — that still goes to Claude (analysis policy unchanged)', async () => {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const analysis = { verdict: 'caution', flagged_ingredients: [], allergen_warnings: ['gluten'], explanation: 'Tag only.', confidence: 'low' };
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return { ok: true, json: async () => ({ status: 1, product: { product_name: 'Oat Bar', allergens_tags: ['en:gluten'] } }) };
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toHaveProperty('result_reason');
+      expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ hadIngredientData: true }));
+    });
+
+    it('does not mark an evidence-backed result, even a low-confidence caution', async () => {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      const analysis = { verdict: 'caution', flagged_ingredients: ['natural flavors'], allergen_warnings: [], explanation: 'Ambiguous.', confidence: 'low' };
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return { ok: true, json: async () => ({ status: 1, product: { product_name: 'Chips', ingredients_text: 'corn, natural flavors' } }) };
+      }));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.confidence).toBe('low');
+      expect(res.body).not.toHaveProperty('result_reason');
+    });
+
+    it('never marks a not_found — that stays a 404 failure, not a fabricated result', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OFF_MISS));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+      expect(res.statusCode).toBe(404);
+      expect(res.body).not.toHaveProperty('result_reason');
+      expect(res.body).not.toHaveProperty('verdict');
+    });
+  });
+
   it('tracks a successful analysis with Claude confidence and had_ingredient_data true', async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key';
     const analysis = {
