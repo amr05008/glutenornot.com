@@ -176,7 +176,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (91 tests as of the 1.4.3 version header)
+npm test             # jest — all green (148 tests as of the 1.5.0 version header)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
