@@ -202,6 +202,10 @@ export default function CameraScreen() {
   );
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  // The request whose result has landed and is being committed (see
+  // navigateToResult / abandonScan). Cleared wherever the owner clears
+  // abortControllerRef.
+  const settledRef = useRef<AbortController | null>(null);
   // What the in-flight request is and when it went out — for the beacon an
   // abandoned scan sends. The API layer can't tell a user cancel from a
   // system abort (both are the same AbortSignal), so the screen reports it.
@@ -218,10 +222,20 @@ export default function CameraScreen() {
   // time asleep, so it carries no elapsed. Before this a cancel left no trace
   // anywhere (plans/weak-signal-upload-2026-08-28.md).
   const abandonScan = useCallback((reason: 'cancelled' | 'interrupted') => {
-    invalidatePhotoSelection();
-    const wasBarcode = abortControllerRef.current && scanMethodRef.current === 'barcode';
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    const current = abortControllerRef.current;
+    // A result that has already landed is committing — count, history, push.
+    // A Cancel or background in that window must not abort it, beacon a
+    // false failure for a scan the server counted as a success, or drop a
+    // result whose count is already spent. Let it push; its own finally
+    // clears the spinner.
+    if (current && settledRef.current === current) return;
+    const wasBarcode = current && scanMethodRef.current === 'barcode';
+    if (current) {
+      // Only a request actually in flight has a photo to discard. A pending
+      // library pick with nothing in flight survives an app switch — the
+      // user went to find the photo, and picking it must still analyze.
+      invalidatePhotoSelection();
+      current.abort();
       abortControllerRef.current = null;
       if (reason === 'cancelled') {
         sendFailureBeacon(scanMethodRef.current, 'cancelled', Date.now() - scanStartedAtRef.current);
@@ -238,6 +252,7 @@ export default function CameraScreen() {
   useEffect(() => () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    settledRef.current = null;
     invalidatePhotoSelection();
   }, [invalidatePhotoSelection]);
 
@@ -347,7 +362,6 @@ export default function CameraScreen() {
     sendRecoveryEvent(flow.id, flow.reason, 'exited');
     suppressCode(flow.barcode);
     rearmScannerAfter(SCANNER_REARM_MS);
-    setSystemState(null);
     setRecoveryFlow(null);
   }, [suppressCode, rearmScannerAfter, setRecoveryFlow, invalidatePhotoSelection]);
 
@@ -372,12 +386,14 @@ export default function CameraScreen() {
     // would re-open the prompt (and, for missing_context, re-run the lookup)
     // for a question the photo just answered.
     const flow = recoveryRef.current;
-    const stillCurrent = () => abortControllerRef.current === controller && !controller.signal.aborted && focusedRef.current;
-    if (!stillCurrent()) return;
+    if (abortControllerRef.current !== controller || controller.signal.aborted || !focusedRef.current) return;
+    // From here the result is committed as one unit: count, history, push.
+    // Marking it settled makes abandonScan stand aside, so a Cancel or
+    // background landing during the storage writes can't strand a spent
+    // count or a history entry with no result shown.
+    settledRef.current = controller;
     const scanCount = await incrementLifetimeScanCount();
-    if (!stillCurrent()) return;
     await addRecentScan(result); // never throws — history can't break a scan
-    if (!stillCurrent()) return;
     if (flow) {
       suppressCode(flow.barcode);
       setRecoveryFlow(null);
@@ -499,6 +515,7 @@ export default function CameraScreen() {
       // not clear its replacement's spinner or steal its Cancel controller.
       if (ownsRequest()) {
         abortControllerRef.current = null;
+        settledRef.current = null;
         setIsAnalyzing(false);
       }
     }
@@ -575,6 +592,7 @@ export default function CameraScreen() {
     } finally {
       if (abortControllerRef.current === controller && !controller.signal.aborted) {
         abortControllerRef.current = null;
+        settledRef.current = null;
         setIsAnalyzing(false);
         // Only the owner may reset the scanner or replace its re-arm timer.
         rearmScannerAfter(SCANNER_REARM_MS);
@@ -626,7 +644,12 @@ export default function CameraScreen() {
 
       await processAndAnalyze(result.assets[0].uri, 'picker');
     } catch (error) {
-      if (photoSelectionRef.current === selection) handleError(error, 'photo_picker');
+      // A picker failure is not a scan failure: report it, but never show
+      // the raw native error string.
+      if (photoSelectionRef.current === selection) {
+        reportError(error, { context: 'photo_picker' });
+        Alert.alert('Error', "Couldn't open your photo library. Please try again.");
+      }
     } finally {
       if (photoSelectionRef.current === selection) invalidatePhotoSelection();
     }

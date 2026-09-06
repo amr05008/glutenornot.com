@@ -1335,6 +1335,100 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
     });
   });
 
+  describe('second-grill regressions on the normal path', () => {
+    it('a Cancel that lands while the result is being saved does not drop it — no abort, no false beacon, the result still pushes', async () => {
+      let resolveCount: (n: number) => void = () => {};
+      (incrementLifetimeScanCount as jest.Mock).mockReturnValueOnce(new Promise((r) => { resolveCount = r; }));
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByLabelText, getByText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Capture photo of ingredients'));
+      });
+      // analyzeImage has resolved; navigateToResult is waiting on the count write
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async () => {
+        fireEvent.press(getByText('Cancel'));
+      });
+      await act(async () => {
+        resolveCount(7);
+      });
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('7');
+      expect(addRecentScan).toHaveBeenCalledWith(LABEL_RESULT);
+      expect(sendFailureBeacon).not.toHaveBeenCalled();
+    });
+
+    it('backgrounding during the history write of a barcode result does not strand a spent count', async () => {
+      let resolveSave: () => void = () => {};
+      (addRecentScan as jest.Mock).mockReturnValueOnce(new Promise<void>((r) => { resolveSave = r; }));
+      mockLookupBarcode.mockResolvedValueOnce(UNMARKED_CAUTION as any);
+      const { getByTestId } = render(<CameraScreen />);
+
+      // Not awaited: the handler itself is waiting on the save we hold open
+      await act(async () => {
+        getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+
+      const listener = (AppState.addEventListener as jest.Mock).mock.calls.at(-1)[1];
+      await act(async () => {
+        listener('background');
+      });
+      await act(async () => {
+        resolveSave();
+      });
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(sendFailureBeacon).not.toHaveBeenCalled();
+    });
+
+    it('an app switch while the photo library is open does not discard the photo the user then picks', async () => {
+      let resolvePick: (r: any) => void = () => {};
+      mockLaunchLibrary.mockReturnValueOnce(new Promise((r) => { resolvePick = r; }) as any);
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT as any);
+      const { getByLabelText } = render(<CameraScreen />);
+
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      const listener = (AppState.addEventListener as jest.Mock).mock.calls.at(-1)[1];
+      await act(async () => {
+        listener('background');
+      });
+      await act(async () => {
+        listener('active');
+      });
+      await act(async () => {
+        resolvePick({ canceled: false, assets: [{ uri: 'file://picked.jpg' }] });
+      });
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+      expect(mockAnalyzeImage).toHaveBeenCalledTimes(1);
+      expect(sendFailureBeacon).not.toHaveBeenCalled();
+    });
+
+    it('a picker failure shows a fixed message, never the raw native error', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation();
+      mockLaunchLibrary.mockRejectedValueOnce(new Error('NSPhotoLibrary SENTINEL_NATIVE'));
+      const { getByLabelText } = render(<CameraScreen />);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(alertSpy.mock.calls)).not.toContain('SENTINEL_NATIVE');
+      // and the shutter/picker are usable again
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: true } as any);
+      await act(async () => {
+        fireEvent.press(getByLabelText('Upload photo from library'));
+      });
+      expect(mockLaunchLibrary).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('stale and unfocused callbacks', () => {
     it('does not beacon shown for a recovery prompt under an unfocused route', async () => {
       let resolveLookup!: (r: typeof MISSING_CONTEXT) => void;
