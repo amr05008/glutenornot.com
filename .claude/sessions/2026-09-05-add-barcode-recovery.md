@@ -1,7 +1,7 @@
 ---
 date: 2026-09-05
-summary: Implemented plans/barcode-recovery-2026-09-05.md end to end — missing-context marker + content-free barcode_recovery funnel (api, live via Vercel), neutral dead-end states + photo-only capture (iOS, needs a build); three grill rounds (mine, Aaron's own agent's race-hardening commit, then a fresh reviewer that caught two normal-path regressions from that commit); PR #25 merged
-tags: [barcode, recovery, analytics, mobile, grill, privacy]
+summary: Implemented plans/barcode-recovery-2026-09-05.md end to end — missing-context marker + content-free barcode_recovery funnel (api, live via Vercel), neutral dead-end states + photo-only capture (iOS); three grill rounds (mine, Aaron's own agent's race-hardening commit, then a fresh reviewer that caught two normal-path regressions from that commit); PR #25 merged; iOS 1.5.0 built, TestFlight-smoked with PostHog evidence for every funnel stage, submitted (build 2), tagged
+tags: [barcode, recovery, analytics, mobile, grill, privacy, release]
 ---
 
 ## Summary
@@ -33,7 +33,13 @@ gitignored. Merged as PR #25; api half verified live; iOS build not started.
 - **Race hardening from a second agent was kept, then corrected.** `08cb7af` closed real holes (barcode detected under an open picker → two concurrent requests; torch pre-applied after the prompt) but regressed two normal-path windows (a landed result aborted mid-commit with a false failure beacon; a picked photo discarded after an app switch). Probes proved both; fixed in `11b39c2` with the "settled" marker. Lesson: race fixes are where new races hide — a fresh reviewer with probes, not the author, found them.
 - **The `-rc` app-version tag** makes smoke traffic excludable by rule; the live checks used `1.4.3-rc.smoke`.
 
+## Release (same session)
+- Version lockstep 1.4.3 → 1.5.0 (`a843927`), prebuild + MARKETING_VERSION/team patches, simulator Release build proved launch with `app.config` 1.5.0. Aaron archived/uploaded; smoke on TestFlight build 1; submitted build 2 (identical source). Tag `v1.5.0` at `a843927`, GitHub release.
+- TestFlight evidence from PostHog (21:36–21:46 local): four `barcode_recovery` flows, one event per stage each — three completions (two `missing_context`, one `not_found`) and one `exited`; `result_displayed` landed 0.26 s after the server `scan`, so the modal focus effect fires; no lookups under the result. This closed the one gap the tests could not (focus semantics). Exclude that window from the day-14 read.
+- Sentry properties: I overwrote prebuild's generated file with only the token → first simulator build failed ("A project ID or slug is required"); fixed by restoring `defaults.org/project`; runbook step 0 now says append (`d102893`).
+- App Store Connect: description rewritten by Aaron (drops "photos never leave your device"; now mentions barcodes and anonymous usage stats), privacy labels already had Product Interaction + Coarse Location; Crash Data + Performance Data recommended.
+
 ## Notes
-- The one thing no test proves: react-navigation focus semantics under the modal result (every test mocks `useFocusEffect`). Device smoke must confirm exactly one `result_displayed` per flow and no lookup under the modal.
+- The focus-semantics gap is now closed by the TestFlight evidence above; keep the device check in the runbook for future changes to `index.tsx`'s ownership model.
 - Live verification 2026-09-05: `/api/recovery` 204/400/413 as designed; an evidence-backed barcode carries no marker; an unknown code returns 404. The `missing_context` branch could not be exercised live (Open Food Facts search was down); it is unit-tested and state B on the phone will prove it.
 - Code comments cite `plans/barcode-recovery-2026-09-05.md`, which is gitignored (existing convention for this repo's plans).

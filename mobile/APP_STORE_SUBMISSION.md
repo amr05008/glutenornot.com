@@ -6,9 +6,9 @@ Reference document for completing the GlutenOrNot App Store listing.
 
 ## Current Status
 
-**SUBMITTED FOR REVIEW** - Feb 2, 2026 at 1:00 PM
+**SUBMITTED FOR REVIEW** — 2026-09-05, iOS 1.5.0 (build 2; build 1 was the TestFlight smoke build).
 
-Version 1.0.0 (Build 2) is waiting for Apple review. Release set to automatic upon approval.
+Listing description rewritten at this submission (below) — the old copy claimed "photos never leave your device". App Privacy answers reviewed (see §3). History: 1.0.0 (build 2) first submitted Feb 2, 2026.
 
 ### Completed
 - [x] App icon (1024x1024)
@@ -98,31 +98,29 @@ Instantly check if food is gluten-free. Just snap a photo of the ingredient labe
 
 ### Full Description
 ```
-GlutenOrNot instantly checks if packaged foods are safe for people with celiac disease. Point your camera at an ingredient label and get a clear verdict in seconds—no account required, completely free.
+GlutenOrNot instantly checks if menu items, packaged foods, and ingredient labels are safe for people with celiac disease. Point your camera at an ingredient label, barcode or restaurant menu and get a clear verdict in seconds. 
+
+No account required, and it's completely free.
 
 We built this because we have celiac disease ourselves. Figuring out what we could and couldn't eat was confusing at first, and we didn't want to pay for an app just to scan ingredients. We hope this makes it a little easier for you too.
 
 HOW IT WORKS
-
 1. Point your camera at an ingredient label
 2. Tap to scan
 3. Get a clear verdict: Safe, Caution, or Unsafe
 
 FEATURES
-
 - Instant results in seconds
-- AI-powered ingredient analysis
 - No account required
 - No ads, no subscriptions, no hidden costs
-- Photos never leave your device
+- Ingredient analysis powered by Anthropic's Claude models
 
 VERDICTS EXPLAINED
-✓ SAFE – No gluten-containing ingredients detected
-⚠ CAUTION – Contains oats or uncertain ingredients that may have cross-contamination risk
-✗ UNSAFE – Contains wheat, barley, rye, or other gluten sources
+SAFE – No gluten-containing ingredients detected
+CAUTION – Contains oats or uncertain ingredients that may have cross-contamination risk
+UNSAFE – Contains wheat, barley, rye, or other gluten sources
 
 PERFECT FOR
-
 - People with celiac disease
 - Gluten sensitivity or intolerance
 - Anyone following a gluten-free diet
@@ -132,13 +130,20 @@ IMPORTANT
 GlutenOrNot is a helpful tool but does not replace medical advice. Always check with manufacturers about cross-contamination and consult your healthcare provider about dietary restrictions. When in doubt, don't eat it.
 
 PRIVACY
-We don't collect personal data, require accounts, or store your photos. See our full privacy policy at glutenornot.com/privacy-policy
+We don't collect personal data or require accounts. Photos are analyzed and immediately discarded, never stored. Only anonymous usage statistics are recorded. See our full privacy policy at glutenornot.com/privacy-policy
 
 FEEDBACK
 Run into an issue or have feedback for us? Let us know with this form: https://forms.gle/SdJmYM8yahsz973E8
 ```
 
 ### What's New (Release Notes)
+
+1.5.0 (2026-09-05):
+```
+When a barcode isn't in our databases, or the database has no ingredient information, GlutenOrNot now says so plainly instead of guessing, and offers to scan the ingredient label instead. One tap opens a photo-only camera so the barcode can't take over. Same conservative gluten checks.
+```
+
+1.0.0:
 ```
 Initial release! GlutenOrNot helps you quickly check ingredient labels for gluten.
 
@@ -197,9 +202,12 @@ category definitions before saving):
   for analysis — and should be reworded).
 - Crash reports go to Sentry (Diagnostics → Crash Data, not linked).
 
-The earlier "No analytics tracking" answer here was wrong from the day
-analytics shipped (2026-06); if the live questionnaire still says that, fix it
-with this release.
+Live state checked 2026-09-05: App Store Connect already declared Product
+Interaction + Coarse Location (not linked, Analytics) — the "No analytics
+tracking" note that used to sit here was wrong, not the questionnaire.
+Recommended additions at the 1.5.0 submission: Diagnostics → Crash Data (Sentry,
+not linked, App Functionality) and Performance Data (scan timings / failure
+reasons, not linked, Analytics).
 
 ---
 

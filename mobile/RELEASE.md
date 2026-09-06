@@ -6,9 +6,48 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.4.3 — Weak-signal upload (2026-08-28)
+## ✅ Last shipped: v1.5.0 — Barcode recovery (2026-09-05)
 
-Submitted to App Store review on 2026-08-28 (**build 1**), the day it was scoped
+Submitted to App Store review on 2026-09-05 as **build 2** (build 1 was the
+TestFlight smoke build; identical source — the second archive was a re-upload
+of the same tree). Plan: `plans/barcode-recovery-2026-09-05.md` (local), PR #25
+(grilled twice — mine, then a fresh reviewer after a second agent's
+race-hardening commit, which had regressed two normal-path windows; fixed
+before merge). What changed on the phone: a barcode dead end — 404, or a 200 the
+server marks `result_reason: "missing_context"` — lands on a persistent neutral
+"Product not found" / "Not enough information" state instead of a toast or an
+amber Caution; "Scan ingredient label" opens a **photo-only** camera (barcode
+detection off for the whole flow, labelled exit top-left, torch / library /
+shutter / Recents in the shipped positions); those states never touch history,
+the scan count, or the rating prompt; explicit exit silently ignores the same
+code for 60 s. The api half (marker + `POST /api/recovery`) went live at the PR
+#25 merge, verified against production before the build.
+
+**TestFlight evidence (2026-09-05, build 1, Aaron's phone, 21:36–21:46 local):**
+four `barcode_recovery` flows under `app_version 1.5.0`, each with exactly one
+event per stage — three completions (`shown → photo_started → result_displayed`,
+two `missing_context`, one `not_found` preceded by a server `scan_failed
+not_found`) and one explicit exit (`shown → exited`, 10 s apart). The
+`result_displayed` beacon landed 0.26 s after the server's `scan` event, i.e.
+the focus effect on the modal fires as designed, and no barcode lookup ran
+while a result was up — the one property no test could prove. Couldn't-read
+(`ocr_failed` ×2), library route, camera-denied, Cancel/background, largest
+Dynamic Type and VoiceOver were all exercised by hand. **Exclude that window
+from the day-14 read.**
+
+**Post-release checks that matter for this one:** (1) day-14 funnel read from
+the *public release date* (day 28 if under 20 started flows) — query and target
+under `barcode_recovery` in `api/ANALYTICS.md`; (2) Sentry `glutenornot-mobile`
+for anything from `index.tsx` (the ownership model is new) or an unexpected
+rating-prompt path; (3) App Store privacy labels were updated at submission
+(Product Interaction, Coarse Location already declared; Crash Data + Performance
+Data recommended — see `APP_STORE_SUBMISSION.md`); (4) the listing description
+was rewritten to drop "photos never leave your device".
+
+**Runbook lesson (1.5.0):** `ios/sentry.properties` must be *appended to*, not
+overwritten — see step 0.
+
+Previous: v1.4.3 (2026-08-28, build 1) — weak-signal upload. Submitted to App Store review on 2026-08-28 (**build 1**), the day it was scoped
 — `plans/weak-signal-upload-2026-08-28.md`, from a field incident on 2-bar LTE.
 What changed on the phone: the OCR request goes over XHR so the reading screen
 shows **"Uploading photo… N%"** and only says "Reading ingredients…" once iOS
@@ -65,36 +104,15 @@ Context still worth knowing:
   Collected" → "Data Not Linked to You": Usage Data + Coarse Location) to match the
   rewritten privacy policy — keep the two in sync in future releases.
 
+
 ## ⏳ Pending on main (not yet shipped)
 
-- **Barcode recovery** — PR #25, merged 2026-09-05 (`a216417`), plan
-  `plans/barcode-recovery-2026-09-05.md`. The api half is already live
-  (Vercel): `result_reason: "missing_context"` on the barcode no-data branch
-  and `POST /api/recovery` (verified 2026-09-05: 204 on a valid beacon, 400 on
-  an invalid one, 413 on an oversize body). **Needs an iOS build** for: the
-  neutral "Product not found" / "Not enough information" states (no more
-  toast / amber verdict on a barcode dead end), the photo-only recovery camera
-  (barcode detection off for the whole flow, labelled exit, torch/library/
-  shutter/Recents in the shipped positions), and the `barcode_recovery`
-  funnel beacons. Privacy policy already re-dated 2026-09-05 (sw.js v8).
-- **Before the build (step 2 smoke, on a physical device):** the two grills
-  agreed the one thing tests can't prove is react-navigation focus under the
-  modal result — confirm one real flow produces exactly one `shown`, one
-  `photo_started`, one `result_displayed` in PostHog (tag the build `-rc` so
-  it's excludable) and that no barcode lookup fires while the result modal is
-  up; then the plan's §10 list: hold a missing barcode in frame → recovery →
-  photograph the label without the barcode taking over; exit with the same
-  code in frame stays quiet; largest Dynamic Type + VoiceOver on A/B/C; small
-  iPhone safe areas; camera denied + library allowed; torch through remount.
-- **App Store Connect at submission:** update the privacy questionnaire — see
-  `APP_STORE_SUBMISSION.md` §"App Privacy" (it said "No analytics tracking",
-  which has been wrong since June).
-- **After public release:** day-14 funnel read (day-28 if under 20 started
-  flows) — query in `api/ANALYTICS.md` under `barcode_recovery`; count from the
-  App Store release date, not submission.
-- The next weak-signal lever remains plan toggle T2 (multipart instead of
-  base64 JSON) — its own PR and build. Auto-retry-with-backoff stays on the
-  ROADMAP on its own merits.
+- Nothing — main is fully shipped as of v1.5.0 (2026-09-05).
+- **No next iOS release is scheduled.** Barcode recovery step 2 (bounded
+  enrichment of data-empty Open Food Facts hits) is gated on the day-14 funnel
+  read and its own feasibility table (plan §8); the weak-signal lever remains
+  plan toggle T2 (multipart upload) — an api-contract change, its own PR, and a
+  client build when it lands. Auto-retry-with-backoff stays on the ROADMAP.
 - Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
   its on-device confirmation rides the 1.4.1 TestFlight/production build —
   if "Turn on flashlight & retry" ever leaves the LED dark again, see the
