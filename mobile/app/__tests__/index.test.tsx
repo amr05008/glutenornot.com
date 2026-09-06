@@ -1336,6 +1336,13 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
   });
 
   describe('second-grill regressions on the normal path', () => {
+    beforeEach(() => {
+      // The AppState listener reads `appState.current.match(...)`; the mock
+      // ships no currentState, so seed it here rather than depend on an
+      // earlier describe having done so.
+      (AppState as any).currentState = 'active';
+    });
+
     it('a Cancel that lands while the result is being saved does not drop it — no abort, no false beacon, the result still pushes', async () => {
       let resolveCount: (n: number) => void = () => {};
       (incrementLifetimeScanCount as jest.Mock).mockReturnValueOnce(new Promise((r) => { resolveCount = r; }));
