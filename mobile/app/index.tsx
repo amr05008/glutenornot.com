@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, AppState } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, AppState, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -732,15 +732,26 @@ export default function CameraScreen() {
     );
   }
 
-  // Camera permission gate → designed system-state screen
+  // Camera permission gate → designed system-state screen.
+  // App Review (5.1.1(iv), 2026-09-07) rejected "Enable camera" as steering the
+  // user toward granting: the button before a system permission prompt must be
+  // neutral ("Continue" / "Next"). Once iOS will no longer show the prompt
+  // (denied with canAskAgain=false) a "Continue" tap would silently do nothing,
+  // so that case explains and links to Settings instead — Apple's own
+  // suggestion in the same review note.
   if (!permission.granted) {
+    const settingsOnly = permission.canAskAgain === false;
     return (
       <StateScreen
         icon="camera"
         title="Camera access"
-        body="GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored."
-        primary="Enable camera"
-        onPrimary={requestPermission}
+        body={
+          settingsOnly
+            ? 'Camera access is turned off for GlutenOrNot. You can turn it on in Settings, or choose a photo from your library instead.'
+            : 'GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored.'
+        }
+        primary={settingsOnly ? 'Open Settings' : 'Continue'}
+        onPrimary={settingsOnly ? () => Linking.openSettings() : requestPermission}
         secondary="Choose a photo instead"
         onSecondary={handlePickImage}
       />

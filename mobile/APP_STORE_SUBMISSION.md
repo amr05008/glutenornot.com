@@ -17,6 +17,11 @@ Listing description rewritten at this submission (below) — the old copy claime
 - [x] Privacy policy at `glutenornot.com/privacy-policy`
 - [x] EAS Build configured
 - [x] Camera permissions with clear descriptions
+  - ⚠️ **5.1.1(iv) rejection, 2026-09-07 (v1.5.0 build 2):** any in-app screen
+    shown *before* the system permission prompt must use a neutral button
+    ("Continue" / "Next"), never "Enable camera" / "Allow" / "Turn on". Explaining
+    *why* is fine; steering is not. If the user has already denied, link to
+    Settings instead. Fixed in build 3.
 - [x] Screenshots (4 at 6.5" size)
 - [x] App Store metadata (descriptions, keywords, etc.)
 - [x] App Store Connect configuration

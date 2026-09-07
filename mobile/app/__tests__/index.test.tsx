@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 // --- Mocks ---
 
@@ -12,8 +12,10 @@ const cameraReadyControl: { auto: boolean; fire: () => void } = {
   auto: true,
   fire: () => {},
 };
-// Tests can flip this to render the screen with camera permission denied.
-const permissionControl = { granted: true };
+// Tests can flip this to render the screen with camera permission denied;
+// canAskAgain=false models the "denied, iOS won't prompt again" state.
+const permissionControl = { granted: true, canAskAgain: true };
+const mockRequestPermission = jest.fn();
 jest.mock('expo-camera', () => {
   const { forwardRef, useEffect, useImperativeHandle } = require('react');
   const { View } = require('react-native');
@@ -28,7 +30,10 @@ jest.mock('expo-camera', () => {
       }));
       return <View testID="camera-view" {...props} />;
     }),
-    useCameraPermissions: () => [{ granted: permissionControl.granted }, jest.fn()],
+    useCameraPermissions: () => [
+      { granted: permissionControl.granted, canAskAgain: permissionControl.canAskAgain },
+      mockRequestPermission,
+    ],
   };
 });
 
@@ -137,6 +142,7 @@ beforeEach(() => {
   mockTakePictureAsync.mockResolvedValue({ uri: 'file://test-photo.jpg' });
   cameraReadyControl.auto = true;
   permissionControl.granted = true;
+  permissionControl.canAskAgain = true;
   focusControl.focused = true;
   focusControl.effect = null;
   focusControl.cleanup = null;
@@ -495,6 +501,37 @@ describe('CameraScreen error flow', () => {
       });
       await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
       expect(getByLabelText('Turn on flashlight & retry')).toBeTruthy();
+    });
+  });
+
+  // App Review 2026-09-07 (guideline 5.1.1(iv)): the pre-prompt button must be
+  // neutral — "Enable camera" was rejected. Once iOS won't prompt again the
+  // gate points at Settings instead of a dead "Continue" tap.
+  describe('camera permission gate', () => {
+    it('offers a neutral "Continue" that requests the system permission', () => {
+      permissionControl.granted = false;
+      const { getByLabelText, getByText, queryByLabelText } = render(<CameraScreen />);
+
+      expect(getByText('Camera access')).toBeTruthy();
+      expect(queryByLabelText('Enable camera')).toBeNull();
+      fireEvent.press(getByLabelText('Continue'));
+      expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+    });
+
+    it('links to Settings once iOS will no longer show the prompt', () => {
+      permissionControl.granted = false;
+      permissionControl.canAskAgain = false;
+      const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+      const { getByLabelText, getByText, queryByLabelText } = render(<CameraScreen />);
+
+      expect(getByText(/turned off for GlutenOrNot/)).toBeTruthy();
+      expect(queryByLabelText('Continue')).toBeNull();
+      fireEvent.press(getByLabelText('Open Settings'));
+      expect(openSettings).toHaveBeenCalledTimes(1);
+      expect(mockRequestPermission).not.toHaveBeenCalled();
+      // The library route stays available either way.
+      expect(getByLabelText('Choose a photo instead')).toBeTruthy();
+      openSettings.mockRestore();
     });
   });
 
