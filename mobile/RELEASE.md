@@ -120,8 +120,9 @@ Context still worth knowing:
 ## ⏳ Pending on main (not yet shipped)
 
 - **v1.5.0 build 3 — the 5.1.1(iv) fix above.** Once the branch merges: steps
-  1, 4, 4a, 5 (Build = **3**, Version stays 1.5.0), then in App Store Connect
-  reply to the rejection, attach build 3, resubmit. The `v1.5.0` tag sits at
+  1, 2 (permission checks below), 4, 4a, 5 (Build = **3**, Version stays
+  1.5.0). TestFlight-smoke the permission checks on build 3 before replying
+  to the rejection in App Store Connect, attaching build 3, and resubmitting. The `v1.5.0` tag sits at
   the rejected build's commit (`69837fe`); move it to the resubmitted commit
   (`git tag -fa v1.5.0 … && git push -f origin v1.5.0`) so the tag matches what
   actually shipped.
@@ -193,7 +194,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (150 tests as of the 1.5.0 build-3 fix)
+npm test             # jest — all green (155 tests as of the 1.5.0 build-3 fix)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -224,6 +225,13 @@ Verify in the **simulator**:
       **Couldn't read** screen.
 
 Verify on a **physical device** (camera doesn't exist in the simulator):
+- [ ] **Build-3 permission fix:** fresh permission state → neutral **Continue**
+      → system prompt. Deny → **Open Settings**; photo-library scans still work.
+      Open Settings → grant → return: live camera appears without a manual
+      restart (the app refreshes Expo's cached permission on foreground).
+      Also return without granting: Settings and library actions remain usable.
+      Jest covers the warm-return path with Expo's real hook; native navigation
+      and the actual prompt still require this TestFlight check.
 - [ ] Live camera feed + the **shutter** capture path.
 - [ ] **Barcode** auto-detection.
 - [ ] **Torch** (1.4.0+): overlay toggle actually lights the LED; torch stays on

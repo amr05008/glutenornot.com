@@ -98,7 +98,7 @@ function Corners() {
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -272,11 +272,17 @@ export default function CameraScreen() {
         nextState === 'active'
       ) {
         resumedFromBackground.current = true;
+        // Expo caches permission state; opening Settings does not refresh it.
+        // Read (never request) on resume so a warm return can unlock the camera
+        // or reflect a revocation without forcing the user to restart the app.
+        void getPermission().catch((error: unknown) => {
+          reportError(error, { context: 'camera_permission_refresh' });
+        });
       }
       appState.current = nextState;
     });
     return () => sub.remove();
-  }, [abandonScan]);
+  }, [abandonScan, getPermission]);
 
   const cameraMounted = !!permission?.granted && !isAnalyzing && !systemState && recovery?.phase !== 'prompt';
 
@@ -655,6 +661,18 @@ export default function CameraScreen() {
     }
   };
 
+  const handleOpenSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      reportError(error, { context: 'camera_settings' });
+      Alert.alert(
+        "Couldn't open Settings",
+        'Open Settings on your device, find GlutenOrNot, and allow camera access. You can also choose a photo from your library.'
+      );
+    }
+  };
+
   if (!permission) {
     return <View style={styles.container} />;
   }
@@ -751,7 +769,7 @@ export default function CameraScreen() {
             : 'GlutenOrNot uses your camera to read ingredient labels, menus, and barcodes. Your photos are never stored.'
         }
         primary={settingsOnly ? 'Open Settings' : 'Continue'}
-        onPrimary={settingsOnly ? () => Linking.openSettings() : requestPermission}
+        onPrimary={settingsOnly ? handleOpenSettings : requestPermission}
         secondary="Choose a photo instead"
         onSecondary={handlePickImage}
       />

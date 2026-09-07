@@ -16,6 +16,7 @@ const cameraReadyControl: { auto: boolean; fire: () => void } = {
 // canAskAgain=false models the "denied, iOS won't prompt again" state.
 const permissionControl = { granted: true, canAskAgain: true };
 const mockRequestPermission = jest.fn();
+const mockGetPermission = jest.fn().mockResolvedValue({ granted: true, canAskAgain: true });
 jest.mock('expo-camera', () => {
   const { forwardRef, useEffect, useImperativeHandle } = require('react');
   const { View } = require('react-native');
@@ -33,6 +34,7 @@ jest.mock('expo-camera', () => {
     useCameraPermissions: () => [
       { granted: permissionControl.granted, canAskAgain: permissionControl.canAskAgain },
       mockRequestPermission,
+      mockGetPermission,
     ],
   };
 });
