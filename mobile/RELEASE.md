@@ -8,6 +8,18 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ## ✅ Last shipped: v1.5.0 — Barcode recovery (2026-09-05)
 
+**⚠️ Build 2 was REJECTED on 2026-09-07 — guideline 5.1.1(iv)** (submission
+`bb74b8bd-ff99-41ab-a1ea-47e4bf673110`, reviewed on iPad Air 11" M3 + iPhone 17
+Pro Max): the camera pre-permission screen's "Enable camera" button "encourages
+or directs" the user to grant. Apple's rule: the button before a system
+permission prompt must be neutral — "Continue" or "Next". Fix (branch
+`app-review-camera-button`): primary is now **"Continue"**, and when iOS will
+no longer show the prompt (`canAskAgain=false`) the gate explains and offers
+**"Open Settings"** (`Linking.openSettings()`), which the same review note
+recommends. Same version string, **build 3**; Reply to the rejection in App
+Store Connect noting the change, then resubmit. **Lesson for every future
+pre-permission screen: never put the verb of the permission on the button.**
+
 Submitted to App Store review on 2026-09-05 as **build 2** (build 1 was the
 TestFlight smoke build; identical source — the second archive was a re-upload
 of the same tree). Plan: `plans/barcode-recovery-2026-09-05.md` (local), PR #25
@@ -107,7 +119,13 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.5.0 (2026-09-05).
+- **v1.5.0 build 3 — the 5.1.1(iv) fix above.** Once the branch merges: steps
+  1, 2 (permission checks below), 4, 4a, 5 (Build = **3**, Version stays
+  1.5.0). TestFlight-smoke the permission checks on build 3 before replying
+  to the rejection in App Store Connect, attaching build 3, and resubmitting. The `v1.5.0` tag sits at
+  the rejected build's commit (`69837fe`); move it to the resubmitted commit
+  (`git tag -fa v1.5.0 … && git push -f origin v1.5.0`) so the tag matches what
+  actually shipped.
 - **No next iOS release is scheduled.** Barcode recovery step 2 (bounded
   enrichment of data-empty Open Food Facts hits) is gated on the day-14 funnel
   read and its own feasibility table (plan §8); the weak-signal lever remains
@@ -176,7 +194,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (148 tests as of the 1.5.0 version header)
+npm test             # jest — all green (155 tests as of the 1.5.0 build-3 fix)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
@@ -207,6 +225,13 @@ Verify in the **simulator**:
       **Couldn't read** screen.
 
 Verify on a **physical device** (camera doesn't exist in the simulator):
+- [ ] **Build-3 permission fix:** fresh permission state → neutral **Continue**
+      → system prompt. Deny → **Open Settings**; photo-library scans still work.
+      Open Settings → grant → return: live camera appears without a manual
+      restart (the app refreshes Expo's cached permission on foreground).
+      Also return without granting: Settings and library actions remain usable.
+      Jest covers the warm-return path with Expo's real hook; native navigation
+      and the actual prompt still require this TestFlight check.
 - [ ] Live camera feed + the **shutter** capture path.
 - [ ] **Barcode** auto-detection.
 - [ ] **Torch** (1.4.0+): overlay toggle actually lights the LED; torch stays on
