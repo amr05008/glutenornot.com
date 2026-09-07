@@ -1,6 +1,6 @@
 ---
 date: 2026-09-06
-summary: iOS 1.5.0 build 2 rejected by App Review (5.1.1(iv)) — the camera pre-permission button "Enable camera" steers the user; changed to "Continue", added an "Open Settings" branch for canAskAgain=false, tests, docs; branch pushed for review ahead of a build-3 resubmission
+summary: iOS 1.5.0 build 2 rejected by App Review (5.1.1(iv)) — the camera pre-permission button "Enable camera" steers the user; changed to "Continue", added an "Open Settings" branch for canAskAgain=false; Aaron's agent added the Settings-return refresh; grilled, merged PR #26, built and resubmitted as build 3 the same night, tag moved
 tags: [mobile, app-review, permissions, release]
 ---
 
@@ -34,8 +34,25 @@ Same version string; resubmit as build 3.
   only the build number moves (2 → 3). The git tag should follow the commit
   that actually ships — flagged for Aaron rather than force-moved unasked.
 
+## Release (same session)
+- Aaron's agent added the Settings-return fix (`6b7bd32`: Expo's hook caches
+  permission status, so a warm return from Settings left the user on the
+  gate; now re-read on foreground, never re-prompt; failed Settings launch
+  reports + alerts; a new suite runs the *real* `createPermissionHook`).
+  Grilled: the caching claim checks out against the hook source; SHIP.
+- Merged PR #26 (`ba916ed`). `npm ci`, tsc clean, 155 tests. Prebuild, patches
+  (MARKETING_VERSION 1.5.0, CURRENT_PROJECT_VERSION 3, team), Sentry token.
+  Runbook lesson: prebuild's `sentry.properties` has no trailing newline, so
+  `echo >>` glued the token onto the comment line — now `printf '\n…'` +
+  `sentry-cli info` check. Simulator Release build launched with
+  `app.config` 1.5.0.
+- Aaron archived/uploaded build 3, swapped it in on the same 1.5.0 version and
+  resubmitted at 22:37 ET. Resubmitting closed the rejection thread, so the
+  drafted reply was never sent. **TestFlight permission round-trip skipped**
+  (Aaron's call, low stakes) — recorded in the runbook header.
+- Tag `v1.5.0` moved to `ba916ed`; live-check routine re-armed for 2026-09-09.
+
 ## Next
-- Aaron's agent reviews the PR → "proceed" → merge → runbook steps 1/4/4a/5
-  with Build = 3 → reply to the rejection in App Store Connect and resubmit.
-- Day-14 funnel read still counts from the *public* release date, which just
-  moved later.
+- Live-check 2026-09-09; day-14 funnel read counts from the public release.
+- Any Sentry event with `context: camera_permission_refresh` /
+  `camera_settings` → the unproven native Settings-return path.

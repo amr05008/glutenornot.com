@@ -20,6 +20,16 @@ recommends. Same version string, **build 3**; Reply to the rejection in App
 Store Connect noting the change, then resubmit. **Lesson for every future
 pre-permission screen: never put the verb of the permission on the button.**
 
+**Build 3 RESUBMITTED 2026-09-06 22:37 ET** (PR #26 merged `ba916ed`; tag
+`v1.5.0` moved there). The rejected submission shows as *Removed*; the new
+one is *Waiting for Review*. Resubmitting closed the old message thread, so
+no reply went to the reviewer — the change speaks for itself. **The TestFlight
+permission round-trip below was NOT run on build 3** (Aaron's call: low
+stakes; the Settings-return path is covered by jest with Expo's real hook and
+the simulator Release build launched with `app.config` 1.5.0). If a Sentry
+event ever lands with `context: camera_permission_refresh` or
+`camera_settings`, that unproven native path is the first suspect.
+
 Submitted to App Store review on 2026-09-05 as **build 2** (build 1 was the
 TestFlight smoke build; identical source — the second archive was a re-upload
 of the same tree). Plan: `plans/barcode-recovery-2026-09-05.md` (local), PR #25
@@ -119,13 +129,12 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- **v1.5.0 build 3 — the 5.1.1(iv) fix above.** Once the branch merges: steps
-  1, 2 (permission checks below), 4, 4a, 5 (Build = **3**, Version stays
-  1.5.0). TestFlight-smoke the permission checks on build 3 before replying
-  to the rejection in App Store Connect, attaching build 3, and resubmitting. The `v1.5.0` tag sits at
-  the rejected build's commit (`69837fe`); move it to the resubmitted commit
-  (`git tag -fa v1.5.0 … && git push -f origin v1.5.0`) so the tag matches what
-  actually shipped.
+- Nothing — main is fully shipped as of v1.5.0 build 3 (2026-09-06).
+- **Rejection playbook (learned 1.5.0):** same version string, next build
+  number; in App Store Connect hover the Build row → red minus → Add Build →
+  Save → Submit for Review on the *same* version. Resubmitting closes the
+  rejection's message thread, so reply *before* submitting if you want the
+  reviewer to read it. Move the git tag to the resubmitted commit.
 - **No next iOS release is scheduled.** Barcode recovery step 2 (bounded
   enrichment of data-empty Open Food Facts hits) is gated on the day-14 funnel
   read and its own feasibility table (plan §8); the weak-signal lever remains
@@ -174,7 +183,12 @@ Context still worth knowing:
   into that file; replacing it with only the token makes every build fail in the
   "Bundle React Native code" phase with `A project ID or slug is required`
   (1.5.0, 2026-09-05). Safe form:
-  `echo "auth.token=$(grep ^token= ~/.sentryclirc | cut -d= -f2-)" >> ios/sentry.properties`. Without it the build still succeeds but ships without source maps
+  `printf '\nauth.token=%s\n' "$(grep ^token= ~/.sentryclirc | cut -d= -f2-)" >> ios/sentry.properties`
+  — the leading newline matters: prebuild's file ends without one, so a plain
+  `echo >>` glues the token onto the trailing `# Using SENTRY_AUTH_TOKEN…`
+  comment line and it is silently ignored (1.5.0 build 3, 2026-09-06). Check
+  with `SENTRY_PROPERTIES=ios/sentry.properties npx sentry-cli info` — it must
+  print `Method: Auth Token`. Without it the build still succeeds but ships without source maps
   (Sentry stack traces stay minified).
   **As of 1.3.0 the token also lives permanently in `~/.sentryclirc`** (`[auth]`
   `token=…`, perms 600) — sentry-cli reads that global file from Xcode build phases
