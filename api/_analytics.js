@@ -21,6 +21,11 @@ const SCAN_FAILED_EVENT = 'scan_failed';
 // random flow ID that lives only in the client's memory. Its own event so it
 // can never inflate `scan` or `scan_failed`.
 const BARCODE_RECOVERY_EVENT = 'barcode_recovery';
+// App Store review ask (plans/review-prompt-visibility-2026-09-15.md): the
+// system rating sheet gives the app no callback, so the only measurable facts
+// are "we handed a request to iOS" and "the user tapped our write-review
+// link". Two stages, no content. Its own event so it can never inflate `scan`.
+const REVIEW_PROMPT_EVENT = 'review_prompt';
 
 /**
  * Build the PostHog event properties for a scan, omitting absent optional fields.
@@ -122,6 +127,24 @@ function buildRecoveryProperties({ flowId, reason, stage, source, resultMode, ve
   if (resultMode != null) props.result_mode = resultMode;
   if (verdict != null) props.verdict = verdict;
   if (confidence != null) props.confidence = confidence;
+  if (platform != null) props.platform = platform;
+  if (appVersion != null) props.app_version = appVersion;
+  if (country != null) props.$geoip_country_code = country;
+  if (region != null) props.$geoip_subdivision_1_code = region;
+  if (city != null) props.$geoip_city_name = city;
+  return props;
+}
+
+/**
+ * Build the PostHog event properties for a review-prompt stage. `stage` is
+ * `requested` (the native rating request was made on a non-TestFlight
+ * install) or `store_opened` (the user tapped the write-review link). The
+ * endpoint rebuilds the payload from an allowlist, so nothing here can carry
+ * a rating, review text, scan count, or product.
+ * Pure — no I/O.
+ */
+function buildReviewPromptProperties({ stage, platform, appVersion, country, region, city } = {}) {
+  const props = { stage };
   if (platform != null) props.platform = platform;
   if (appVersion != null) props.app_version = appVersion;
   if (country != null) props.$geoip_country_code = country;
@@ -252,6 +275,21 @@ async function trackBarcodeRecovery({ ip, ...fields } = {}) {
   return captureEvent(BARCODE_RECOVERY_EVENT, ip, buildRecoveryProperties(fields));
 }
 
+/**
+ * Track one stage of the App Store review ask.
+ * @param {object} input
+ * @param {string} input.ip - Client IP (hashed before it leaves this module)
+ * @param {'requested'|'store_opened'} input.stage
+ * @param {'ios'|'web'|'unknown'} [input.platform]
+ * @param {string} [input.appVersion]
+ * @param {string} [input.country]
+ * @param {string} [input.region]
+ * @param {string} [input.city]
+ */
+async function trackReviewPrompt({ ip, ...fields } = {}) {
+  return captureEvent(REVIEW_PROMPT_EVENT, ip, buildReviewPromptProperties(fields));
+}
+
 async function captureEvent(event, ip, properties) {
   const apiKey = process.env.POSTHOG_API_KEY;
   if (!apiKey) return; // not configured — no-op
@@ -302,13 +340,16 @@ export {
   SCAN_EVENT,
   SCAN_FAILED_EVENT,
   BARCODE_RECOVERY_EVENT,
+  REVIEW_PROMPT_EVENT,
   buildScanProperties,
   buildScanFailureProperties,
   buildRecoveryProperties,
+  buildReviewPromptProperties,
   anonId,
   normalizeClient,
   normalizeAppVersion,
   trackScan,
   trackScanFailure,
   trackBarcodeRecovery,
+  trackReviewPrompt,
 };

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Linking } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { ResultCard } from '../components/ResultCard';
 import { MenuResultCard } from '../components/MenuResultCard';
 import { reportError } from '../services/errorReporting';
-import { maybeRequestReview, REVIEW_PROMPT_DELAY_MS } from '../services/review';
+import { maybeRequestReview, openWriteReview, REVIEW_PROMPT_DELAY_MS } from '../services/review';
 import { sendRecoveryEvent } from '../services/recovery';
 import { AnalysisResult, Verdict, Confidence } from '../constants/verdicts';
 import { theme } from '../constants/theme';
@@ -97,7 +97,6 @@ export default function ResultScreen() {
   }
 
   const handleClose = () => router.back();
-  const handleFeedback = () => Linking.openURL('https://forms.gle/ZtSwSTuhCpAGwsHKA');
 
   const isMenu = isMenuResult(analysisResult);
 
@@ -108,14 +107,14 @@ export default function ResultScreen() {
           result={analysisResult}
           scanCount={count}
           onClose={handleClose}
-          onFeedback={handleFeedback}
+          onRate={openWriteReview}
         />
       ) : (
         <ResultCard
           result={analysisResult}
           scanCount={count}
           onClose={handleClose}
-          onFeedback={handleFeedback}
+          onRate={openWriteReview}
         />
       )}
     </View>

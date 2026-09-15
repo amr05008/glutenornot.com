@@ -12,7 +12,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 import * as Network from 'expo-network';
-import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError, ScanProgress } from '../api';
+import { analyzeImage, lookupBarcode, sendFailureBeacon, sendReviewBeacon, APIError, ScanProgress } from '../api';
 
 const mockedGetNetworkState = Network.getNetworkStateAsync as jest.Mock;
 
@@ -469,5 +469,32 @@ describe('sendFailureBeacon (used by the screen for cancelled / interrupted)', (
   it('never throws, even with no fetch at all', () => {
     (global as any).fetch = undefined;
     expect(() => sendFailureBeacon('ocr', 'cancelled', 10)).not.toThrow();
+  });
+});
+
+describe('sendReviewBeacon (review ask stages, plans/review-prompt-visibility-2026-09-15.md)', () => {
+  it('posts the stage to /api/review with the client headers and nothing else', () => {
+    const fetchMock = mockFetch();
+
+    sendReviewBeacon('requested');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://www.glutenornot.com/api/review');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ stage: 'requested' });
+    expect(init.headers['X-Client']).toBe('ios');
+    expect(init.headers['X-Client-Version']).toBe(APP_VERSION);
+  });
+
+  it('never touches /api/track — a review ask is not a scan failure', () => {
+    const fetchMock = mockFetch();
+    sendReviewBeacon('store_opened');
+    expect(fetchMock.mock.calls[0][0]).not.toContain('/api/track');
+  });
+
+  it('never throws, even with no fetch at all', () => {
+    (global as any).fetch = undefined;
+    expect(() => sendReviewBeacon('requested')).not.toThrow();
   });
 });

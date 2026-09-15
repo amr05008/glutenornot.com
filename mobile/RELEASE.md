@@ -214,7 +214,11 @@ npm test             # jest — all green (155 tests as of the 1.5.0 build-3 fix
 ## 2. Smoke test (do this BEFORE the release build)
 
 Native modules (`react-native-svg`, `expo-camera`, Sentry) mean **Expo Go won't
-work** — you need a dev build:
+work** — you need a dev build. **Tag it first:** set `version` in `mobile/app.json`
+to `<next>-rc.smoke` (e.g. `1.5.1-rc.smoke`) before building. The server
+whitelists `-[a-z0-9.]{1,10}` suffixes, so every event the smoke build sends
+(`scan`, `barcode_recovery`, `review_prompt` — dev builds *do* emit `requested`)
+is excludable by `app_version NOT LIKE '%-rc%'`. Step 3 sets the real version.
 
 ```bash
 npx expo run:ios            # builds + runs a dev build in the iOS simulator
@@ -247,6 +251,18 @@ Verify on a **physical device** (camera doesn't exist in the simulator):
       Jest covers the warm-return path with Expo's real hook; native navigation
       and the actual prompt still require this TestFlight check.
 - [ ] Live camera feed + the **shutter** capture path.
+- [ ] **Write-review link** (1.5.1+): after the 3rd lifetime scan the result footer
+      reads "Your feedback matters! Write us a review"; the link must open the App
+      Store compose sheet for GlutenOrNot. PostHog should show a `review_prompt`
+      `store_opened` event within seconds:
+      `~/.claude/skills/glutenornot-debug/scripts/posthog-query sql "SELECT timestamp, properties.stage, properties.app_version FROM events WHERE event='review_prompt' ORDER BY timestamp DESC LIMIT 5"`
+      (the script lives in the debug skill, not on PATH). The `requested` stage
+      will **not** fire on TestFlight — `isAvailableAsync()` is false there by
+      design — and it will not fire on a phone that has already been asked (the
+      once-per-install flag; delete + reinstall to reset). Simulator / Xcode
+      smoke builds DO send it, which is why they carry an `-rc` app_version.
+      Verify `requested` from a fresh App Store install after release
+      (`api/ANALYTICS.md` → `review_prompt`).
 - [ ] **Barcode** auto-detection.
 - [ ] **Torch** (1.4.0+): overlay toggle actually lights the LED; torch stays on
       across a retake; and — the path jest can't prove — after the **Couldn't

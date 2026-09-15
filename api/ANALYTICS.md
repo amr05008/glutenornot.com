@@ -94,6 +94,54 @@ photo_started and shown → displayed-label conversion. Report the
 low-confidence share and menu outcomes separately — a displayed result is not
 proof the evidence was complete.
 
+**`review_prompt`** — the App Store review ask
+(`plans/review-prompt-visibility-2026-09-15.md`). The native rating sheet
+(`AppStore.requestReview`, via `expo-store-review`) gives the app no callback —
+not whether it was shown, not what was tapped — and Apple drops it silently on
+TestFlight installs, after three asks per device per year, and for undocumented
+reasons. This event records the two facts the client *can* know, beaconed via
+`POST /api/review`. Its own event so it can never inflate `scan` / `scan_failed`
+/ `barcode_recovery`; it is not a scan outcome and must never appear in the
+failure taxonomy. Properties:
+
+- `stage` — `requested` (`mobile/services/review.ts` handed a rating request to
+  iOS: lifetime scans ≥ 3, once per install, `requestReview()` resolved without
+  throwing — which excludes TestFlight, where `isAvailableAsync()` is false and
+  the once-per-install flag is never set. **Simulator and Xcode-installed dev
+  builds are not excluded** — StoreKit always "shows" the sheet in development
+  and the beacon fires; the runbook gives smoke builds an `-rc` app_version, so
+  every read filters `app_version NOT LIKE '%-rc%'`) | `store_opened` (the user
+  tapped the "Write us a review" link on a result screen; the beacon fires once
+  iOS accepted the `apps.apple.com/...?action=write-review` URL, which it does
+  for almost any https URL — a floor on taps, not proof the compose sheet
+  opened. Read it by distinct id: one rage-tapper can send ten.)
+- `platform`, `app_version`, `$geoip_*` — same normalization as the other events.
+- Nothing else. No rating, no review text, no scan count, no verdict.
+
+The endpoint rebuilds the payload from an allowlist: unknown `stage` → 400;
+bodies over 512 bytes → 413; every other property is discarded. Own per-IP cap
+(10/day — a device sends at most one `requested` per install and a handful of
+`store_opened`), separate from the scan quota, `/api/track` and `/api/recovery`,
+with the same per-instance caveat.
+
+**Read** (weekly, by hand; first read 2026-10-15 or after 20 `requested` from
+non-`-rc` versions, whichever is later): `requested` per week is an *upper bound* on prompts shown;
+compare against the rating count on App Store Connect → Ratings and Reviews
+(no API for the count — read it from the page and date it in the session log).
+`store_opened` (distinct ids) is a *floor* on write-review intent; compare
+against the written reviews list. Query:
+
+```sql
+SELECT toStartOfWeek(timestamp) AS wk, properties.stage AS stage,
+       count() AS events, count(DISTINCT distinct_id) AS ids
+FROM events
+WHERE event = 'review_prompt' AND properties.app_version NOT LIKE '%-rc%'
+GROUP BY wk, stage ORDER BY wk
+``` Neither is a true funnel — Apple hides the middle. If ratings stay
+flat while `requested` climbs, the loss is inside Apple (device-level "In-App
+Ratings & Reviews" off, the yearly cap, already rated this version) and there
+is nothing further to fix in code.
+
 ## Privacy invariant
 
 **Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.

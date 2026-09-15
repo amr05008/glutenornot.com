@@ -13,7 +13,8 @@
 // same-origin page, so a visited policy is pinned until CACHE_NAME changes.
 // Any user-facing HTML edit needs this bump, not just the precached assets.
 // v8: privacy policy discloses the barcode-recovery funnel events + flow ID.
-const CACHE_NAME = 'glutenornot-v8';
+// v9: privacy policy discloses the review_prompt event (rating ask / write-review tap).
+const CACHE_NAME = 'glutenornot-v9';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

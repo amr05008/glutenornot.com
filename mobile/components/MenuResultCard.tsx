@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
+import { ResultFooter } from './ResultFooter';
 import { AnalysisResult, MenuItem, Verdict, verdictColors } from '../constants/verdicts';
 import { theme } from '../constants/theme';
 import { sans, mono } from '../constants/fonts';
@@ -12,7 +13,7 @@ interface MenuResultCardProps {
   result: AnalysisResult;
   scanCount: number;
   onClose: () => void;
-  onFeedback: () => void;
+  onRate: () => void;
 }
 
 type Groups = Record<Verdict, MenuItem[]>;
@@ -57,7 +58,7 @@ function MenuGroup({ label, items, color }: { label: string; items: MenuItem[]; 
   );
 }
 
-export function MenuResultCard({ result, scanCount, onClose, onFeedback }: MenuResultCardProps) {
+export function MenuResultCard({ result, scanCount, onClose, onRate }: MenuResultCardProps) {
   const insets = useSafeAreaInsets();
   const items = result.menu_items || [];
   const groups = groupItems(items);
@@ -156,18 +157,7 @@ export function MenuResultCard({ result, scanCount, onClose, onFeedback }: MenuR
           <Icon name="refresh" size={20} color="#fff" stroke={2} />
           <Text style={styles.scanAnotherText}>Scan another</Text>
         </TouchableOpacity>
-        <Text style={styles.scanCounter}>{scanCount === 1 ? '1 scan' : `${scanCount} scans`}</Text>
-        <Text style={styles.feedbackPrompt}>
-          Run into an issue?{' '}
-          <Text
-            style={styles.feedbackLink}
-            onPress={onFeedback}
-            accessibilityRole="link"
-            accessibilityLabel="Share your feedback"
-          >
-            Share your feedback
-          </Text>
-        </Text>
+        <ResultFooter scanCount={scanCount} onRate={onRate} />
       </>
     );
   }
@@ -381,24 +371,5 @@ const styles = StyleSheet.create({
     fontFamily: sans('700'),
     fontSize: 16.5,
     color: '#fff',
-  },
-  scanCounter: {
-    fontFamily: sans('500'),
-    textAlign: 'center',
-    marginTop: theme.space[4],
-    fontSize: 13,
-    color: theme.color.faint,
-  },
-  feedbackPrompt: {
-    fontFamily: sans('400'),
-    textAlign: 'center',
-    marginTop: theme.space[2],
-    fontSize: 13,
-    color: theme.color.faint,
-  },
-  feedbackLink: {
-    fontFamily: sans('600'),
-    color: theme.color.sub,
-    textDecorationLine: 'underline',
   },
 });

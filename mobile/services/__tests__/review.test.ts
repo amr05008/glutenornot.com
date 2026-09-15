@@ -6,15 +6,25 @@ jest.mock('../storage', () => ({
   getHasPromptedReview: jest.fn(),
   setHasPromptedReview: jest.fn(),
 }));
+jest.mock('../api', () => ({
+  sendReviewBeacon: jest.fn(),
+}));
+jest.mock('react-native', () => ({
+  Linking: { openURL: jest.fn() },
+}));
 
 import * as StoreReview from 'expo-store-review';
-import { maybeRequestReview, REVIEW_SCAN_THRESHOLD } from '../review';
+import { Linking } from 'react-native';
+import { maybeRequestReview, openWriteReview, APP_STORE_WRITE_REVIEW_URL, REVIEW_SCAN_THRESHOLD } from '../review';
 import { getHasPromptedReview, setHasPromptedReview } from '../storage';
+import { sendReviewBeacon } from '../api';
 
 const mockIsAvailable = StoreReview.isAvailableAsync as jest.Mock;
 const mockRequestReview = StoreReview.requestReview as jest.Mock;
 const mockGetPrompted = getHasPromptedReview as jest.Mock;
 const mockSetPrompted = setHasPromptedReview as jest.Mock;
+const mockBeacon = sendReviewBeacon as jest.Mock;
+const mockOpenURL = Linking.openURL as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -22,6 +32,7 @@ beforeEach(() => {
   mockRequestReview.mockResolvedValue(undefined);
   mockGetPrompted.mockResolvedValue(false);
   mockSetPrompted.mockResolvedValue(undefined);
+  mockOpenURL.mockResolvedValue(true);
 });
 
 describe('maybeRequestReview', () => {
@@ -29,6 +40,40 @@ describe('maybeRequestReview', () => {
     await expect(maybeRequestReview(REVIEW_SCAN_THRESHOLD)).resolves.toBe(true);
     expect(mockRequestReview).toHaveBeenCalled();
     expect(mockSetPrompted).toHaveBeenCalled();
+  });
+
+  it('beacons `requested` only after the native request resolved — the one fact the app can know', async () => {
+    await maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+    expect(mockBeacon).toHaveBeenCalledTimes(1);
+    expect(mockBeacon).toHaveBeenCalledWith('requested');
+    // ordering: the beacon must not precede the native call
+    const nativeOrder = mockRequestReview.mock.invocationCallOrder[0];
+    const beaconOrder = mockBeacon.mock.invocationCallOrder[0];
+    expect(beaconOrder).toBeGreaterThan(nativeOrder);
+  });
+
+  it('does not beacon below the threshold or when already asked', async () => {
+    await maybeRequestReview(REVIEW_SCAN_THRESHOLD - 1);
+    mockGetPrompted.mockResolvedValue(true);
+    await maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+    expect(mockBeacon).not.toHaveBeenCalled();
+  });
+
+  it('does not beacon on TestFlight (native UI unavailable) — that ask never reached iOS', async () => {
+    mockIsAvailable.mockResolvedValue(false);
+    await maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+    expect(mockBeacon).not.toHaveBeenCalled();
+  });
+
+  it('does not beacon when the native call throws — nothing was handed to iOS', async () => {
+    mockRequestReview.mockRejectedValue(new Error('no window scene'));
+    await maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+    expect(mockBeacon).not.toHaveBeenCalled();
+  });
+
+  it('still returns true when the beacon itself throws — telemetry never breaks the ask', async () => {
+    mockBeacon.mockImplementation(() => { throw new Error('boom'); });
+    await expect(maybeRequestReview(REVIEW_SCAN_THRESHOLD)).resolves.toBe(true);
   });
 
   it('does nothing below the scan threshold', async () => {
@@ -59,5 +104,23 @@ describe('maybeRequestReview', () => {
   it('never throws when storage itself fails', async () => {
     mockGetPrompted.mockRejectedValue(new Error('disk full'));
     await expect(maybeRequestReview(REVIEW_SCAN_THRESHOLD)).resolves.toBe(false);
+  });
+});
+
+describe('openWriteReview', () => {
+  it('opens the App Store compose sheet and beacons store_opened', async () => {
+    await openWriteReview();
+    expect(mockOpenURL).toHaveBeenCalledWith(APP_STORE_WRITE_REVIEW_URL);
+    expect(mockBeacon).toHaveBeenCalledWith('store_opened');
+  });
+
+  it('deep-links to the write-review action for this app id', () => {
+    expect(APP_STORE_WRITE_REVIEW_URL).toBe('https://apps.apple.com/app/id6758594582?action=write-review');
+  });
+
+  it('never throws when the App Store cannot be opened, and does not beacon a tap that went nowhere', async () => {
+    mockOpenURL.mockRejectedValue(new Error('no handler'));
+    await expect(openWriteReview()).resolves.toBeUndefined();
+    expect(mockBeacon).not.toHaveBeenCalled();
   });
 });
