@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent } from '@testing-library/react-native';
 
 // --- Mocks ---
 
@@ -28,7 +28,9 @@ jest.mock('react-native-safe-area-context', () => {
 
 jest.mock('../../services/review', () => ({
   maybeRequestReview: jest.fn().mockResolvedValue(false),
+  openWriteReview: jest.fn().mockResolvedValue(undefined),
   REVIEW_PROMPT_DELAY_MS: 2000,
+  REVIEW_SCAN_THRESHOLD: 3,
 }));
 
 jest.mock('../../services/errorReporting', () => ({
@@ -40,10 +42,11 @@ jest.mock('../../services/recovery', () => ({
 }));
 
 import ResultScreen from '../result';
-import { maybeRequestReview } from '../../services/review';
+import { maybeRequestReview, openWriteReview } from '../../services/review';
 import { sendRecoveryEvent } from '../../services/recovery';
 
 const mockMaybeRequestReview = maybeRequestReview as jest.Mock;
+const mockOpenWriteReview = openWriteReview as jest.Mock;
 const mockSendRecoveryEvent = sendRecoveryEvent as jest.Mock;
 
 const SAFE_RESULT = JSON.stringify({
@@ -63,6 +66,27 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+});
+
+describe('ResultScreen write-review link (plans/review-prompt-visibility-2026-09-15.md D4)', () => {
+  it('offers the App Store write-review link at the scan threshold and opens it on tap', () => {
+    mockParams = { result: SAFE_RESULT, scanCount: '3' };
+    const { getByLabelText } = render(<ResultScreen />);
+    fireEvent.press(getByLabelText('Write us a review on the App Store'));
+    expect(mockOpenWriteReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the link below the threshold', () => {
+    mockParams = { result: SAFE_RESULT, scanCount: '2' };
+    const { queryByLabelText } = render(<ResultScreen />);
+    expect(queryByLabelText('Write us a review on the App Store')).toBeNull();
+  });
+
+  it('shows the link on a reopen from Recents too — it is a link, not a moment-bound prompt', () => {
+    mockParams = { result: SAFE_RESULT, scanCount: '5', fromHistory: '1' };
+    const { getByLabelText } = render(<ResultScreen />);
+    expect(getByLabelText('Write us a review on the App Store')).toBeTruthy();
+  });
 });
 
 describe('ResultScreen review prompt', () => {

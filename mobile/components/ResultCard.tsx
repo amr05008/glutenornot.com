@@ -1,11 +1,12 @@
 /* Label / barcode result screen — LOUD full-bleed verdict band over a white
  * sheet. Ported from A_Result in the V2 design package. Owns the top bar,
- * verdict band, result sheet, "Scan another" action, and the scan-count /
- * feedback footer. */
+ * verdict band, result sheet, "Scan another" action, and the shared
+ * scan-count / write-review footer (ResultFooter). */
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
+import { ResultFooter } from './ResultFooter';
 import { AnalysisResult, VERDICT_META, CONFIDENCE_LEVEL, verdictColors } from '../constants/verdicts';
 import { theme } from '../constants/theme';
 import { sans, mono } from '../constants/fonts';
@@ -14,7 +15,7 @@ interface ResultCardProps {
   result: AnalysisResult;
   scanCount: number;
   onClose: () => void;
-  onFeedback: () => void;
+  onRate: () => void;
 }
 
 function ConfidenceMeter({ level, color }: { level: number; color: string }) {
@@ -48,7 +49,7 @@ function IngredientRow({
   );
 }
 
-export function ResultCard({ result, scanCount, onClose, onFeedback }: ResultCardProps) {
+export function ResultCard({ result, scanCount, onClose, onRate }: ResultCardProps) {
   const insets = useSafeAreaInsets();
   const v = verdictColors[result.verdict];
   const meta = VERDICT_META[result.verdict];
@@ -140,19 +141,7 @@ export function ResultCard({ result, scanCount, onClose, onFeedback }: ResultCar
           <Text style={styles.scanAnotherText}>Scan another</Text>
         </TouchableOpacity>
 
-        {/* scan count + feedback */}
-        <Text style={styles.scanCounter}>{scanCount === 1 ? '1 scan' : `${scanCount} scans`}</Text>
-        <Text style={styles.feedbackPrompt}>
-          Run into an issue?{' '}
-          <Text
-            style={styles.feedbackLink}
-            onPress={onFeedback}
-            accessibilityRole="link"
-            accessibilityLabel="Share your feedback"
-          >
-            Share your feedback
-          </Text>
-        </Text>
+        <ResultFooter scanCount={scanCount} onRate={onRate} />
       </View>
     </ScrollView>
   );
@@ -318,24 +307,5 @@ const styles = StyleSheet.create({
     fontFamily: sans('700'),
     fontSize: 16.5,
     color: '#fff',
-  },
-  scanCounter: {
-    fontFamily: sans('500'),
-    textAlign: 'center',
-    marginTop: theme.space[4],
-    fontSize: 13,
-    color: theme.color.faint,
-  },
-  feedbackPrompt: {
-    fontFamily: sans('400'),
-    textAlign: 'center',
-    marginTop: theme.space[2],
-    fontSize: 13,
-    color: theme.color.faint,
-  },
-  feedbackLink: {
-    fontFamily: sans('600'),
-    color: theme.color.sub,
-    textDecorationLine: 'underline',
   },
 });

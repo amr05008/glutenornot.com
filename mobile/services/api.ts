@@ -1,6 +1,6 @@
 import * as Network from 'expo-network';
 import Constants from 'expo-constants';
-import { API_URL, BARCODE_API_URL, TRACK_API_URL, AnalysisResult } from '../constants/verdicts';
+import { API_URL, BARCODE_API_URL, TRACK_API_URL, REVIEW_API_URL, AnalysisResult } from '../constants/verdicts';
 
 // Analytics ships server-side, so every event carries $lib_version =
 // posthog-node — the SDK's version, not the app's. Without this header a
@@ -75,6 +75,25 @@ export function sendFailureBeacon(method: 'ocr' | 'barcode', reason: BeaconReaso
     }).catch(() => {});
   } catch {
     // Telemetry can never break a scan.
+  }
+}
+
+// Review-ask beacon (plans/review-prompt-visibility-2026-09-15.md). The native
+// rating sheet gives the app no callback, so the only facts worth recording
+// are "a request was handed to iOS" and "the user tapped our write-review
+// link". Fire-and-forget; its own endpoint so it can never be mistaken for a
+// scan failure. The body is exactly the stage — nothing about the scan, the
+// rating, or the review rides along.
+export type ReviewStage = 'requested' | 'store_opened';
+export function sendReviewBeacon(stage: ReviewStage): void {
+  try {
+    fetch(REVIEW_API_URL, {
+      method: 'POST',
+      headers: clientHeaders(),
+      body: JSON.stringify({ stage }),
+    }).catch(() => {});
+  } catch {
+    // Telemetry can never break a result screen.
   }
 }
 

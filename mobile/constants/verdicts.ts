@@ -53,6 +53,7 @@ export const API_URL = 'https://www.glutenornot.com/api/analyze';
 export const BARCODE_API_URL = 'https://www.glutenornot.com/api/barcode';
 export const TRACK_API_URL = 'https://www.glutenornot.com/api/track';
 export const RECOVERY_API_URL = 'https://www.glutenornot.com/api/recovery';
+export const REVIEW_API_URL = 'https://www.glutenornot.com/api/review';
 
 // Barcode types relevant for food products
 export const FOOD_BARCODE_TYPES = [

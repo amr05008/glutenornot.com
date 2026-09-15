@@ -18,15 +18,18 @@ import {
   buildScanProperties,
   buildScanFailureProperties,
   buildRecoveryProperties,
+  buildReviewPromptProperties,
   anonId,
   normalizeClient,
   normalizeAppVersion,
   trackScan,
   trackScanFailure,
   trackBarcodeRecovery,
+  trackReviewPrompt,
   SCAN_EVENT,
   SCAN_FAILED_EVENT,
   BARCODE_RECOVERY_EVENT,
+  REVIEW_PROMPT_EVENT,
 } from '../../../api/_analytics.js';
 
 describe('SCAN_EVENT', () => {
@@ -509,6 +512,64 @@ describe('barcode_recovery event (plans/barcode-recovery-2026-09-05.md §7)', ()
       expect(ev.event).toBe('barcode_recovery');
       expect(ev.distinctId).toBe(anonId('203.0.113.9'));
       expect(ev.properties).toEqual({ flow_id: 'f', reason: 'not_found', stage: 'exited' });
+      expect(JSON.stringify(ev)).not.toContain('203.0.113.9');
+    });
+  });
+});
+
+describe('review_prompt event (plans/review-prompt-visibility-2026-09-15.md)', () => {
+  it('REVIEW_PROMPT_EVENT is the stable event name "review_prompt"', () => {
+    expect(REVIEW_PROMPT_EVENT).toBe('review_prompt');
+  });
+
+  it('buildReviewPromptProperties carries stage plus platform, app version and geo', () => {
+    const props = buildReviewPromptProperties({
+      stage: 'requested',
+      platform: 'ios',
+      appVersion: '1.5.1',
+      country: 'US',
+      region: 'NY',
+      city: 'Brooklyn',
+    });
+    expect(props).toEqual({
+      stage: 'requested',
+      platform: 'ios',
+      app_version: '1.5.1',
+      $geoip_country_code: 'US',
+      $geoip_subdivision_1_code: 'NY',
+      $geoip_city_name: 'Brooklyn',
+    });
+  });
+
+  it('buildReviewPromptProperties omits absent optionals and has no method or verdict — it is not a scan', () => {
+    const props = buildReviewPromptProperties({ stage: 'store_opened' });
+    expect(props).toEqual({ stage: 'store_opened' });
+    expect(props).not.toHaveProperty('method');
+    expect(props).not.toHaveProperty('verdict');
+  });
+
+  describe('trackReviewPrompt', () => {
+    const originalKey = process.env.POSTHOG_API_KEY;
+    afterEach(() => {
+      if (originalKey === undefined) delete process.env.POSTHOG_API_KEY;
+      else process.env.POSTHOG_API_KEY = originalKey;
+      posthogControl.captured = [];
+    });
+
+    it('no-ops without throwing when POSTHOG_API_KEY is unset', async () => {
+      delete process.env.POSTHOG_API_KEY;
+      await expect(trackReviewPrompt({ ip: '1.2.3.4', stage: 'requested' })).resolves.toBeUndefined();
+      expect(posthogControl.captured).toHaveLength(0);
+    });
+
+    it('captures a review_prompt event under the hashed IP, never the raw IP', async () => {
+      process.env.POSTHOG_API_KEY = 'phc_test';
+      await trackReviewPrompt({ ip: '203.0.113.9', stage: 'store_opened' });
+      expect(posthogControl.captured).toHaveLength(1);
+      const [ev] = posthogControl.captured;
+      expect(ev.event).toBe('review_prompt');
+      expect(ev.distinctId).toBe(anonId('203.0.113.9'));
+      expect(ev.properties).toEqual({ stage: 'store_opened' });
       expect(JSON.stringify(ev)).not.toContain('203.0.113.9');
     });
   });
