@@ -28,6 +28,7 @@ const mockOpenURL = Linking.openURL as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockBeacon.mockReset(); // clearAllMocks keeps implementations; a throwing beacon must not leak
   mockIsAvailable.mockResolvedValue(true);
   mockRequestReview.mockResolvedValue(undefined);
   mockGetPrompted.mockResolvedValue(false);
@@ -42,14 +43,19 @@ describe('maybeRequestReview', () => {
     expect(mockSetPrompted).toHaveBeenCalled();
   });
 
-  it('beacons `requested` only after the native request resolved — the one fact the app can know', async () => {
-    await maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+  it('beacons `requested` only after the native request RESOLVED — not merely after it was called', async () => {
+    let resolveNative!: () => void;
+    mockRequestReview.mockReturnValue(new Promise<void>((resolve) => { resolveNative = resolve; }));
+
+    const pending = maybeRequestReview(REVIEW_SCAN_THRESHOLD);
+    await new Promise((r) => setTimeout(r, 0)); // drain the storage/availability awaits up to the native call
+    expect(mockRequestReview).toHaveBeenCalled();
+    expect(mockBeacon).not.toHaveBeenCalled(); // native still pending → no beacon yet
+
+    resolveNative();
+    await expect(pending).resolves.toBe(true);
     expect(mockBeacon).toHaveBeenCalledTimes(1);
     expect(mockBeacon).toHaveBeenCalledWith('requested');
-    // ordering: the beacon must not precede the native call
-    const nativeOrder = mockRequestReview.mock.invocationCallOrder[0];
-    const beaconOrder = mockBeacon.mock.invocationCallOrder[0];
-    expect(beaconOrder).toBeGreaterThan(nativeOrder);
   });
 
   it('does not beacon below the threshold or when already asked', async () => {
@@ -72,7 +78,7 @@ describe('maybeRequestReview', () => {
   });
 
   it('still returns true when the beacon itself throws — telemetry never breaks the ask', async () => {
-    mockBeacon.mockImplementation(() => { throw new Error('boom'); });
+    mockBeacon.mockImplementationOnce(() => { throw new Error('boom'); });
     await expect(maybeRequestReview(REVIEW_SCAN_THRESHOLD)).resolves.toBe(true);
   });
 

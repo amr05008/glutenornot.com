@@ -125,11 +125,14 @@ bodies over 512 bytes → 413; every other property is discarded. Own per-IP cap
 with the same per-instance caveat.
 
 **Read** (weekly, by hand; first read 2026-10-15 or after 20 `requested` from
-non-`-rc` versions, whichever is later): `requested` per week is an *upper bound* on prompts shown;
-compare against the rating count on App Store Connect → Ratings and Reviews
-(no API for the count — read it from the page and date it in the session log).
-`store_opened` (distinct ids) is a *floor* on write-review intent; compare
-against the written reviews list. Query:
+non-`-rc` versions, whichever is later): `requested` per week is the count of
+rating requests the client handed to iOS, with best-effort (fire-and-forget)
+delivery — a prompt can be shown while its beacon is lost, so it is an
+*approximate* ceiling on prompts shown, not a hard one. Compare against the
+rating count on App Store Connect → Ratings and Reviews (no API for the count —
+read it from the page and date it in the session log). `store_opened` (distinct
+ids) is a *floor* on write-review intent; compare against the written reviews
+list. Query:
 
 ```sql
 SELECT toStartOfWeek(timestamp) AS wk, properties.stage AS stage,
@@ -137,10 +140,16 @@ SELECT toStartOfWeek(timestamp) AS wk, properties.stage AS stage,
 FROM events
 WHERE event = 'review_prompt' AND properties.app_version NOT LIKE '%-rc%'
 GROUP BY wk, stage ORDER BY wk
-``` Neither is a true funnel — Apple hides the middle. If ratings stay
-flat while `requested` climbs, the loss is inside Apple (device-level "In-App
-Ratings & Reviews" off, the yearly cap, already rated this version) and there
-is nothing further to fix in code.
+```
+
+Neither is a true funnel — Apple hides the middle, and two unknowns stay
+separate: whether the sheet was *presented* (Apple suppresses it for the
+device-level "In-App Ratings & Reviews" setting, the yearly cap, an existing
+rating on this version, and undocumented reasons) and whether a presented sheet
+was *answered* (users dismiss). Rising `requested` with a flat rating count says
+the loss is downstream of the request; it does not say which of the two. What
+code can still change is the ask's timing and the write-review link's
+placement — not Apple's presentation logic.
 
 ## Privacy invariant
 
