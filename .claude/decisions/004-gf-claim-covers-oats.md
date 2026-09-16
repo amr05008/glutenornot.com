@@ -42,8 +42,10 @@ to oats themselves), which no label resolves.
 
 1. **OCR path (`api/analyze.js`)**: T2 flipped. A whole-product gluten-free
    claim or a certification mark covers oats; return `safe`, name the label,
-   and add one short clause that a small share of people with celiac disease
-   react to oats themselves. Plain oats with no claim in frame stay `caution`.
+   and end the explanation with one prescribed sentence: "Heads-up: a small
+   share of people with celiac disease react to oats themselves." (an exact
+   sentence, not a paraphrase, so the eval gate can assert it verbatim — Pi's
+   grill beat three regex approximations of its meaning). Plain oats with no claim in frame stay `caution`.
    "Gluten-free oats" inside the list still covers the oats only (003's
    ingredient-level rule); the rest of the list is judged as usual.
 2. **Barcode path (`api/barcode.js`)**: T5 reversed — the claim block is
@@ -141,10 +143,10 @@ Live eval (`RUN_LIVE_EVALS=1`, Opus 4.8 through the real prompts), 2026-09-16:
   ("not suitable for celiacs") beside a `no-gluten` tag → not-safe; B15
   unrecognized positive free text beside a real claim → `safe` (the
   unverified line must not demote a labeled product). Safe-with-oats cases
-  (5, 6, 23, 26, B1, B2, B15) additionally assert the avenin caveat via
-  `hasOatsCaveat` (`evals/assertions.js`, unit-tested offline against
-  positive and negative fixtures — Pi's counterexample "suitable for people
-  with gluten sensitivity" is rejected).
+  (5, 6, 23, 26, B1, B2, B15) additionally assert the prescribed caveat
+  sentence verbatim via `hasOatsCaveat` (`evals/assertions.js`, which also
+  pins both prompts to `OATS_CAVEAT_SENTENCE`; offline fixtures reject every
+  paraphrase, reassurance and negation Pi produced).
 - **Final gate: 42/42, zero false-safe** (OCR 27 + barcode 15; tables in the
   PR body). Five seams
   were caught on the way — Pi's review of PR #29 found the allowlist dropped

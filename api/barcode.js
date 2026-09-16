@@ -94,8 +94,8 @@ frequently auto-derived from ingredients or contributed by users — they are NO
 - With such a label present, the ambiguous ingredients listed under "caution" do NOT lower the
   verdict. Return "safe", and say in the explanation that the gluten-free label is what covers them.
 - The label also covers oats: the same regulation holds a labeled product's oats to the 20 ppm limit.
-  Return "safe", name the label, and add one short clause that a small share of people with celiac
-  disease react to oats themselves.
+  Return "safe", name the label, and end the explanation with this exact sentence: "Heads-up: a small
+  share of people with celiac disease react to oats themselves."
 - A claim written on one ingredient — "gluten free oats" inside the ingredient list, with no
   Certifications line — is NOT a whole-product claim. It clears the oats only; every other ambiguous
   ingredient (natural flavors, maltodextrin, spices, …) still returns "caution" exactly as it would
