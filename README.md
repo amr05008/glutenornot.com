@@ -81,6 +81,10 @@ glutenornot.com/
 
 ## How It Works
 
+![How a GlutenOrNot scan works: scan, read, check, answer](docs/how-it-works-simple.svg)
+
+The engineering version, with the lookup waterfall, the prompt rules and the safe-verdict floor, is [`docs/how-it-works.svg`](docs/how-it-works.svg).
+
 **Photo scanning:**
 1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
