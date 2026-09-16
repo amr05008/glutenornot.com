@@ -18,6 +18,7 @@ export const BARCODE_GF_CLAIM_CASES = [
     id: 'B1',
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'the incident shape — "No gluten" label, list calls its oats gluten-free, auto-derived gluten tag',
     product: {
       product_name: 'Fruit & Oat Bar Strawberry',
@@ -34,6 +35,7 @@ export const BARCODE_GF_CLAIM_CASES = [
     id: 'B2',
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 flipped — "No gluten" label + plain whole grain oats + auto-derived gluten tag',
     product: {
       product_name: 'Honey Oat Granola Clusters',
@@ -154,6 +156,47 @@ export const BARCODE_GF_CLAIM_CASES = [
       allergens_tags: [],
       traces_tags: [],
       labels_tags: ['en:vegan'],
+      source: 'openfoodfacts',
+    },
+  },
+  // Pi grill on PR #29 — adverse package statements must survive the label
+  // allowlist and beat the claim; a wheat-specific tag is not "oats".
+  {
+    id: 'B11',
+    expect: 'not-safe',
+    why: 'conflicting labels — "No gluten" AND "contains gluten" on an otherwise-safe list (ignoring the warning would yield safe)',
+    product: {
+      product_name: 'Plain Rice Cakes',
+      ingredients_text: 'whole grain brown rice, sunflower oil, sea salt.',
+      allergens_tags: [],
+      traces_tags: [],
+      labels_tags: ['en:no-gluten', 'en:contains-gluten'],
+      source: 'openfoodfacts',
+    },
+  },
+  {
+    id: 'B12',
+    expect: 'caution',
+    why: 'wheat-specific allergen tag + "No gluten" label + oats — oats explain a generic gluten tag, not a wheat tag',
+    product: {
+      product_name: 'Honey Oat Granola Clusters',
+      ingredients_text: 'whole grain rolled oats, honey, brown sugar, sunflower oil, sea salt.',
+      allergens_tags: ['en:wheat'],
+      traces_tags: [],
+      labels_tags: ['en:no-gluten'],
+      source: 'openfoodfacts',
+    },
+  },
+  {
+    id: 'B13',
+    expect: 'not-safe',
+    why: 'free-text "very low gluten" tag on an otherwise-safe list — gluten is present; must not read as "no label"',
+    product: {
+      product_name: 'Seeded Crispbread',
+      ingredients_text: 'rice flour, sunflower seeds, flaxseed, rapeseed oil, sea salt.',
+      allergens_tags: [],
+      traces_tags: [],
+      labels_tags: ['en:very-low-gluten'],
       source: 'openfoodfacts',
     },
   },

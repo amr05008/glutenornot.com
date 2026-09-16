@@ -82,6 +82,7 @@ Netto 150 g`,
     // without a certification mark). A whole-product claim now covers oats.
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 flipped — labeled GF + rolled oats, no certification mark',
     ocrText: `HONEY OAT GRANOLA CLUSTERS
 Gluten Free
@@ -93,6 +94,7 @@ NET WT 11 OZ (312g)`,
     id: 6,
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 — "Certified Gluten-Free (GFCO)" + rolled oats',
     ocrText: `MAPLE ALMOND OATMEAL CUP
 Certified Gluten-Free (GFCO)
@@ -264,6 +266,7 @@ NET WT 7 OZ (198g). Keep sealed for freshness. Made with love since 1998.`,
     id: 23,
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 flipped — labeled GF fruit bar, list calls its oats gluten-free, natural flavors present',
     ocrText: `ORCHARD FRUIT & OAT BAR — STRAWBERRY
 Gluten Free · Plant Based · Whole Grains & Real Fruit
@@ -297,6 +300,7 @@ NET WT 2.1 OZ (60g)`,
     id: 26,
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 flipped, Spanish — "Sin gluten" + avena integral + aromas naturales',
     ocrText: `GRANOLA DE AVENA CON MIEL
 Sin gluten

@@ -30,10 +30,11 @@ a frame. Front-only → caution ("show me the ingredients"); back-only → cauti
 when a brand printed "certified gluten-free oats" inside the ingredient list.
 
 Domain fact: FDA 21 CFR 101.91 applies the 20 ppm limit to every ingredient
-of a product labeled "gluten-free", oats included — a manufacturer making the
-claim on an oat product is using purity-protocol or sorted-and-tested oats.
-The certification mark adds third-party testing on top of the same standard;
-it does not change the standard. The community carve-out that 003 preserved
+of a product labeled "gluten-free", oats included — the claim is the
+manufacturer's assurance that the oats meet it (the regulation does not
+mandate a sourcing or testing method, so the prompt asserts none). The
+certification mark adds third-party testing on top of the same standard; it
+does not change the standard. The community carve-out that 003 preserved
 is about avenin sensitivity (a small share of people with celiac disease react
 to oats themselves), which no label resolves.
 
@@ -50,13 +51,18 @@ to oats themselves), which no label resolves.
    transcribed into the database, and covers ambiguous ingredients and oats. Only an
    explicit allowlist of Open Food Facts claim tags (`GF_LABEL_TAGS`: the
    `en:no-gluten` / `en:suitable-for-celiacs` subtrees of the labels taxonomy)
-   reaches that line; `en:contains-gluten` gets its own "Package states:
-   contains gluten" line (never safe), and any other gluten-ish tag (free
-   text such as `en:gluten-free-oats`) is dropped. A gluten allergen tag next
-   to a gluten-free label **with oats in the list** and no gluten grain is the
-   auto-derived-from-oats pattern and no longer lowers the verdict
-   (`assessGlutenSignal` note rewritten, gated on `OATS_PATTERN`); with
-   neither oats nor a grain the record contradicts itself and the old
+   reaches that line; the package's own gluten-present statements
+   (`en:contains-gluten` and free-text tags matching
+   `ADVERSE_GLUTEN_TAG_PATTERN`: low / very low gluten, gluten-reduced, not
+   gluten-free, may contain gluten) get their own "Package states:" line,
+   which is never safe and beats a Certifications line on the same record;
+   any other gluten-ish tag (`en:gluten-free-oats`) is dropped. A **generic**
+   gluten allergen tag next to a gluten-free label **with oats in the list**
+   and no gluten grain is the auto-derived-from-oats pattern and no longer
+   lowers the verdict (`assessGlutenSignal` note rewritten, gated on
+   `OATS_PATTERN` and on every gluten-family tag being `en:gluten`); with
+   neither oats nor a grain, or with a grain-specific tag such as `en:wheat`
+   that oats cannot explain, the record contradicts itself and the old
    "caution with low confidence" wording stays. A listed gluten source
    (caution, "label and list disagree"), a gluten trace tag (caution), and
    missing or sparse ingredients (caution, low) still win.
@@ -122,8 +128,17 @@ Live eval (`RUN_LIVE_EVALS=1`, Opus 4.8 through the real prompts), 2026-09-16:
   trace → `caution`; B7 label + gluten tag + no oats + ambiguous-only list →
   `caution` (the /grill case); B8 `en:contains-gluten` + oats → not-safe;
   B9 free-text `en:gluten-free-oats` tag + natural flavors → `caution`; B10
-  no label + natural flavors → `caution` (barcode baseline).
-- **Final gate: 37/37, zero false-safe.** Two seams were caught on the way:
+  no label + natural flavors → `caution` (barcode baseline); B11 `no-gluten`
+  AND `contains-gluten` on an otherwise-safe list → not-safe; B12 wheat-specific
+  tag + label + oats → `caution`; B13 free-text `very-low-gluten` on an
+  otherwise-safe list → not-safe. Safe-with-oats cases (5, 6, 23, 26, B1, B2)
+  additionally assert the avenin caveat in the explanation.
+- **Final gate: 40/40, zero false-safe** (OCR 27 + barcode 13; tables in the
+  PR body). Four seams
+  were caught on the way — Pi's review of PR #29 found the allowlist dropped
+  adverse free-text tags ("very low gluten") to the same context as "no
+  label", and the label-wins note fired on a wheat-specific tag; both fixed
+  deterministically with B11–B13 + unit tests. Earlier:
   the first cut of the barcode note explained a gluten tag away as "oats"
   without checking for oats (/grill, → B7 + the `OATS_PATTERN` gate), and
   case 25 / B9 (ingredient-level "gluten-free oats" + natural flavors) came

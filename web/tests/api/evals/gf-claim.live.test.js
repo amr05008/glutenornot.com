@@ -31,6 +31,11 @@ const FALLBACK_EXPLANATION = /Unable to fully analyze/;
 // Safe-with-claim cases: the explanation has to name the label as the reason
 // (definition of done — "with the claim named"), not just happen to say safe.
 const NAMES_CLAIM = /gluten[\s-]*free|label|certif|GFCO|sin gluten|glutenvrij/i;
+// Safe-with-oats cases (decision 004): the explanation must carry the avenin
+// caveat — the one signal left for people who avoid oats entirely. Pi grill
+// on PR #29: "labeled gluten-free" alone used to satisfy the gate.
+const OATS_CAVEAT = /oat/i;
+const OATS_CAVEAT_CLAUSE = /react|sensitiv|avenin|tolerat|some people|small share|not everyone/i;
 const results = [];
 
 function passes({ expect, verdicts }) {
@@ -67,6 +72,12 @@ describe.skipIf(!LIVE).concurrent('gf-claim live eval (real prompt, live Claude)
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
+      }
+      if (c.oatsCaveat) {
+        for (const r of runs) {
+          expect(r.explanation, 'explanation mentions the oats').toMatch(OATS_CAVEAT);
+          expect(r.explanation, 'explanation carries the avenin caveat').toMatch(OATS_CAVEAT_CLAUSE);
+        }
       }
     });
   }

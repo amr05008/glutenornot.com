@@ -13,6 +13,7 @@ import handler, {
   buildIngredientContext,
   assessGlutenSignal,
   hasGlutenFreeLabelTag,
+  adverseGlutenLabels,
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
@@ -181,6 +182,20 @@ describe('buildIngredientContext', () => {
     expect(context).not.toContain('Certifications');
   });
 
+  // Pi grill on PR #29: adverse free-text tags are evidence gluten is present
+  // and must reach Claude under the "Package states:" heading, not vanish.
+  it('surfaces adverse free-text gluten tags under Package states, alongside a claim', () => {
+    const context = buildIngredientContext({
+      ingredients_text: 'rice flour, sunflower seeds, flaxseed, sea salt',
+      labels_tags: ['en:no-gluten', 'en:very-low-gluten', 'en:gluten-reduced', 'en:not-gluten-free', 'en:may-contain-gluten'],
+    });
+    expect(context).toContain('Certifications: no-gluten');
+    expect(context).toContain('Package states: very low gluten; gluten reduced; not gluten free; may contain gluten');
+    expect(adverseGlutenLabels(['en:contains-gluten', 'en:vegan'])).toEqual(['contains gluten']);
+    expect(adverseGlutenLabels(['en:no-gluten', 'en:gluten-free-oats'])).toEqual([]);
+    expect(adverseGlutenLabels(null)).toEqual([]);
+  });
+
   it('drops a free-text gluten tag that is not an allowlisted claim', () => {
     const context = buildIngredientContext({
       ingredients_text: 'gluten-free oats, honey, natural flavors',
@@ -303,6 +318,35 @@ describe('assessGlutenSignal', () => {
       ingredients_text: 'whole grain oats, honey',
       allergens_tags: ['en:gluten'],
       labels_tags: ['en:contains-gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  // Pi grill on PR #29: hasGlutenAllergen includes en:wheat, and oats cannot
+  // explain a wheat-specific tag — the label-wins reading must not fire.
+  it('does not let the label win over a wheat-specific tag, even with oats listed', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'whole grain rolled oats, honey, sea salt',
+      allergens_tags: ['en:wheat'],
+      labels_tags: ['en:no-gluten'],
+    });
+    expect(note).toMatch(/specific grain \(wheat\)/i);
+    expect(note).toMatch(/lean caution with low confidence/i);
+    expect(note).not.toMatch(/regulated claim and wins/i);
+
+    const both = assessGlutenSignal({
+      ingredients_text: 'whole grain rolled oats, honey, sea salt',
+      allergens_tags: ['en:gluten', 'en:wheat'],
+      labels_tags: ['en:no-gluten'],
+    });
+    expect(both).not.toMatch(/regulated claim and wins/i);
+  });
+
+  it('lets a gluten tag stand when a free-text adverse label (very low gluten) is present', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'rice flour, oats',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:very-low-gluten'],
     });
     expect(note).toBeNull();
   });

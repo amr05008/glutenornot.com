@@ -7,7 +7,7 @@
  *
  *   RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
  *
- * 10 cases → 3 × 2 + 7 × 5 = 41 Opus calls. Direct Anthropic calls only: no
+ * 13 cases → 3 × 2 + 10 × 5 = 56 Opus calls. Direct Anthropic calls only: no
  * PostHog event, no scan-quota consumption, no database lookup.
  */
 import { describe, it, afterAll } from 'vitest';
@@ -18,6 +18,11 @@ const LIVE = process.env.RUN_LIVE_EVALS === '1';
 const RUNS = { safe: 2, caution: 5, unsafe: 5, 'not-safe': 5 };
 const FALLBACK_EXPLANATION = /Unable to fully analyze/;
 const NAMES_CLAIM = /gluten[\s-]*free|no[\s-]gluten|label|certif/i;
+// Safe-with-oats cases (decision 004): the explanation must carry the avenin
+// caveat — the one signal left for people who avoid oats entirely. Pi grill
+// on PR #29: "labeled gluten-free" alone used to satisfy the gate.
+const OATS_CAVEAT = /oat/i;
+const OATS_CAVEAT_CLAUSE = /react|sensitiv|avenin|tolerat|some people|small share|not everyone/i;
 const results = [];
 
 function passes({ expect, verdicts }) {
@@ -52,6 +57,12 @@ describe.skipIf(!LIVE).concurrent('barcode gf-claim live eval (real prompt, live
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
+      }
+      if (c.oatsCaveat) {
+        for (const r of runs) {
+          expect(r.explanation, 'explanation mentions the oats').toMatch(OATS_CAVEAT);
+          expect(r.explanation, 'explanation carries the avenin caveat').toMatch(OATS_CAVEAT_CLAUSE);
+        }
       }
     });
   }
