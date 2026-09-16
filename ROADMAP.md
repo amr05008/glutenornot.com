@@ -13,7 +13,8 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [ ] Build and release initial Android app on google play store **OWNER = Batch**
 
 ### In app star rating prompt ✅
- - [x] Native iOS rating prompt via `expo-store-review` (2026-07-06): fires on the result screen 2s after a successful scan, once lifetime scans ≥ 3, at most once per install (`mobile/services/review.ts`); all failures swallowed so it can never break a result. **Ships with the next iOS build.**
+ - [x] Native iOS rating prompt via `expo-store-review` (2026-07-06): fires on the result screen 2s after a successful scan, once lifetime scans ≥ 3, at most once per install (`mobile/services/review.ts`); all failures swallowed so it can never break a result. Shipped in iOS 1.3.0.
+ - [x] **Make the ask measurable + add a real write-review path** (2026-09-15, PR #27, `plans/review-prompt-visibility-2026-09-15.md`): triage found the prompt works but is structurally blind — the system sheet collects stars only (never a written review), Apple gives no callback and suppresses it silently, and App Store Connect showed 4 ratings / 2 written reviews (Feb 2026) while ~100 devices crossed the threshold. Fix: content-free `review_prompt` event (`requested` after `requestReview()` resolves — never on TestFlight; `store_opened` on link tap) via `POST /api/review` (**live**), and the result-footer "Run into an issue? Share your feedback" form link (zero submissions since launch) replaced by "Your feedback matters! Write us a review" → App Store compose sheet, gated at 3 scans (**on `main`, bumped to iOS 1.5.1, parked unshipped** — bundle with the next user-facing change). Read: weekly `requested` vs the ASC rating count, `store_opened` (distinct ids) vs written reviews, `app_version NOT LIKE '%-rc%'`.
 
 ### Privacy claims accuracy
 > Surfaced 2026-07-06 while building Recents: the per-scan PostHog events (since 2026-05-31; hashed IP, verdict, city-level geo) sit uneasily under the current claims.
@@ -198,7 +199,7 @@ Each completed item should:
 - [x] Add creator credits/names
 - [x] Add accuracy disclaimer with specifics
 - [ ] Consider adding a "Report an issue" link
-- [ ] add way to contact us (feedback, bugs, w.e)
+- [ ] add way to contact us (feedback, bugs, w.e) — **now the open follow-up from PR #27**: the in-app Google Form link is gone (zero submissions Feb–Sep 2026); the App Store support URL is the only remaining path. Decide a private channel (support email / site form) as its own small piece of work; natural bundle-mate for the parked iOS 1.5.1
 
 **Files**: `index.html` (lines 177-203)
 
