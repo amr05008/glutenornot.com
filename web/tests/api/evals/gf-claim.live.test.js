@@ -15,7 +15,7 @@
  * (plans/gf-label-claim-2026-08-28.md, step 5).
  *
  * Direct Anthropic calls only: no PostHog event, no scan-quota consumption.
- * 22 cases → 8 × 2 + 14 × 5 ≈ 86 Opus calls ≈ $2 per invocation.
+ * 27 cases → 11 × 2 + 16 × 5 = 102 Opus calls ≈ $2–3 per invocation.
  */
 import { describe, it, afterAll } from 'vitest';
 import { analyzeWithClaude } from '../../../../api/analyze.js';

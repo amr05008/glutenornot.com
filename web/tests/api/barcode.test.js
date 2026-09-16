@@ -8,9 +8,11 @@ vi.mock('../../../api/_analytics.js', async (importOriginal) => {
 });
 
 import handler, {
+  CLAUDE_PROMPT,
   parseClaudeResponse,
   buildIngredientContext,
   assessGlutenSignal,
+  hasGlutenFreeLabelTag,
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
@@ -164,6 +166,81 @@ describe('buildIngredientContext', () => {
     const context = buildIngredientContext(product);
     expect(context).not.toContain('Certifications');
   });
+
+  // Decision 004 + /grill 2026-09-16: the prompt reads "Certifications:" as
+  // the package's whole-product gluten-free claim, so only allowlisted OFF
+  // claim tags may land there. `en:contains-gluten` is a real taxonomy tag
+  // and a free-text tag canonicalizes to whatever was typed.
+  it('routes en:contains-gluten to its own line, never under Certifications', () => {
+    const context = buildIngredientContext({
+      ingredients_text: 'whole grain oats, honey',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:contains-gluten'],
+    });
+    expect(context).toContain('Package states: contains gluten');
+    expect(context).not.toContain('Certifications');
+  });
+
+  it('drops a free-text gluten tag that is not an allowlisted claim', () => {
+    const context = buildIngredientContext({
+      ingredients_text: 'gluten-free oats, honey, natural flavors',
+      labels_tags: ['en:gluten-free-oats', 'en:low-gluten'],
+    });
+    expect(context).not.toContain('Certifications');
+    expect(context).not.toContain('gluten-free-oats');
+  });
+
+  it('lists certification-body tags (children of no-gluten in the OFF taxonomy) under Certifications', () => {
+    const context = buildIngredientContext({
+      ingredients_text: 'rolled oats, honey',
+      labels_tags: ['en:gfco-gluten-free', 'en:no-gluten', 'en:crossed-grain-trademark'],
+    });
+    expect(context).toContain('Certifications: gfco-gluten-free, no-gluten, crossed-grain-trademark');
+  });
+});
+
+describe('hasGlutenFreeLabelTag', () => {
+  it('matches the allowlisted claim tags only', () => {
+    expect(hasGlutenFreeLabelTag(['en:no-gluten'])).toBe(true);
+    expect(hasGlutenFreeLabelTag(['en:vegan', 'en:coeliac-uk'])).toBe(true);
+    expect(hasGlutenFreeLabelTag(['en:contains-gluten'])).toBe(false);
+    expect(hasGlutenFreeLabelTag(['en:gluten-free-oats'])).toBe(false);
+    expect(hasGlutenFreeLabelTag([])).toBe(false);
+    expect(hasGlutenFreeLabelTag(null)).toBe(false);
+  });
+});
+
+// Decision 004 (2026-09-16): the barcode path was left on the pre-003 rubric
+// (toggle T5), so a product whose database record said "No gluten" label +
+// "gluten free rolled oats" still came back caution. The claim block is
+// ported here and, as on the OCR path, covers oats.
+describe('CLAUDE_PROMPT gluten-free label claims (barcode path)', () => {
+  function claimsBlock() {
+    const [, rest = ''] = CLAUDE_PROMPT.split('### Gluten-free label claims');
+    return rest.split('\n### ')[0];
+  }
+
+  it('has a dedicated gluten-free label claims block', () => {
+    expect(claimsBlock()).not.toBe('');
+  });
+
+  it('treats the Certifications line as the whole-product claim', () => {
+    expect(claimsBlock()).toMatch(/Certifications:/);
+    expect(claimsBlock()).toMatch(/do NOT lower the\s+verdict/);
+    expect(claimsBlock()).toMatch(/Return "safe"/);
+  });
+
+  it('lets the claim cover oats, but not a listed gluten source or a gluten trace', () => {
+    expect(claimsBlock()).toMatch(/covers oats/i);
+    expect(claimsBlock()).toMatch(/A listed gluten source/);
+    expect(claimsBlock()).toMatch(/label and the ingredient list\s+disagree/);
+    expect(claimsBlock()).toMatch(/traces/i);
+  });
+
+  it('no longer flags all oats unconditionally', () => {
+    expect(CLAUDE_PROMPT).not.toMatch(/Flag ALL oats as "caution" unless explicitly certified/);
+    expect(CLAUDE_PROMPT).toMatch(/oats without a gluten-free label or certification/i);
+  });
 });
 
 describe('assessGlutenSignal', () => {
@@ -185,9 +262,58 @@ describe('assessGlutenSignal', () => {
     expect(note).toMatch(/do not mark .*unsafe/i);
   });
 
-  it('flags the gluten-free label vs gluten allergen contradiction', () => {
+  // Decision 004 (2026-09-16): a gluten tag with no gluten grain in the list,
+  // next to a gluten-free label, is the auto-derived-from-oats pattern. The
+  // label is the manufacturer's regulated claim and wins; the note used to
+  // tell Claude to "lean caution with low confidence" on the conflict, which
+  // kept a labeled-GF oat product at caution on the barcode path.
+  it('tells Claude the gluten-free label beats an uncorroborated gluten tag when oats are listed', () => {
     const note = assessGlutenSignal(KIND);
     expect(note).toMatch(/gluten-free label/i);
+    expect(note).toMatch(/lists oats/i);
+    expect(note).toMatch(/label is the manufacturer's regulated claim and wins/i);
+    expect(note).not.toMatch(/lean caution with low confidence/i);
+  });
+
+  // /grill 2026-09-16 (controlling finding): without oats in the list the tag
+  // has no innocent explanation. Label + gluten tag + no grain + no oats is a
+  // self-contradicting record and must not be talked into safe.
+  it('keeps the contradiction → caution wording when the list has no oats to explain the tag', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'sugar, glucose syrup, natural flavouring, yeast extract, salt',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten'],
+    });
+    expect(note).toMatch(/contradicts itself/i);
+    expect(note).toMatch(/lean caution with low confidence/i);
+    expect(note).not.toMatch(/label is the manufacturer's regulated claim and wins/i);
+  });
+
+  it('recognizes oats in the local language for the label-wins note', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'copos de avena integral, miel, sal',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten'],
+    });
+    expect(note).toMatch(/lists oats/i);
+  });
+
+  it('lets a gluten tag stand when the package itself says it contains gluten', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'whole grain oats, honey',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:contains-gluten'],
+    });
+    expect(note).toBeNull();
+  });
+
+  it('does not treat a free-text gluten-free-ish tag as the label', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'gluten-free oats, honey, natural flavors',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:gluten-free-oats'],
+    });
+    expect(note).not.toMatch(/gluten-free label/i);
   });
 
   it('returns null when a gluten allergen tag IS corroborated by ingredients', () => {
@@ -250,6 +376,16 @@ describe('assessGlutenSignal — non-English ingredient lists', () => {
       allergens_tags: ['en:gluten'],
     });
     expect(note).toBeNull();
+  });
+
+  // /grill re-pass 2026-09-16: OATS_PATTERN knows Portuguese `aveia`, so the
+  // grain pattern must know Portuguese grains too — otherwise a wrong crowd
+  // label on "aveia, malte de cevada" would enable the label-wins note with
+  // nothing deterministic to block it.
+  it('treats Portuguese cevada / centeio / malte as corroborating the gluten tag', () => {
+    for (const text of ['Aveia, malte de cevada, açúcar', 'Farinha de centeio, sal', 'Extrato de malte, água']) {
+      expect(assessGlutenSignal({ ingredients_text: text, allergens_tags: ['en:gluten'], labels_tags: ['en:no-gluten'] })).toBeNull();
+    }
   });
 
   it('treats Catalan blat as corroborating the gluten tag', () => {
@@ -779,14 +915,14 @@ describe('barcode handler analytics', () => {
   it('tracks the no-ingredient-data caution with confidence low and had_ingredient_data false', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ status: 1, product: { product_name: 'Mystery Snack' } }),
+      json: async () => ({ status: 1, product: { product_name: 'Mystery Snack', labels_tags: ['en:no-gluten'] } }),
     }));
     const res = mockRes();
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.verdict).toBe('caution');
     expect(trackScan).toHaveBeenCalledWith(
-      expect.objectContaining({ confidence: 'low', hadIngredientData: false })
+      expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true })
     );
   });
 
@@ -932,6 +1068,9 @@ describe('barcode handler analytics', () => {
     const res = mockRes();
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
     expect(res.statusCode).toBe(200);
+    // Decision 004: the barcode twin of gf_claim_present — explicit false when
+    // the record has no label tag at all, so labeled vs unlabeled is readable.
+    expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ gfLabelPresent: false }));
     expect(trackScan).toHaveBeenCalledWith(
       expect.objectContaining({ confidence: 'high', hadIngredientData: true })
     );

@@ -31,7 +31,7 @@ const REVIEW_PROMPT_EVENT = 'review_prompt';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, imageKb, ocrChars, gfClaimPresent, ocrMs, claudeMs, totalMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, ocrMs, claudeMs, totalMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -48,6 +48,12 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // Barcode path only: splits caution verdicts into "the database had no
   // ingredient data" vs a real judgement call on actual ingredients.
   if (hadIngredientData != null) props.had_ingredient_data = hadIngredientData;
+  // Barcode path only (decision 004): did the database record carry a
+  // whole-product gluten-free label tag (`hasGlutenFreeLabelTag`)? The
+  // barcode twin of `gf_claim_present` — splits barcode cautions into labeled
+  // vs unlabeled so the claim rule's effect on this path is readable. A flag,
+  // never the tag list or the product.
+  if (gfLabelPresent != null) props.gf_label_present = gfLabelPresent;
   // OCR path only (plans/ocr-capture-assist-2026-07-18.md): technical capture
   // metrics — decoded upload size and how much text Vision extracted. Byte and
   // char COUNTS only, never content (privacy: no record of what was scanned).
@@ -221,6 +227,7 @@ function anonId(ip) {
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
  * @param {boolean} [input.gfClaimPresent]  OCR path only: the text carried a gluten-free claim phrase
+ * @param {boolean} [input.gfLabelPresent]  Barcode path only: the record carried a gluten-free label tag
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
  * @param {number} [input.claudeMs]         OCR path only: Claude round-trip in ms (incl. retries)
  * @param {number} [input.totalMs]          OCR path only: body-received → verdict, in ms

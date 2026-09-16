@@ -20,6 +20,17 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
   caution share into labeled vs unlabeled products so the claim rule (decision
   003, `plans/gf-label-claim-2026-08-28.md`) is measurable. A flag, never the
   text — the privacy invariant below holds. Omitted on barcode scans.
+- `gf_label_present` (barcode only) — boolean: the database record carried a
+  whole-product gluten-free label tag (`hasGlutenFreeLabelTag` in
+  `api/barcode.js`, an allowlist of Open Food Facts label ids — not Claude's
+  judgement). The barcode twin of `gf_claim_present`, added with decision 004
+  (2026-09-16, the claim now covers oats on both paths) so barcode cautions
+  split into labeled vs unlabeled. Present on both the analyzed and the
+  no-ingredient-data barcode `scan`. A flag, never the tags or the product.
+  Caveat: a claim can also reach Claude through `ingredients_text` itself
+  (contributors sometimes paste the whole panel, ending "... Gluten free."),
+  which the flag does not see — so `gf_label_present = false` slightly
+  undercounts labeled products on this path.
 - `ocr_ms`, `claude_ms`, `total_ms` (OCR only — the **server leg**: Vision
   round-trip, Claude round-trip incl. retries, and body-received → verdict.
   The upload leg is *not* in `total_ms` — the server clock starts once the body
