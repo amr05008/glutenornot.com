@@ -141,6 +141,14 @@ describe('buildScanProperties (quality fields)', () => {
   });
 });
 
+describe('buildScanProperties (gf_label_present — decision 004, barcode twin)', () => {
+  it('records gf_label_present, including an explicit false, and omits it when not provided', () => {
+    expect(buildScanProperties({ method: 'barcode', verdict: 'safe', gfLabelPresent: true }).gf_label_present).toBe(true);
+    expect(buildScanProperties({ method: 'barcode', verdict: 'caution', gfLabelPresent: false }).gf_label_present).toBe(false);
+    expect(buildScanProperties({ method: 'ocr', verdict: 'safe' })).not.toHaveProperty('gf_label_present');
+  });
+});
+
 describe('buildScanProperties (gf_claim_present)', () => {
   it('records gf_claim_present, including an explicit false', () => {
     const withClaim = buildScanProperties({ method: 'ocr', verdict: 'safe', gfClaimPresent: true });

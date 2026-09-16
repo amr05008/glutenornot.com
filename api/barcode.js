@@ -53,6 +53,9 @@ You will receive:
 - Ingredients text (if available)
 - Allergen tags (if available)
 - Traces/cross-contamination tags (if available)
+- Certifications: gluten-free label tags transcribed from the package (if any)
+- "Package states: …" — the package's own statement that gluten is present (contains gluten, low / very low gluten, gluten-reduced, not gluten-free, may contain gluten), if any
+- "Other gluten-related labels (unverified free text, NOT a claim): …" — label tags this system does not recognize, if any
 
 ### Output Format
 Respond with JSON only, no additional text.
@@ -74,25 +77,58 @@ frequently auto-derived from ingredients or contributed by users — they are NO
   verdict you already reach from the ingredients. They must never be the sole basis for "unsafe."
 - A "gluten" allergen tag is commonly auto-derived from oats. If the ingredients contain NO wheat,
   barley, or rye (and no derivative), DO NOT return "unsafe" on the strength of a gluten tag alone —
-  judge by the actual ingredients (oats → caution).
-- If the data contradicts itself (e.g. a gluten allergen tag alongside a gluten-free label), treat
-  the conflict as a reason to lean **caution with low confidence**, not "unsafe."
+  judge by the actual ingredients (oats → caution unless a gluten-free label covers them, see below).
+- A generic "gluten" allergen tag next to a gluten-free label, with oats in the ingredients and no
+  gluten grain, is that auto-derived-from-oats pattern: the label is the manufacturer's regulated
+  claim and wins. Do not lower the verdict for the tag. With neither a gluten grain nor oats in the
+  list — or with a grain-specific tag such as "wheat", "barley" or "rye", which oats cannot explain — the record
+  contradicts itself: lean caution with low confidence, not "unsafe". If the ingredients DO list a
+  gluten grain, the label and the list disagree — return "caution" and say so.
 - A "DATA RELIABILITY:" note in the product data flags exactly these situations — follow it.
+
+### Gluten-free label claims
+- A "Certifications:" line naming a gluten-free / no-gluten / certified-gluten-free label is the
+  package's whole-product gluten-free claim, transcribed into the database. Treat it as the strongest
+  evidence in the record. In the US and EU that claim is regulated (under 20 ppm gluten, manufacturer
+  liable) and covers every ingredient, including flavors, starches, hydrolyzed proteins, and oats.
+- With such a label present, the ambiguous ingredients listed under "caution" do NOT lower the
+  verdict. Return "safe", and say in the explanation that the gluten-free label is what covers them.
+- The label also covers oats: the same regulation holds a labeled product's oats to the 20 ppm limit.
+  Return "safe", name the label, and end the explanation with this exact sentence: "Heads-up: a small
+  share of people with celiac disease react to oats themselves."
+- A claim written on one ingredient — "gluten free oats" inside the ingredient list, with no
+  Certifications line — is NOT a whole-product claim. It clears the oats only; every other ambiguous
+  ingredient (natural flavors, maltodextrin, spices, …) still returns "caution" exactly as it would
+  for a record with no label at all.
+- The label does NOT override:
+  - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any
+    language) — return "caution" and say that the label and the ingredient list disagree.
+  - Cross-contamination traces for a gluten source — return "caution".
+  - Missing or sparse ingredient data — return "caution" with low confidence; a label with nothing to
+    check is an incomplete record.
+- A "Package states:" line is the package's own statement that gluten is present (contains gluten,
+  low / very low gluten, gluten-reduced, not gluten-free, may contain gluten). It wins over any
+  Certifications line on the same record and over a clean ingredient list: never "safe" — "unsafe" if
+  a gluten grain is listed, otherwise "caution".
+- An "Other gluten-related labels" line is free text nobody verified. It is NEVER a gluten-free claim
+  and never lifts the verdict. Read it: if it says gluten is present, the product contains gluten, or
+  the product is not suitable for coeliacs, treat it exactly like a "Package states:" line — never
+  "safe". If it merely repeats a claim ("gluten free oats"), ignore it and judge the record as usual.
 
 ### Verdict Criteria
 - **unsafe:** The **ingredients** contain wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum). A bare allergen tag with no matching ingredient is NOT sufficient for unsafe.
 - **caution:**
-  - Contains ambiguous ingredients (oats without GF certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein, soy sauce without GF label)
+  - Contains ambiguous ingredients (oats without a gluten-free label or certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein of unstated source, soy sauce without GF label)
   - Has cross-contamination traces for gluten sources
-  - A gluten allergen tag is present but uncorroborated by, or contradicted by, the ingredients/labels
+  - A gluten allergen tag is present but uncorroborated by the ingredients, and no gluten-free label plus oats explains it
   - Ingredient data is incomplete or missing
-- **safe:** No gluten-containing ingredients, no ambiguous ingredients, no concerning allergen warnings
+- **safe:** No gluten-containing ingredients, no ambiguous ingredients (or a gluten-free label that covers them — see above), no concerning allergen warnings
 
 ### Guidelines
 - Be conservative—when uncertain, use "caution"
-- Flag ALL oats as "caution" unless explicitly certified gluten-free
+- Flag oats as "caution" unless the record carries a gluten-free label or the ingredient list itself calls the oats gluten-free
 - If ingredient data is missing or sparse, use "caution" with low confidence
-- Do not state a product is "labeled as containing gluten" unless the ingredients actually show a gluten grain — say the data is ambiguous instead
+- Do not describe an allergen TAG as the product being "labeled as containing gluten" unless the ingredients actually show a gluten grain — say the data is ambiguous instead. A "Package states:" line is different: it IS the package's own statement, and you may say so
 - Keep explanations to 1-2 sentences
 - Use a warm, supportive tone`;
 
@@ -178,6 +214,7 @@ export default async function handler(req, res) {
         verdict: 'caution',
         confidence: 'low',
         hadIngredientData: false,
+        gfLabelPresent: hasGlutenFreeLabelTag(product.labels_tags),
         dataSource: product.source,
         ...geo,
       });
@@ -215,6 +252,7 @@ export default async function handler(req, res) {
       verdict: analysis.verdict,
       confidence: analysis.confidence,
       hadIngredientData: true,
+      gfLabelPresent: hasGlutenFreeLabelTag(product.labels_tags),
       dataSource: product.source,
       ...geo,
     });
@@ -525,13 +563,87 @@ async function lookupUpcItemDb(barcode) {
 // not proof of gluten, and are the usual reason a false `en:gluten` tag appears.
 // Open Food Facts returns ingredients in the product's local language, so the
 // pattern covers the analyze-prompt vocabulary (Spanish, Dutch, Catalan, French)
-// plus German and Italian. A miss in an uncovered language is handled by the
+// plus German, Italian and Portuguese (pt added 2026-09-16 so every language
+// OATS_PATTERN can enable the label-wins note in, this pattern can also block
+// with a grain). A miss in an uncovered language is handled by the
 // note's wording, which never asserts the grain is absent. `\b` breaks on
 // accented letters (é is non-\w in JS), hence `\p{L}` lookarounds with the u
 // flag. `tarwe`/`weizen`/`gerst`/`rogge` allow compound suffixes (tarwebloem,
 // Weizenmehl); `malt` stays exact so maltodextrin (gluten-free) never matches.
 const GLUTEN_GRAIN_PATTERN =
-  /(?<!\p{L})(wheat|barley|rye|malt|triticale|spelt|kamut|khorasan|einkorn|emmer|durum|semolina|farina|seitan|bulgur|couscous|matzo|graham|trigo|cebada|centeno|malta|sémola|espelta|tarwe\p{L}*|gerst\p{L}*|rogge\p{L}*|mout|griesmeel|blat|ordi|sègol|sèmola|blé|froment|orge|seigle|semoule|épeautre|weizen\p{L}*|gerste|roggen|malz|dinkel|frumento|orzo|segale|malto|farro|semola)(?!\p{L})/iu;
+  /(?<!\p{L})(wheat|barley|rye|malt|triticale|spelt|kamut|khorasan|einkorn|emmer|durum|semolina|farina|seitan|bulgur|couscous|matzo|graham|trigo|cebada|centeno|malta|sémola|espelta|tarwe\p{L}*|gerst\p{L}*|rogge\p{L}*|mout|griesmeel|blat|ordi|sègol|sèmola|blé|froment|orge|seigle|semoule|épeautre|weizen\p{L}*|gerste|roggen|malz|dinkel|frumento|orzo|segale|malto|farro|semola|cevada|centeio|malte)(?!\p{L})/iu;
+
+// Open Food Facts label tags that are a whole-product gluten-free claim
+// (decision 004). Canonical ids from openfoodfacts-server
+// `taxonomies/labels.txt`, 2026-09-16: every certification body sits under
+// `en:no-gluten` or `en:suitable-for-celiacs`, and OFF adds each tag's
+// parents to `labels_tags`, so a GFCO product carries `en:gfco-gluten-free`
+// AND `en:no-gluten`. An explicit allowlist, not a substring match:
+// `en:contains-gluten` is a real tag, and a free-text tag canonicalizes to
+// whatever the contributor typed (`en:gluten-free-oats`), which is
+// ingredient-level at best.
+const GF_LABEL_TAGS = new Set([
+  'en:no-gluten',
+  'en:certified-gluten-free',
+  'en:gfco-gluten-free',
+  'en:crossed-grain-trademark',
+  'en:dzg-gluten-free',
+  'en:free-from-dairy-and-gluten',
+  'en:suitable-for-celiacs',
+  'en:celiac-disease-foundation',
+  'en:beyond-celiac-gluten-free',
+  'en:coeliac-uk',
+  'en:coeliac-australia-new-zealand',
+  'en:canadian-celiac-association-gluten-free',
+]);
+// The package's own statements that gluten is PRESENT, transcribed as labels:
+// `en:contains-gluten` is canonical; the rest are free-text tags that
+// canonicalize to whatever a contributor typed ("very low gluten",
+// "gluten-reduced", "not gluten-free", "may contain gluten"). Adverse evidence
+// must reach Claude under its own heading, never be dropped (Pi grill on PR
+// #29: the first allowlist cut made these indistinguishable from "no label").
+const ADVERSE_GLUTEN_TAG_PATTERN =
+  /contains-gluten|low-gluten|gluten-reduced|reduced-gluten|not-gluten-free|non-gluten-free|may-contain-gluten|traces?-of-gluten|gluten-traces/;
+
+/** The record's package statements that gluten is present, as readable text. */
+function adverseGlutenLabels(labelsTags) {
+  if (!Array.isArray(labelsTags)) return [];
+  return labelsTags
+    .filter(tag => ADVERSE_GLUTEN_TAG_PATTERN.test(tag))
+    .map(tag => tag.replace(/^[a-z]{2}:/, '').replace(/-/g, ' '));
+}
+
+// Gluten-related label tags the system does NOT recognize — neither an
+// allowlisted claim nor a known adverse statement. Free text a contributor
+// typed ("en:gluten-containing", "en:not-suitable-for-celiacs",
+// "en:gluten-free-oats"). Pi grill on PR #29: these must not vanish, and the
+// deterministic layer cannot tell adverse from positive intent, so they go to
+// Claude under an explicitly unverified heading that never lifts the verdict.
+const GLUTEN_RELATED_TAG_PATTERN = /gluten|celiac|coeliac/;
+function unrecognizedGlutenLabels(labelsTags) {
+  if (!Array.isArray(labelsTags)) return [];
+  return labelsTags
+    .filter(tag => GLUTEN_RELATED_TAG_PATTERN.test(tag) && !GF_LABEL_TAGS.has(tag) && !ADVERSE_GLUTEN_TAG_PATTERN.test(tag))
+    .map(tag => tag.replace(/^[a-z]{2}:/, '').replace(/-/g, ' '));
+}
+
+// Allergen tags in the gluten family: the generic `en:gluten` (the one OFF
+// auto-derives from oats) plus grain-specific tags, which oats never explain.
+const GRAIN_SPECIFIC_ALLERGEN_TAGS = new Set(['en:wheat', 'en:barley', 'en:rye', 'en:spelt', 'en:kamut', 'en:triticale']);
+function isGlutenFamilyTag(tag) {
+  return tag === 'en:gluten' || GRAIN_SPECIFIC_ALLERGEN_TAGS.has(tag) || tag.includes('gluten');
+}
+
+// Oats in the product's local language — the one ingredient that makes an
+// auto-derived `en:gluten` tag explicable on a labeled gluten-free product.
+// Mirrors the analyze-prompt glossary (avena / haver / civada / avoine) plus
+// German, Italian, Portuguese; compound forms (havermout, Haferflocken) allowed.
+const OATS_PATTERN = /(?<!\p{L})(oats?|oatmeal|avena|haver\p{L}*|civada|avoine|hafer\p{L}*|aveia)(?!\p{L})/iu;
+
+/** Does the record carry a whole-product gluten-free label tag? */
+function hasGlutenFreeLabelTag(labelsTags) {
+  return Array.isArray(labelsTags) && labelsTags.some(tag => GF_LABEL_TAGS.has(tag));
+}
 
 /**
  * Assess whether a database `gluten` allergen tag is trustworthy.
@@ -544,9 +656,7 @@ const GLUTEN_GRAIN_PATTERN =
  */
 function assessGlutenSignal(product) {
   const allergenTags = product.allergens_tags || [];
-  const hasGlutenAllergen = allergenTags.some(
-    tag => tag === 'en:gluten' || tag === 'en:wheat' || tag.includes('gluten')
-  );
+  const hasGlutenAllergen = allergenTags.some(isGlutenFamilyTag);
   if (!hasGlutenAllergen) return null;
 
   const ingredients = product.ingredients_text;
@@ -557,9 +667,17 @@ function assessGlutenSignal(product) {
   if (GLUTEN_GRAIN_PATTERN.test(ingredients)) return null;
 
   const labelTags = product.labels_tags || [];
-  const hasGlutenFreeLabel = labelTags.some(
-    tag => tag === 'en:no-gluten' || tag.includes('gluten-free') || tag.includes('no-gluten')
-  );
+  // The package itself says gluten is present → the tag is corroborated.
+  if (adverseGlutenLabels(labelTags).length > 0) return null;
+
+  const hasGlutenFreeLabel = hasGlutenFreeLabelTag(labelTags);
+  // Oats explain an auto-derived GENERIC `en:gluten` tag. A grain-specific tag
+  // (`en:wheat`, `en:barley`, `en:rye`…) has no oat explanation (Pi grill on
+  // PR #29), so the label-wins reading requires every gluten-family tag to be
+  // the generic one — and no unrecognized gluten-related label text, whose
+  // intent this layer cannot read.
+  const onlyGenericGlutenTag = allergenTags.filter(isGlutenFamilyTag).every(tag => tag === 'en:gluten');
+  const hasUnrecognizedLabel = unrecognizedGlutenLabels(labelTags).length > 0;
 
   let note =
     "DATA RELIABILITY: The 'gluten' allergen tag is NOT corroborated by any gluten-grain term " +
@@ -569,10 +687,33 @@ function assessGlutenSignal(product) {
     'crowd edits, so treat it as low-confidence metadata, not a manufacturer declaration. ' +
     'DO NOT mark this product unsafe on the strength of that tag alone — base the verdict on the actual ingredients.';
 
-  if (hasGlutenFreeLabel) {
+  if (hasGlutenFreeLabel && onlyGenericGlutenTag && !hasUnrecognizedLabel && OATS_PATTERN.test(ingredients)) {
+    // Decision 004 (2026-09-16): label + oats + auto-derived gluten tag is the
+    // normal shape of a labeled-GF oat product in Open Food Facts. The label
+    // is the manufacturer's regulated claim; it used to be read as a conflict
+    // that pushed the verdict to caution. Gated on oats actually being in the
+    // list (/grill 2026-09-16): without them the tag has no innocent
+    // explanation and the record simply contradicts itself.
     note +=
-      ' This product also carries a gluten-free label, which directly contradicts the gluten allergen tag; ' +
-      'treat the conflict as a reason to lean caution with low confidence rather than unsafe.';
+      ' This product also carries a gluten-free label and lists oats. A gluten tag with oats in the list ' +
+      'and no gluten grain, next to a gluten-free label, is the auto-derived-from-oats pattern: the label is ' +
+      'the manufacturer\'s regulated claim and wins — do not lower the verdict on the strength of the tag.';
+  } else if (hasGlutenFreeLabel && !onlyGenericGlutenTag) {
+    note +=
+      ' This product also carries a gluten-free label, but the allergen tag names a specific grain (wheat, ' +
+      'barley or rye), which oats cannot explain — the record contradicts itself; treat the conflict as a ' +
+      'reason to lean caution with low confidence rather than unsafe.';
+  } else if (hasGlutenFreeLabel && hasUnrecognizedLabel) {
+    note +=
+      ' This product also carries a gluten-free label AND unrecognized gluten-related label text (see ' +
+      '"Other gluten-related labels"). If that text says gluten is present or the product is unsuitable for ' +
+      'coeliacs, it wins — never "safe". Only if it does not, and oats are listed, is the gluten tag the ' +
+      'auto-derived-from-oats pattern that the label covers.';
+  } else if (hasGlutenFreeLabel) {
+    note +=
+      ' This product also carries a gluten-free label, and the ingredient list shows neither a gluten grain ' +
+      'nor oats that would explain the tag — the record contradicts itself; treat the conflict as a reason ' +
+      'to lean caution with low confidence rather than unsafe.';
   }
 
   return note;
@@ -611,14 +752,24 @@ function buildIngredientContext(product) {
     parts.push(`Cross-contamination traces: ${traces}`);
   }
 
-  if (product.labels_tags && product.labels_tags.length > 0) {
-    const glutenLabels = product.labels_tags.filter(
-      tag => tag.includes('gluten') || tag.includes('celiac') || tag.includes('coeliac')
-    );
-    if (glutenLabels.length > 0) {
-      const labels = glutenLabels.map(tag => tag.replace('en:', '')).join(', ');
-      parts.push(`Certifications: ${labels}`);
-    }
+  // Only allowlisted gluten-free claim tags reach the "Certifications:" line
+  // (the prompt reads that line as the package's whole-product claim). The
+  // package's own gluten-present statements get their own "Package states:"
+  // line so adverse evidence is never dropped; any other gluten-ish tag
+  // (unrecognized free text) is dropped rather than shown under a heading
+  // that would lend it weight.
+  const labelTags = Array.isArray(product.labels_tags) ? product.labels_tags : [];
+  const claimLabels = labelTags.filter(tag => GF_LABEL_TAGS.has(tag));
+  if (claimLabels.length > 0) {
+    parts.push(`Certifications: ${claimLabels.map(tag => tag.replace('en:', '')).join(', ')}`);
+  }
+  const adverse = adverseGlutenLabels(labelTags);
+  if (adverse.length > 0) {
+    parts.push(`Package states: ${adverse.join('; ')}`);
+  }
+  const unrecognized = unrecognizedGlutenLabels(labelTags);
+  if (unrecognized.length > 0) {
+    parts.push(`Other gluten-related labels (unverified free text, NOT a claim): ${unrecognized.join('; ')}`);
   }
 
   // Only ingredients_text or allergens_tags are useful for analysis
@@ -709,9 +860,15 @@ function parseClaudeResponse(content) {
 
 // Re-export shared utils + local functions for testing
 export {
+  CLAUDE_PROMPT,
+  analyzeWithClaude, // real prompt + callClaude + parse path, for the live evals in tests/api/evals
   parseClaudeResponse,
   buildIngredientContext,
   assessGlutenSignal,
+  hasGlutenFreeLabelTag,
+  adverseGlutenLabels,
+  unrecognizedGlutenLabels,
+  isGlutenFamilyTag,
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,

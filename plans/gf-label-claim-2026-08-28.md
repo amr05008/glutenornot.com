@@ -77,6 +77,11 @@ Toggles — flip by editing here, then the prompt text in step 3 and the eval ex
   Flip = one prompt bullet + eval case 13's expectation.
 - **T2 certified clears oats** — default yes. Alternative: no (oats always caution, full
   stop). Flip = one prompt bullet + eval case 6.
+  **Flipped the other way 2026-09-16 (decision 004):** a whole-product claim covers oats
+  too, not only a certification mark — the mark is on the front and the ingredients on the
+  back, so "certified clears oats" never fired from one photo. Cases 5 → safe, 23–27 added.
+  T5 reversed at the same time: the claim block is in `api/barcode.js` with its own eval
+  (`barcode-gf-claim-cases.js`).
 - **T3 listed gluten source despite claim** — default `caution` + "label and list disagree".
   Alternative: `unsafe` (treat the listed source as authoritative). Either is never `safe`;
   the eval only asserts not-safe.

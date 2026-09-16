@@ -298,9 +298,21 @@ describe('CLAUDE_PROMPT gluten-free label claims', () => {
     expect(claimsBlock()).toMatch(/Return "safe"/);
   });
 
-  it('keeps oats at caution unless the claim is a certification mark (T2)', () => {
-    expect(claimsBlock()).toMatch(/Oats — still "caution", unless the claim is a third-party certification mark/);
+  // Decision 004 (2026-09-16): T2 flipped. A whole-product claim covers the
+  // oats too — FDA 21 CFR 101.91 holds every ingredient, oats included, to
+  // 20 ppm. The old "certification mark clears oats" was unreachable by photo:
+  // on a small package the mark is on the front and the ingredient panel on
+  // the back, so the two never shared a frame (a GFCO-certified fig bar came
+  // back caution twice on 2026-09-16).
+  it('lets a whole-product gluten-free claim cover oats (T2 flipped)', () => {
+    expect(claimsBlock()).not.toMatch(/Oats — still "caution"/);
+    expect(claimsBlock()).toMatch(/covers oats/i);
     expect(claimsBlock()).toContain('GFCO');
+  });
+
+  it('keeps plain oats at caution when the label carries no claim', () => {
+    expect(CLAUDE_PROMPT).toMatch(/oats without a gluten-free claim or certification/i);
+    expect(CLAUDE_PROMPT).not.toMatch(/Flag oats as "caution" even if the product claims to be gluten-free/);
   });
 
   it('keeps a listed gluten source and may-contain advisories at caution despite the claim (T1, T3)', () => {
@@ -331,7 +343,11 @@ describe('CLAUDE_PROMPT gluten-free label claims', () => {
 
   it('scopes an ingredient-level claim to that ingredient, not the product', () => {
     expect(claimsBlock()).toContain('"gluten-free soy sauce"');
-    expect(claimsBlock()).toMatch(/covers only that ingredient/);
+    // Reworded 2026-09-16 (decision 004): the live eval caught "gluten-free
+    // oats" + natural flavors being talked into safe 3/5 — the ingredient-level
+    // claim must be said to NOT lift the verdict, not merely "cover" one item.
+    expect(claimsBlock()).toMatch(/clears only that one ingredient/);
+    expect(claimsBlock()).toMatch(/does NOT lift the verdict/);
   });
 
   it('treats a claim with no visible ingredient list as an incomplete read', () => {

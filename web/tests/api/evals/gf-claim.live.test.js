@@ -15,11 +15,12 @@
  * (plans/gf-label-claim-2026-08-28.md, step 5).
  *
  * Direct Anthropic calls only: no PostHog event, no scan-quota consumption.
- * 22 cases → 8 × 2 + 14 × 5 ≈ 86 Opus calls ≈ $2 per invocation.
+ * 27 cases → 11 × 2 + 16 × 5 = 102 Opus calls ≈ $2–3 per invocation.
  */
 import { describe, it, afterAll } from 'vitest';
 import { analyzeWithClaude } from '../../../../api/analyze.js';
 import { GF_CLAIM_CASES } from './gf-claim-cases.js';
+import { hasOatsCaveat } from './assertions.js';
 
 const LIVE = process.env.RUN_LIVE_EVALS === '1';
 const RUNS = { safe: 2, caution: 5, unsafe: 5, 'not-safe': 5 };
@@ -31,6 +32,10 @@ const FALLBACK_EXPLANATION = /Unable to fully analyze/;
 // Safe-with-claim cases: the explanation has to name the label as the reason
 // (definition of done — "with the claim named"), not just happen to say safe.
 const NAMES_CLAIM = /gluten[\s-]*free|label|certif|GFCO|sin gluten|glutenvrij/i;
+// Safe-with-oats cases (decision 004): the explanation must carry the avenin
+// caveat — the one signal left for people who avoid oats entirely. The
+// matcher lives in assertions.js and is unit-tested offline against positive
+// and negative fixtures (Pi grill on PR #29).
 const results = [];
 
 function passes({ expect, verdicts }) {
@@ -67,6 +72,11 @@ describe.skipIf(!LIVE).concurrent('gf-claim live eval (real prompt, live Claude)
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
+      }
+      if (c.oatsCaveat) {
+        for (const r of runs) {
+          expect(hasOatsCaveat(r.explanation), `explanation carries the avenin caveat: ${r.explanation}`).toBe(true);
+        }
       }
     });
   }

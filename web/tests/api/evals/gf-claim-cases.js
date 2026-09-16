@@ -25,9 +25,11 @@
  * as a false safe rather than hiding behind the baseline caution.
  *
  * The plan's toggles live here as expectations: T1 (advisory on a labeled
- * product → caution: cases 13, 14), T2 (a certification mark clears oats: case
- * 6), T3 (listed gluten source beats the claim: cases 7, 8). Flip a toggle in
- * the plan → edit the prompt AND the matching expectation here.
+ * product → caution: cases 13, 14), T2 (a whole-product claim covers oats —
+ * flipped 2026-09-16, decision 004: cases 5, 6, 23; oats with no claim stay
+ * caution: cases 24, 25), T3 (listed gluten source beats the claim: cases 7,
+ * 8). Flip a toggle in the plan → edit the prompt AND the matching
+ * expectation here.
  */
 export const GF_CLAIM_CASES = [
   {
@@ -76,8 +78,12 @@ Netto 150 g`,
   },
   {
     id: 5,
-    expect: 'caution',
-    why: 'labeled GF + rolled oats, no certification — the oats rule holds',
+    // Decision 004 (2026-09-16): was `caution` under T2 (oats stay caution
+    // without a certification mark). A whole-product claim now covers oats.
+    expect: 'safe',
+    namesClaim: true,
+    oatsCaveat: true,
+    why: 'T2 flipped — labeled GF + rolled oats, no certification mark',
     ocrText: `HONEY OAT GRANOLA CLUSTERS
 Gluten Free
 INGREDIENTS: Whole grain rolled oats, honey, brown sugar, sunflower oil, almonds, natural flavor, sea salt.
@@ -88,6 +94,7 @@ NET WT 11 OZ (312g)`,
     id: 6,
     expect: 'safe',
     namesClaim: true,
+    oatsCaveat: true,
     why: 'T2 — "Certified Gluten-Free (GFCO)" + rolled oats',
     ocrText: `MAPLE ALMOND OATMEAL CUP
 Certified Gluten-Free (GFCO)
@@ -253,5 +260,68 @@ NET WT 4 OZ (113g)`,
 Gluten Free · Non-GMO · Made in Vermont
 Small-batch popped in copper kettles. A sweet and salty snack the whole family will love.
 NET WT 7 OZ (198g). Keep sealed for freshness. Made with love since 1998.`,
+  },
+  // Decision 004 (2026-09-16) — the oats rule after the T2 flip.
+  {
+    id: 23,
+    expect: 'safe',
+    namesClaim: true,
+    oatsCaveat: true,
+    why: 'T2 flipped — labeled GF fruit bar, list calls its oats gluten-free, natural flavors present',
+    ocrText: `ORCHARD FRUIT & OAT BAR — STRAWBERRY
+Gluten Free · Plant Based · Whole Grains & Real Fruit
+INGREDIENTS: Brown rice flour, brown rice syrup, fruit paste, strawberry filling (cane sugar, rice starch, strawberries, natural flavors, pectin, citric acid), canola oil, gluten free five grain flour (amaranth, quinoa, millet, sorghum, teff), gluten free rolled oats, glycerin, flaxseed, leavening (monocalcium phosphate, sodium bicarbonate), sea salt, xanthan gum, natural flavor.
+Made in a dedicated peanut and tree nut free facility.
+NET WT 2 OZ (57g)`,
+  },
+  {
+    id: 24,
+    expect: 'caution',
+    why: 'no claim + rolled oats — plain oats are still a cross-contamination caution (the flip needs a claim)',
+    ocrText: `HONEY OAT GRANOLA CLUSTERS
+INGREDIENTS: Whole grain rolled oats, honey, brown sugar, sunflower oil, almonds, sea salt.
+CONTAINS: TREE NUTS (ALMONDS).
+NET WT 11 OZ (312g)`,
+  },
+  {
+    id: 25,
+    expect: 'caution',
+    why: 'ingredient-level "gluten-free oats" with no product claim covers the oats only; natural flavors stay ambiguous',
+    ocrText: `MAPLE PECAN OATMEAL CUP
+INGREDIENTS: Gluten-free whole grain rolled oats, maple sugar, pecans, chia seeds, natural flavor, sea salt.
+CONTAINS: TREE NUTS (PECANS).
+NET WT 2.1 OZ (60g)`,
+  },
+  // /grill 2026-09-16: the per-language glossaries used to say "avena (oats —
+  // treat as caution)" unconditionally, above the claims block — the traveler
+  // case got two contradicting instructions. Now "caution unless the label
+  // claims gluten-free".
+  {
+    id: 26,
+    expect: 'safe',
+    namesClaim: true,
+    oatsCaveat: true,
+    why: 'T2 flipped, Spanish — "Sin gluten" + avena integral + aromas naturales',
+    ocrText: `GRANOLA DE AVENA CON MIEL
+Sin gluten
+INGREDIENTES: Copos de avena integral, miel, azúcar de caña, aceite de girasol, almendras, aromas naturales, sal marina.
+CONTIENE: FRUTOS DE CÁSCARA (ALMENDRAS).
+Peso neto 300 g`,
+  },
+  // /grill 2026-09-16: a two-product frame with a real certification mark on
+  // product A and unlabeled oats on product B. The claim is "about this
+  // product"; it must not lift the other product's oats.
+  {
+    id: 27,
+    expect: 'not-safe',
+    why: 'multi-product frame — "CERTIFIED GLUTEN-FREE" belongs to the rice crackers, not the oat granola beside them',
+    ocrText: `SEA SALT RICE CRACKERS
+CERTIFIED GLUTEN-FREE
+INGREDIENTS: Whole grain brown rice, sunflower oil, sea salt.
+NET WT 3.5 OZ (100g)
+
+HONEY OAT GRANOLA
+INGREDIENTS: Whole grain rolled oats, honey, brown sugar, sunflower oil, natural flavor, sea salt.
+NET WT 11 OZ (312g)`,
   },
 ];
