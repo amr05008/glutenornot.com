@@ -1,27 +1,36 @@
 /**
  * Explanation assertions shared by the live runners. Kept in a plain module
  * so they can be unit-tested offline against positive AND negative fixtures
- * (Pi grill on PR #29: two independent keyword matches — "oats" anywhere plus
- * "sensitiv" anywhere — accepted "Labeled gluten-free oats, suitable for
- * people with gluten sensitivity", which is reassurance, not the caveat).
+ * (Pi grill on PR #29, two rounds: keyword co-occurrence accepted "Labeled
+ * gluten-free oats, suitable for people with gluten sensitivity"; a looser
+ * second cut still accepted "The oats themselves are covered by the label",
+ * "can tolerate oats" and "contain avenin, a natural oat protein" — none of
+ * which warns anyone).
  */
 
-// The avenin caveat: a statement that some people with celiac disease react
-// to / cannot tolerate / are sensitive to OATS THEMSELVES. The reaction has
-// to be about the oats — "gluten sensitivity" near the word "oats" is not it.
+// The avenin caveat: a WARNING that some people with celiac disease react to
+// / cannot tolerate / are sensitive to OATS THEMSELVES. Every alternative
+// requires an adverse relationship between the person and the oats; bare
+// "oats themselves", affirmative "tolerate", or the word "avenin" alone do
+// not count.
 const OATS = String.raw`(?:the\s+|these\s+|those\s+)?oats?\b`;
+const CLAUSE = String.raw`[^.;!?]{0,60}?`;
+const ADVERSE = String.raw`(?:react\w*|sensitiv\w*|intoleran\w*|reaction|symptom\w*|trigger\w*|bother\w*|problem\w*|issue\w*|flare\w*|affect\w*)`;
+const NOT_TOLERATE = String.raw`(?:don't|do not|cannot|can't|may not|might not|not|never)\s+(?:always\s+|fully\s+|well\s+)?tolerat\w*`;
 const OATS_CAVEAT_PATTERN = new RegExp(
   [
-    // "react to oats", "sensitive to the oats", "intolerant of oats", "reaction to oats"
-    String.raw`(?:react\w*|sensitiv\w*|intoleran\w*|reaction)\s+(?:to|of)\s+${OATS}`,
+    // "react to oats", "sensitive to the oats", "intolerant of oats", "reaction to oats", "symptoms from oats"
+    String.raw`${ADVERSE}\s+(?:to|of|from|with)\s+${OATS}`,
     // "cannot tolerate the oats", "don't tolerate oats"
-    String.raw`tolerat\w*\s+${OATS}`,
-    // "oats themselves", "the oats itself"
-    String.raw`\boats?\s+(?:themselves|itself)\b`,
-    // "oats can trigger a reaction", "oats cause symptoms"
-    String.raw`\boats?\b[^.;!?]{0,40}?(?:trigger|cause|provoke)\w*\s+(?:a\s+|an\s+)?(?:reaction|symptoms|response)`,
-    // the protein, by name
-    String.raw`avenin`,
+    String.raw`${NOT_TOLERATE}\s+${OATS}`,
+    // "oats themselves can trigger a reaction", "oats themselves bother some people"
+    String.raw`\boats?\s+(?:themselves|itself)\b${CLAUSE}(?:${ADVERSE}|${NOT_TOLERATE})`,
+    // "oats can trigger a reaction", "oats cause symptoms", "oats are an issue for some"
+    String.raw`\boats?\b${CLAUSE}(?:trigger|cause|provoke)\w*\s+(?:a\s+|an\s+)?(?:reaction|symptoms|response|flare)`,
+    String.raw`\boats?\b${CLAUSE}(?:issue|problem|concern|trigger)s?\s+for\b`,
+    // the protein, by name — only next to an adverse relationship
+    String.raw`avenin${CLAUSE}(?:${ADVERSE}|${NOT_TOLERATE})`,
+    String.raw`(?:${ADVERSE}|${NOT_TOLERATE})${CLAUSE}avenin`,
   ].join('|'),
   'i'
 );
