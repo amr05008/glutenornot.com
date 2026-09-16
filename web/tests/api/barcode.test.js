@@ -14,6 +14,8 @@ import handler, {
   assessGlutenSignal,
   hasGlutenFreeLabelTag,
   adverseGlutenLabels,
+  unrecognizedGlutenLabels,
+  isGlutenFamilyTag,
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
@@ -196,13 +198,18 @@ describe('buildIngredientContext', () => {
     expect(adverseGlutenLabels(null)).toEqual([]);
   });
 
-  it('drops a free-text gluten tag that is not an allowlisted claim', () => {
+  it('surfaces an unrecognized gluten-related free-text tag under an unverified heading, never as a claim', () => {
     const context = buildIngredientContext({
       ingredients_text: 'gluten-free oats, honey, natural flavors',
-      labels_tags: ['en:gluten-free-oats', 'en:low-gluten'],
+      labels_tags: ['en:gluten-free-oats', 'en:low-gluten', 'en:not-suitable-for-celiacs', 'en:gluten-containing'],
     });
     expect(context).not.toContain('Certifications');
-    expect(context).not.toContain('gluten-free-oats');
+    expect(context).toContain('Package states: low gluten');
+    expect(context).toContain(
+      'Other gluten-related labels (unverified free text, NOT a claim): gluten free oats; not suitable for celiacs; gluten containing'
+    );
+    expect(unrecognizedGlutenLabels(['en:no-gluten', 'en:contains-gluten', 'en:vegan'])).toEqual([]);
+    expect(unrecognizedGlutenLabels(null)).toEqual([]);
   });
 
   it('lists certification-body tags (children of no-gluten in the OFF taxonomy) under Certifications', () => {
@@ -330,7 +337,7 @@ describe('assessGlutenSignal', () => {
       allergens_tags: ['en:wheat'],
       labels_tags: ['en:no-gluten'],
     });
-    expect(note).toMatch(/specific grain \(wheat\)/i);
+    expect(note).toMatch(/specific grain \(wheat/i);
     expect(note).toMatch(/lean caution with low confidence/i);
     expect(note).not.toMatch(/regulated claim and wins/i);
 
@@ -340,6 +347,34 @@ describe('assessGlutenSignal', () => {
       labels_tags: ['en:no-gluten'],
     });
     expect(both).not.toMatch(/regulated claim and wins/i);
+  });
+
+  // Pi re-grill on PR #29: the classifier must cover barley/rye too, and
+  // unrecognized gluten-related label text must block the label-wins reading
+  // (this layer cannot tell "not suitable for celiacs" from "gluten-free oats").
+  it('treats barley and rye tags as grain-specific (no label-wins) and shares the classifier with detection', () => {
+    for (const tag of ['en:barley', 'en:rye']) {
+      const note = assessGlutenSignal({
+        ingredients_text: 'whole grain rolled oats, honey, sea salt',
+        allergens_tags: ['en:gluten', tag],
+        labels_tags: ['en:no-gluten'],
+      });
+      expect(note, tag).toMatch(/specific grain/i);
+      expect(note, tag).not.toMatch(/regulated claim and wins/i);
+      expect(isGlutenFamilyTag(tag)).toBe(true);
+    }
+    expect(isGlutenFamilyTag('en:peanuts')).toBe(false);
+  });
+
+  it('withholds label-wins when an unrecognized gluten-related label is present, and points Claude at it', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'whole grain rolled oats, honey, sea salt',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:not-suitable-for-celiacs'],
+    });
+    expect(note).toMatch(/unrecognized gluten-related label text/i);
+    expect(note).toMatch(/never "safe"/);
+    expect(note).not.toMatch(/regulated claim and wins/i);
   });
 
   it('lets a gluten tag stand when a free-text adverse label (very low gluten) is present', () => {

@@ -20,6 +20,7 @@
 import { describe, it, afterAll } from 'vitest';
 import { analyzeWithClaude } from '../../../../api/analyze.js';
 import { GF_CLAIM_CASES } from './gf-claim-cases.js';
+import { hasOatsCaveat } from './assertions.js';
 
 const LIVE = process.env.RUN_LIVE_EVALS === '1';
 const RUNS = { safe: 2, caution: 5, unsafe: 5, 'not-safe': 5 };
@@ -32,10 +33,9 @@ const FALLBACK_EXPLANATION = /Unable to fully analyze/;
 // (definition of done — "with the claim named"), not just happen to say safe.
 const NAMES_CLAIM = /gluten[\s-]*free|label|certif|GFCO|sin gluten|glutenvrij/i;
 // Safe-with-oats cases (decision 004): the explanation must carry the avenin
-// caveat — the one signal left for people who avoid oats entirely. Pi grill
-// on PR #29: "labeled gluten-free" alone used to satisfy the gate.
-const OATS_CAVEAT = /oat/i;
-const OATS_CAVEAT_CLAUSE = /react|sensitiv|avenin|tolerat|some people|small share|not everyone/i;
+// caveat — the one signal left for people who avoid oats entirely. The
+// matcher lives in assertions.js and is unit-tested offline against positive
+// and negative fixtures (Pi grill on PR #29).
 const results = [];
 
 function passes({ expect, verdicts }) {
@@ -75,8 +75,7 @@ describe.skipIf(!LIVE).concurrent('gf-claim live eval (real prompt, live Claude)
       }
       if (c.oatsCaveat) {
         for (const r of runs) {
-          expect(r.explanation, 'explanation mentions the oats').toMatch(OATS_CAVEAT);
-          expect(r.explanation, 'explanation carries the avenin caveat').toMatch(OATS_CAVEAT_CLAUSE);
+          expect(hasOatsCaveat(r.explanation), `explanation carries the avenin caveat: ${r.explanation}`).toBe(true);
         }
       }
     });

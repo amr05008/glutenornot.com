@@ -200,4 +200,35 @@ export const BARCODE_GF_CLAIM_CASES = [
       source: 'openfoodfacts',
     },
   },
+  // Pi re-grill on PR #29 — unrecognized gluten-related free text must reach
+  // Claude (under an explicitly unverified heading) rather than vanish, and
+  // must never act as a claim in either direction.
+  {
+    id: 'B14',
+    expect: 'not-safe',
+    why: 'unrecognized adverse free text "not suitable for celiacs" beside a "No gluten" tag, oats + generic gluten tag',
+    product: {
+      product_name: 'Honey Oat Granola Clusters',
+      ingredients_text: 'whole grain rolled oats, honey, brown sugar, sunflower oil, sea salt.',
+      allergens_tags: ['en:gluten'],
+      traces_tags: [],
+      labels_tags: ['en:no-gluten', 'en:not-suitable-for-celiacs'],
+      source: 'openfoodfacts',
+    },
+  },
+  {
+    id: 'B15',
+    expect: 'safe',
+    namesClaim: true,
+    oatsCaveat: true,
+    why: 'unrecognized POSITIVE free text "gluten-free-oats" beside a real "No gluten" tag must not demote a labeled product',
+    product: {
+      product_name: 'Honey Oat Granola Clusters',
+      ingredients_text: 'gluten-free rolled oats, honey, brown sugar, sunflower oil, natural flavor, sea salt.',
+      allergens_tags: ['en:gluten'],
+      traces_tags: [],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-oats'],
+      source: 'openfoodfacts',
+    },
+  },
 ];

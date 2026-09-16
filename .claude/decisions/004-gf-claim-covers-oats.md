@@ -56,13 +56,19 @@ to oats themselves), which no label resolves.
    `ADVERSE_GLUTEN_TAG_PATTERN`: low / very low gluten, gluten-reduced, not
    gluten-free, may contain gluten) get their own "Package states:" line,
    which is never safe and beats a Certifications line on the same record;
-   any other gluten-ish tag (`en:gluten-free-oats`) is dropped. A **generic**
+   any other gluten-related tag the system does not recognize
+   (`en:gluten-free-oats`, `en:not-suitable-for-celiacs`) reaches Claude on
+   an "Other gluten-related labels (unverified free text, NOT a claim)" line
+   that never lifts the verdict and, if it reads adverse, is treated like a
+   package statement. A **generic**
    gluten allergen tag next to a gluten-free label **with oats in the list**
    and no gluten grain is the auto-derived-from-oats pattern and no longer
    lowers the verdict (`assessGlutenSignal` note rewritten, gated on
-   `OATS_PATTERN` and on every gluten-family tag being `en:gluten`); with
-   neither oats nor a grain, or with a grain-specific tag such as `en:wheat`
-   that oats cannot explain, the record contradicts itself and the old
+   `OATS_PATTERN`, on every gluten-family tag being the generic `en:gluten`
+   — `isGlutenFamilyTag` is the one classifier for wheat / barley / rye /
+   spelt / kamut / triticale — and on no unrecognized gluten-related label
+   text); with neither oats nor a grain, with a grain-specific tag, or with
+   unrecognized label text, the record contradicts itself and the old
    "caution with low confidence" wording stays. A listed gluten source
    (caution, "label and list disagree"), a gluten trace tag (caution), and
    missing or sparse ingredients (caution, low) still win.
@@ -131,10 +137,16 @@ Live eval (`RUN_LIVE_EVALS=1`, Opus 4.8 through the real prompts), 2026-09-16:
   no label + natural flavors → `caution` (barcode baseline); B11 `no-gluten`
   AND `contains-gluten` on an otherwise-safe list → not-safe; B12 wheat-specific
   tag + label + oats → `caution`; B13 free-text `very-low-gluten` on an
-  otherwise-safe list → not-safe. Safe-with-oats cases (5, 6, 23, 26, B1, B2)
-  additionally assert the avenin caveat in the explanation.
-- **Final gate: 40/40, zero false-safe** (OCR 27 + barcode 13; tables in the
-  PR body). Four seams
+  otherwise-safe list → not-safe; B14 unrecognized adverse free text
+  ("not suitable for celiacs") beside a `no-gluten` tag → not-safe; B15
+  unrecognized positive free text beside a real claim → `safe` (the
+  unverified line must not demote a labeled product). Safe-with-oats cases
+  (5, 6, 23, 26, B1, B2, B15) additionally assert the avenin caveat via
+  `hasOatsCaveat` (`evals/assertions.js`, unit-tested offline against
+  positive and negative fixtures — Pi's counterexample "suitable for people
+  with gluten sensitivity" is rejected).
+- **Final gate: 42/42, zero false-safe** (OCR 27 + barcode 15; tables in the
+  PR body). Five seams
   were caught on the way — Pi's review of PR #29 found the allowlist dropped
   adverse free-text tags ("very low gluten") to the same context as "no
   label", and the label-wins note fired on a wheat-specific tag; both fixed
