@@ -4,7 +4,8 @@
  * the first API call.
  *
  * Why (2026-09-16): the two live runners cost ≈ $6 per FULL invocation
- * (165 uncached Opus 4.8 calls; ≈ $1.50 now that the prompt is cached), and
+ * (165 uncached Opus 4.8 calls; ≈ $1.60 now that the prompt is cached,
+ * counting the two warm-up calls), and
  * an agent iterating on PR #29 ran them nine times in 50 minutes. That
  * emptied the org's prepaid credits and took the live app down for two
  * hours. So:
