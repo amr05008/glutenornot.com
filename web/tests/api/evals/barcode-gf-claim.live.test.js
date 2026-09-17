@@ -3,20 +3,26 @@
  * Anthropic API through the real barcode CLAUDE_PROMPT + buildIngredientContext
  * (including the assessGlutenSignal note) + callClaude + parseClaudeResponse.
  *
- * Gated on RUN_LIVE_EVALS=1 exactly like gf-claim.live.test.js; same runner:
+ * Gated on RUN_LIVE_EVALS=1 exactly like gf-claim.live.test.js; same runner
+ * and the same two modes (default single sample; FULL=1 for the merge gate,
+ * one per PR, FORCE=1 to repeat within an hour):
  *
- *   RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
+ *   FULL=1 RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
  *
- * 15 cases → 4 × 2 + 11 × 5 = 63 Opus calls. Direct Anthropic calls only: no
- * PostHog event, no scan-quota consumption, no database lookup.
+ * FULL: 15 cases → 4 × 2 + 11 × 5 = 63 Opus 4.8 calls (see gf-claim.live.test.js
+ * for the cost). Direct Anthropic calls only: no PostHog event, no scan-quota
+ * consumption, no database lookup.
  */
 import { describe, it, afterAll } from 'vitest';
 import { analyzeWithClaude, buildIngredientContext } from '../../../../api/barcode.js';
 import { BARCODE_GF_CLAIM_CASES } from './barcode-gf-claim-cases.js';
 import { hasOatsCaveat } from './assertions.js';
+import { guardLiveRun, sampleRuns, LIVE_EVAL_STATE_DIR } from './guard.js';
 
 const LIVE = process.env.RUN_LIVE_EVALS === '1';
-const RUNS = { safe: 2, caution: 5, unsafe: 5, 'not-safe': 5 };
+const RUNS = LIVE
+  ? guardLiveRun({ key: 'barcode-gf-claim', cases: BARCODE_GF_CLAIM_CASES, stateDir: LIVE_EVAL_STATE_DIR })
+  : sampleRuns({ full: false });
 const FALLBACK_EXPLANATION = /Unable to fully analyze/;
 const NAMES_CLAIM = /gluten[\s-]*free|no[\s-]gluten|label|certif/i;
 // Safe-with-oats cases (decision 004): the explanation must carry the avenin

@@ -17,6 +17,9 @@ web-build/
 # Metro
 .metro-health-check*
 
+# Live eval cooldown state (web/tests/api/evals/guard.js)
+web/.live-eval-state/
+
 # Environment variables
 .env
 .env.local

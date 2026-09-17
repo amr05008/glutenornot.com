@@ -7,6 +7,7 @@ import {
   RATE_LIMIT,
   CLAUDE_MODEL,
   callClaude,
+  buildCachedContent,
   claudeErrorResponse,
   describeClaudeError,
   getClientIP,
@@ -804,7 +805,7 @@ function buildIngredientContext(product) {
 async function analyzeWithClaude(ingredientContext) {
   const content = await callClaude({
     maxTokens: 2048, // headroom for the Opus 4.7+ tokenizer (~1–1.35× Sonnet 4.6 counts)
-    content: `${CLAUDE_PROMPT}\n\n### Product Data:\n${ingredientContext}`,
+    content: buildCachedContent(CLAUDE_PROMPT, `### Product Data:\n${ingredientContext}`),
   });
 
   return parseClaudeResponse(content);

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(*--env-file*)",
+      "Bash(*RUN_LIVE_EVALS*)"
+    ]
+  }
+}

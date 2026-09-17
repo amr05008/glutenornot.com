@@ -12,6 +12,7 @@ import handler, {
   applySafeVerdictFloor,
   MIN_OCR_CHARS_FOR_SAFE,
   parseClaudeResponse,
+  analyzeWithClaude,
   detectGlutenFreeClaim,
   performOCR,
   checkRateLimit,
@@ -890,5 +891,43 @@ describe('formatTimeRemaining', () => {
   it('formats zero correctly', () => {
     // Note: 0 minutes uses singular form since 0 > 1 is false
     expect(formatTimeRemaining(0)).toBe('0 minute');
+  });
+});
+
+// Prompt caching (2026-09-16 credit incident): the request Claude receives
+// must carry CLAUDE_PROMPT as a cache-marked block that never changes between
+// scans, with the OCR text in a separate block after the breakpoint.
+describe('analyzeWithClaude request shape (prompt caching)', () => {
+  const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
+  const CLAUDE_OK = {
+    ok: true, status: 200,
+    json: async () => ({ content: [{ type: 'text', text: '{"mode":"label","verdict":"caution","flagged_ingredients":[],"allergen_warnings":[],"explanation":"x","confidence":"low"}' }] }),
+    text: async () => '',
+  };
+  beforeEach(() => { process.env.ANTHROPIC_API_KEY = 'test-key'; });
+  afterEach(() => { process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY; vi.unstubAllGlobals(); });
+
+  function requestBody(call) {
+    return JSON.parse(call[1].body);
+  }
+
+  it('sends CLAUDE_PROMPT as a cache-marked first block and the OCR text after it', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(CLAUDE_OK);
+    vi.stubGlobal('fetch', fetchSpy);
+    await analyzeWithClaude('wheat flour, sugar');
+    const content = requestBody(fetchSpy.mock.calls[0]).messages[0].content;
+    expect(content[0]).toEqual({ type: 'text', text: CLAUDE_PROMPT, cache_control: { type: 'ephemeral' } });
+    expect(content[1]).toEqual({ type: 'text', text: '### OCR Text:\nwheat flour, sugar' });
+    expect(content).toHaveLength(2);
+  });
+
+  it('keeps the cached block byte-identical across scans with different OCR text', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(CLAUDE_OK);
+    vi.stubGlobal('fetch', fetchSpy);
+    await analyzeWithClaude('first label');
+    await analyzeWithClaude('second label');
+    const [a, b] = fetchSpy.mock.calls.map((c) => requestBody(c).messages[0].content);
+    expect(JSON.stringify(a[0])).toBe(JSON.stringify(b[0]));
+    expect(a[1].text).not.toBe(b[1].text);
   });
 });
