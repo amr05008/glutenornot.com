@@ -5,6 +5,7 @@ import {
   describeClaudeError,
   ClaudeError,
   CLAUDE_MODEL,
+  buildCachedContent,
 } from '../../../api/_utils.js';
 
 // Build a minimal fetch Response stand-in.
@@ -273,5 +274,40 @@ describe('describeClaudeError', () => {
 
   it('summarizes a generic error', () => {
     expect(describeClaudeError(new Error('boom'))).toEqual({ kind: 'unknown', message: 'boom' });
+  });
+});
+
+// Prompt caching (2026-09-16 credit incident): the static prompt travels as
+// its own content block with a cache breakpoint so the ~4K-token prefix is
+// read from cache on every scan after the first, instead of billed in full.
+describe('buildCachedContent', () => {
+  it('puts the static text in a cache-marked block and the dynamic text after it', () => {
+    const blocks = buildCachedContent('STATIC PROMPT', '### OCR Text:\nflour');
+    expect(blocks).toEqual([
+      { type: 'text', text: 'STATIC PROMPT', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: '### OCR Text:\nflour' },
+    ]);
+  });
+
+  it('keeps the static block byte-identical across different dynamic inputs', () => {
+    const a = buildCachedContent('STATIC PROMPT', 'first');
+    const b = buildCachedContent('STATIC PROMPT', 'second');
+    expect(JSON.stringify(a[0])).toBe(JSON.stringify(b[0]));
+    expect(a[1].text).toBe('first');
+    expect(b[1].text).toBe('second');
+  });
+});
+
+describe('callClaude with block content', () => {
+  const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
+  beforeEach(() => { process.env.ANTHROPIC_API_KEY = 'test-key'; });
+  afterEach(() => { process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY; vi.restoreAllMocks(); });
+
+  it('sends an array of content blocks through unchanged as the user message', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okWithText('ok'));
+    const content = buildCachedContent('STATIC', 'dynamic');
+    await callClaude({ maxTokens: 16, content }, { fetchImpl, ...fast });
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.messages).toEqual([{ role: 'user', content }]);
   });
 });

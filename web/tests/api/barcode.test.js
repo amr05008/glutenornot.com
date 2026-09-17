@@ -10,6 +10,7 @@ vi.mock('../../../api/_analytics.js', async (importOriginal) => {
 import handler, {
   CLAUDE_PROMPT,
   parseClaudeResponse,
+  analyzeWithClaude,
   buildIngredientContext,
   assessGlutenSignal,
   hasGlutenFreeLabelTag,
@@ -1164,5 +1165,29 @@ describe('formatTimeRemaining (barcode)', () => {
 
   it('formats minutes', () => {
     expect(formatTimeRemaining(30 * 60 * 1000)).toBe('30 minutes');
+  });
+});
+
+// Prompt caching (2026-09-16 credit incident): same contract as the OCR path —
+// CLAUDE_PROMPT is a cache-marked block that never changes, the product data
+// follows it in its own block.
+describe('analyzeWithClaude request shape (prompt caching)', () => {
+  const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
+  const CLAUDE_OK = {
+    ok: true, status: 200,
+    json: async () => ({ content: [{ type: 'text', text: '{"mode":"label","verdict":"caution","flagged_ingredients":[],"allergen_warnings":[],"explanation":"x","confidence":"low"}' }] }),
+    text: async () => '',
+  };
+  beforeEach(() => { process.env.ANTHROPIC_API_KEY = 'test-key'; });
+  afterEach(() => { process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY; vi.unstubAllGlobals(); });
+
+  it('sends CLAUDE_PROMPT as a cache-marked first block and the product data after it', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(CLAUDE_OK);
+    vi.stubGlobal('fetch', fetchSpy);
+    await analyzeWithClaude('Product: Oat Bar\nIngredients: oats, honey');
+    const content = JSON.parse(fetchSpy.mock.calls[0][1].body).messages[0].content;
+    expect(content[0]).toEqual({ type: 'text', text: CLAUDE_PROMPT, cache_control: { type: 'ephemeral' } });
+    expect(content[1]).toEqual({ type: 'text', text: '### Product Data:\nProduct: Oat Bar\nIngredients: oats, honey' });
+    expect(content).toHaveLength(2);
   });
 });

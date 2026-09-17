@@ -8,6 +8,7 @@ import {
   RATE_LIMIT_WINDOW,
   CLAUDE_MODEL,
   callClaude,
+  buildCachedContent,
   claudeErrorResponse,
   describeClaudeError,
   getClientIP,
@@ -596,7 +597,7 @@ function parseClaudeResponse(content) {
 async function analyzeWithClaude(ocrText) {
   const content = await callClaude({
     maxTokens: 4096, // headroom for the Opus 4.7+ tokenizer (~1–1.35× Sonnet 4.6 counts); menu responses have the least room
-    content: `${CLAUDE_PROMPT}\n\n### OCR Text:\n${ocrText}`,
+    content: buildCachedContent(CLAUDE_PROMPT, `### OCR Text:\n${ocrText}`),
   });
 
   return parseClaudeResponse(content);

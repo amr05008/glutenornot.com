@@ -44,6 +44,26 @@ function _truncate(str, max = 300) {
 }
 
 /**
+ * Build the user-message content for a Claude call so the static prompt is
+ * served from the prompt cache. Two text blocks: the static prompt with a
+ * cache breakpoint, then the per-request text after it. Anything before the
+ * breakpoint must be byte-identical across requests or the cache misses, so
+ * never interpolate per-request data into `staticText`.
+ *
+ * Why (2026-09-16): each scan sent ~6.2K uncached input tokens of which
+ * 6,078 was the OCR CLAUDE_PROMPT (verified live: call 1 cache_creation 6078,
+ * call 2 cache_read 6078, 43 uncached). Cached reads bill at 0.1× (write
+ * 1.25× once per 5 min), so a scan costs ~4× less — and the live evals with it.
+ * Opus 4.8 caches prefixes of 1024+ tokens; both prompts clear that.
+ */
+function buildCachedContent(staticText, dynamicText) {
+  return [
+    { type: 'text', text: staticText, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: dynamicText },
+  ];
+}
+
+/**
  * Call the Anthropic Claude API with automatic retry on transient failures.
  *
  * Returns the assistant's text content on success. On failure throws a
@@ -51,6 +71,9 @@ function _truncate(str, max = 300) {
  * retry) from a persistent key/billing/request problem (not worth retrying) —
  * so callers and observability can tell "try again in a minute" apart from
  * "something is actually broken".
+ *
+ * `content` is the user message: a plain string, or the block array from
+ * {@link buildCachedContent} when the static prompt should be cached.
  *
  * Options (mainly for tests): `fetchImpl`, `maxRetries`, `baseDelayMs`, `sleepImpl`.
  */
@@ -305,6 +328,7 @@ export {
   CLAUDE_MODEL,
   ClaudeError,
   callClaude,
+  buildCachedContent,
   claudeErrorResponse,
   describeClaudeError,
   getClientIP,
