@@ -13,7 +13,7 @@
  * for the cost). Direct Anthropic calls only: no PostHog event, no scan-quota
  * consumption, no database lookup.
  */
-import { describe, it, afterAll } from 'vitest';
+import { describe, it, beforeAll, afterAll } from 'vitest';
 import { analyzeWithClaude, buildIngredientContext } from '../../../../api/barcode.js';
 import { BARCODE_GF_CLAIM_CASES } from './barcode-gf-claim-cases.js';
 import { hasOatsCaveat } from './assertions.js';
@@ -39,6 +39,12 @@ function passes({ expect, verdicts }) {
 }
 
 describe.skipIf(!LIVE).concurrent('barcode gf-claim live eval (real prompt, live Claude)', () => {
+  // Write the prompt cache before the concurrent burst (guard.js WARMUP_CALLS);
+  // the result is discarded.
+  beforeAll(async () => {
+    await analyzeWithClaude(buildIngredientContext(BARCODE_GF_CLAIM_CASES[0].product));
+  }, 180_000);
+
   for (const c of BARCODE_GF_CLAIM_CASES) {
     if (!(c.expect in RUNS)) throw new Error(`barcode gf-claim case ${c.id}: unknown expect "${c.expect}"`);
     const context = buildIngredientContext(c.product);

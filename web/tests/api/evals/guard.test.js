@@ -10,6 +10,7 @@ import {
   recordFullRun,
   guardLiveRun,
   FULL_RUN_COOLDOWN_MS,
+  LIVE_EVAL_STATE_DIR,
 } from './guard.js';
 
 // Offline, always runs. The live runners consult this module before the
@@ -115,8 +116,9 @@ describe('guardLiveRun (what the runners call at collection)', () => {
     const runs = guardLiveRun({ key: 'gf-claim', cases: CASES, stateDir: tmpState(), env: {}, log: (l) => lines.push(l) });
     expect(runs).toEqual(sampleRuns({ full: false }));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/5 Opus 4\.8 calls/);
-    expect(lines[0]).toMatch(/\$0\.05 with the prompt cached \(≈ \$0\.18 uncached; less under a -t filter\)/);
+    // 5 sampled + 1 cache warm-up; cached = 5 × $0.00925 + 1 × $0.03625, uncached = 6 × $0.03625
+    expect(lines[0]).toMatch(/6 Opus 4\.8 calls \(incl\. 1 cache warm-up\)/);
+    expect(lines[0]).toMatch(/\$0\.08 with the prompt cached \(≈ \$0\.22 uncached; less under a -t filter\)/);
     expect(lines[0]).toMatch(/single sample/);
   });
 
@@ -130,6 +132,20 @@ describe('guardLiveRun (what the runners call at collection)', () => {
     expect(() =>
       guardLiveRun({ key: 'gf-claim', cases: CASES, stateDir: dir, env: { FULL: '1', FORCE: '1' }, log: () => {} })
     ).not.toThrow();
+  });
+
+  it('refuses to run under vitest watch mode, even without FULL', () => {
+    expect(() =>
+      guardLiveRun({ key: 'gf-claim', cases: CASES, stateDir: tmpState(), env: { VITEST_MODE: 'WATCH' }, log: () => {} })
+    ).toThrow(/watch mode/);
+    expect(() =>
+      guardLiveRun({ key: 'gf-claim', cases: CASES, stateDir: tmpState(), env: { VITEST_MODE: 'RUN' }, log: () => {} })
+    ).not.toThrow();
+  });
+
+  it('keeps cooldown state in the git common dir so every worktree shares it', () => {
+    expect(LIVE_EVAL_STATE_DIR.endsWith(join('.git', 'live-eval-state'))).toBe(true);
+    expect(LIVE_EVAL_STATE_DIR).not.toMatch(/[/\\]worktrees[/\\]/);
   });
 
   it('never touches the state file on a default (non-FULL) run', () => {

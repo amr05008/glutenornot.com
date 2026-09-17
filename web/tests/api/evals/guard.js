@@ -12,16 +12,47 @@
  *   - FULL=1 restores the 2× safe / 5× adversarial sampling the merge gate needs;
  *   - a FULL run prints its call count and dollar estimate first;
  *   - a second FULL run of the same runner within an hour is refused unless
- *     FORCE=1 (state in web/.live-eval-state/<runner>.json, gitignored —
- *     one file per runner because vitest collects the two runners in
- *     separate workers at the same moment).
+ *     FORCE=1 (state in <git common dir>/live-eval-state/<runner>.json,
+ *     shared by every worktree — one file per runner because vitest
+ *     collects the two runners in separate workers at the same moment).
+ *     The hour counts from the START of a FULL run, so an aborted or
+ *     crashed run still counts;
+ *   - a warm-up call writes the prompt cache before the concurrent burst;
+ *   - vitest watch mode is refused outright.
  */
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
-// web/.live-eval-state/ (gitignored): <runner>.json holds that runner's last FULL run.
-export const LIVE_EVAL_STATE_DIR = fileURLToPath(new URL('../../../.live-eval-state', import.meta.url));
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+// <runner>.json holds that runner's last FULL run. It lives in the git common
+// dir (<main checkout>/.git/live-eval-state/), which every worktree shares —
+// agents work in .claude/worktrees/<branch>/, and a per-checkout file would
+// hand each new worktree a fresh cooldown. Outside a git checkout it falls
+// back to web/.live-eval-state/ (gitignored).
+function resolveStateDir() {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: HERE,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (common) return join(resolve(HERE, common), 'live-eval-state');
+  } catch {
+    // not a git checkout — fall through
+  }
+  return resolve(HERE, '../../../.live-eval-state');
+}
+
+export const LIVE_EVAL_STATE_DIR = resolveStateDir();
+
+// The runners' beforeAll call that writes the prompt cache before the
+// concurrent burst. vitest runs up to 5 concurrent tests at once, each firing
+// up to 5 calls; requests that start before any cache entry exists all miss
+// it and each pay the 1.25× write.
+export const WARMUP_CALLS = 1;
 
 export const FULL_RUN_COOLDOWN_MS = 60 * 60 * 1000;
 
@@ -73,7 +104,7 @@ export function checkFullRun({ key, stateDir, now = Date.now(), force = false })
   return {
     ok: false,
     reason:
-      `${key}: a FULL live run finished ${Math.round(elapsed / 60000)} min ago; ` +
+      `${key}: a FULL live run started ${Math.round(elapsed / 60000)} min ago; ` +
       `wait ${minutesLeft} min, iterate with the default single sample or -t, ` +
       `or set FORCE=1 to run it again now.`,
   };
@@ -90,14 +121,20 @@ export function recordFullRun({ key, stateDir, now = Date.now() }) {
  * list, `key` names the runner in the state file.
  */
 export function guardLiveRun({ key, cases, stateDir, env = process.env, log = console.log }) {
+  // Watch mode re-collects the runner on every save: a live bill per keystroke.
+  if (String(env.VITEST_MODE).toUpperCase() === 'WATCH') {
+    throw new Error(`${key}: live evals refuse to run under vitest watch mode; use \`vitest run\`.`);
+  }
   const full = env.FULL === '1';
   const runs = sampleRuns({ full });
-  const calls = countCalls(cases, runs);
+  const sampled = countCalls(cases, runs);
+  const calls = sampled + WARMUP_CALLS;
   const uncached = estimateUsd({ calls, cached: false });
-  const cached = estimateUsd({ calls, cached: true });
+  // The warm-up is billed uncached (plus a 0.25× write premium, ignored here).
+  const cached = estimateUsd({ calls: sampled, cached: true }) + estimateUsd({ calls: WARMUP_CALLS, cached: false });
   log(
     `[${key} live eval] ${cases.length} cases, ${full ? 'FULL (2× safe / 5× adversarial)' : 'single sample (FULL=1 for the merge gate)'}: ` +
-      `${calls} Opus 4.8 calls ≈ $${cached.toFixed(2)} with the prompt cached (≈ $${uncached.toFixed(2)} uncached; less under a -t filter)`
+      `${calls} Opus 4.8 calls (incl. ${WARMUP_CALLS} cache warm-up) ≈ $${cached.toFixed(2)} with the prompt cached (≈ $${uncached.toFixed(2)} uncached; less under a -t filter)`
   );
   if (full) {
     const check = checkFullRun({ key, stateDir, force: env.FORCE === '1' });

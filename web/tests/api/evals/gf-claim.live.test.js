@@ -5,7 +5,7 @@
  * Gated on RUN_LIVE_EVALS=1 so `npm test` stays offline (vitest's root is
  * `web`, so this file sits inside the default test glob). Two modes:
  *
- *   # iterate: one sample per case (27 Opus calls, well under $1)
+ *   # iterate: one sample per case (27 Opus calls + 1 cache warm-up, well under $1)
  *   RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
  *   # merge gate: 2× safe / 5× adversarial, once per PR, a human approves the command
  *   FULL=1 RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
@@ -24,7 +24,7 @@
  * refuses a second FULL run within an hour unless FORCE=1 (guard.js — nine
  * unguarded runs on 2026-09-16 emptied the org's credits).
  */
-import { describe, it, afterAll } from 'vitest';
+import { describe, it, beforeAll, afterAll } from 'vitest';
 import { analyzeWithClaude } from '../../../../api/analyze.js';
 import { GF_CLAIM_CASES } from './gf-claim-cases.js';
 import { hasOatsCaveat } from './assertions.js';
@@ -58,6 +58,12 @@ function passes({ expect, verdicts }) {
 }
 
 describe.skipIf(!LIVE).concurrent('gf-claim live eval (real prompt, live Claude)', () => {
+  // Write the prompt cache before the concurrent burst (guard.js WARMUP_CALLS);
+  // the result is discarded.
+  beforeAll(async () => {
+    await analyzeWithClaude(GF_CLAIM_CASES[0].ocrText);
+  }, 180_000);
+
   for (const c of GF_CLAIM_CASES) {
     // Runs at collection even when skipped: a typo'd expectation would
     // otherwise mean zero runs and a vacuous pass.
