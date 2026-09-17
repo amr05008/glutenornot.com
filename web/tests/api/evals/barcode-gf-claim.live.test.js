@@ -9,8 +9,8 @@
  *
  *   FULL=1 RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
  *
- * FULL: 15 cases → 4 × 2 + 11 × 5 = 63 Opus 4.8 calls (see gf-claim.live.test.js
- * for the cost). Direct Anthropic calls only: no PostHog event, no scan-quota
+ * FULL: 15 cases → 4 × 2 + 11 × 5 = 63 Opus 4.8 calls + 1 cache warm-up
+ * (see gf-claim.live.test.js for the cost). Default single sample: 15 + 1. Direct Anthropic calls only: no PostHog event, no scan-quota
  * consumption, no database lookup.
  */
 import { describe, it, beforeAll, afterAll } from 'vitest';
