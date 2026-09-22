@@ -20,6 +20,14 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
   caution share into labeled vs unlabeled products so the claim rule (decision
   003, `plans/gf-label-claim-2026-08-28.md`) is measurable. A flag, never the
   text — the privacy invariant below holds. Omitted on barcode scans.
+- `list_gate` (OCR only, present only when it fired) — why a Claude `safe` on a
+  label was delivered as `caution` because the ingredient list looked cut off:
+  `no_heading` (no "Ingredients:"-style heading in the read — the start of the
+  list, where flour usually sits, was out of frame) or `no_end` (a heading but
+  no full stop after it — cut before the end). `applyIngredientListGate` in
+  `api/analyze.js`, added 2026-09-22 after the jev-sandbox truncation test. Its
+  count over OCR label scans is the gate's cost in withheld `safe` verdicts; the
+  `verdict` on the event is the delivered one. A reason, never the text.
 - `gf_label_present` (barcode only) — boolean: the database record carried a
   whole-product gluten-free label tag (`hasGlutenFreeLabelTag` in
   `api/barcode.js`, an allowlist of Open Food Facts label ids — not Claude's

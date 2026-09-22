@@ -11,6 +11,8 @@ import handler, {
   normalizeMode,
   applySafeVerdictFloor,
   MIN_OCR_CHARS_FOR_SAFE,
+  checkIngredientList,
+  applyIngredientListGate,
   parseClaudeResponse,
   analyzeWithClaude,
   detectGlutenFreeClaim,
@@ -232,6 +234,127 @@ describe('applySafeVerdictFloor', () => {
       20,
     );
     expect(result.explanation).toContain('menu');
+  });
+});
+
+// Cut-off labels (jev-sandbox experiments 04/05, 2026-09-18): with half the
+// ingredient list out of frame, Claude called 39 of 600 gluten labels "safe" —
+// every one because the cut had removed the gluten word. Flour is usually
+// listed first, so a missing start is the worst case. A label may only come
+// back "safe" when the text shows where the list starts (a heading) and that
+// it ends (a full stop after the heading).
+describe('checkIngredientList', () => {
+  it('passes a complete list with a heading and a closing full stop', () => {
+    expect(checkIngredientList('INGREDIENTS: Whole grain brown rice, sunflower oil, sea salt.\nNET WT 4.9 OZ')).toBeNull();
+  });
+
+  it('flags a list whose start (and heading) was cut off', () => {
+    expect(checkIngredientList('sugar, palm oil, cocoa, salt, natural flavor.\nCONTAINS: MILK.')).toBe('no_heading');
+  });
+
+  it('flags a list with a heading but no full stop after it (end cut off)', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, salt, cocoa butter, whole milk powder, emuls')).toBe('no_end');
+  });
+
+  it('does not count a decimal or an "E 1.2"-style number as the end of the list', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice 4.9%, sugar, salt, cocoa')).toBe('no_end');
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, colour (FD&C Yellow No. 5), cocoa')).toBe('no_end');
+  });
+
+  it('ignores a full stop that sits before the heading', () => {
+    expect(checkIngredientList('Store in a cool, dry place.\nINGREDIENTS: Rice, sugar, salt, cocoa')).toBe('no_end');
+  });
+
+  // IMG_6210: a bioengineered-food disclosure mentions "ingredients" in prose.
+  it('does not treat "ingredients" in running prose as a heading', () => {
+    expect(checkIngredientList('Contains bioengineered food ingredients. The ingredients from corn and sugar are GE.')).toBe('no_heading');
+  });
+
+  // Grocery-site screenshots put the heading on a line of its own.
+  it('accepts a heading on a line of its own, without a colon', () => {
+    expect(checkIngredientList('Description Nutrition\nIngredients\nPeanuts, sugar, salt.')).toBeNull();
+  });
+
+  // IMG_6209: Vision emitted a fragment of the list above its heading.
+  it('accepts a heading that is not the first line of the read', () => {
+    expect(checkIngredientList('GLUTEN FREE\nSugar, Brown Rice\nINGREDIENTS: Fig Paste, Cane\nRice Syrup, Sea Salt.\nDISTRIBUTED BY EXAMPLE')).toBeNull();
+  });
+
+  it.each([
+    ['French, space before the colon', 'Ingrédients : riz, sucre, sel.'],
+    ['Spanish', 'INGREDIENTES: Patatas, aceite de girasol, sal.'],
+    ['Italian', 'Ingredienti: riso, zucchero, sale.'],
+    ['Dutch', 'INGREDIËNTEN: aardappelen, zonnebloemolie, zout.'],
+    ['German', 'Zutaten: Reis, Zucker, Salz.'],
+    ['Portuguese', 'Ingredientes: arroz, açúcar, sal.'],
+    ['Swedish', 'Ingredienser: ris, socker, salt.'],
+    ['Polish (uppercase Ł)', 'SKŁADNIKI: ryż, cukier, sól.'],
+    ['OCR reading the capital I as a lowercase l', 'lNGREDIENTS: Rice, sugar, salt.'],
+    ['singular heading on a one-ingredient product', 'INGREDIENT: Almonds.'],
+  ])('recognises the heading: %s', (_label, text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
+  it('treats a missing or non-string read as having no heading', () => {
+    expect(checkIngredientList(undefined)).toBe('no_heading');
+    expect(checkIngredientList('')).toBe('no_heading');
+  });
+});
+
+describe('applyIngredientListGate', () => {
+  const safeLabel = () => ({
+    mode: 'label',
+    verdict: 'safe',
+    flagged_ingredients: [],
+    allergen_warnings: [],
+    explanation: 'Good news! This product contains no gluten ingredients.',
+    confidence: 'high',
+  });
+  const START_CUT = 'sugar, palm oil, cocoa, salt, natural flavor.\nCONTAINS: MILK.';
+  const END_CUT = 'INGREDIENTS: Rice, sugar, salt, cocoa butter, whole milk powder, emuls';
+  const COMPLETE = 'INGREDIENTS: Rice, sugar, salt.';
+
+  it('withholds "safe" when the start of the list is not in the read', () => {
+    const analysis = safeLabel();
+    expect(applyIngredientListGate(analysis, START_CUT)).toBe('no_heading');
+    expect(analysis.verdict).toBe('caution');
+    expect(analysis.confidence).toBe('low');
+    // The reassurance is exactly what must not survive.
+    expect(analysis.explanation).not.toContain('Good news');
+    expect(analysis.explanation).toContain('Ingredients');
+  });
+
+  it('withholds "safe" when the list is cut off before it ends', () => {
+    const analysis = safeLabel();
+    expect(applyIngredientListGate(analysis, END_CUT)).toBe('no_end');
+    expect(analysis.verdict).toBe('caution');
+    expect(analysis.confidence).toBe('low');
+    expect(analysis.explanation).not.toContain('Good news');
+    expect(analysis.explanation).toContain('cut off');
+  });
+
+  it('leaves a "safe" verdict on a complete list untouched', () => {
+    const analysis = safeLabel();
+    expect(applyIngredientListGate(analysis, COMPLETE)).toBeNull();
+    expect(analysis).toEqual(safeLabel());
+  });
+
+  it('only ever downgrades: unsafe and caution pass through on a cut-off read', () => {
+    const unsafe = { ...safeLabel(), verdict: 'unsafe', explanation: 'Contains wheat flour.' };
+    expect(applyIngredientListGate(unsafe, START_CUT)).toBeNull();
+    expect(unsafe.verdict).toBe('unsafe');
+    expect(unsafe.explanation).toBe('Contains wheat flour.');
+
+    const caution = { ...safeLabel(), verdict: 'caution', explanation: 'Contains oats.' };
+    expect(applyIngredientListGate(caution, END_CUT)).toBeNull();
+    expect(caution.explanation).toBe('Contains oats.');
+  });
+
+  // Menus have no ingredients heading; their partial-capture rule lives in the prompt.
+  it('does not apply to menus', () => {
+    const menu = { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'medium' };
+    expect(applyIngredientListGate(menu, 'Ensalada verde 9.50\nPollo asado 14.00')).toBeNull();
+    expect(menu.verdict).toBe('safe');
   });
 });
 
@@ -601,8 +724,9 @@ describe('analyze handler analytics', () => {
   }
 
   const OCR_TEXT = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'rice, salt' }] }] }) };
-  // Above MIN_OCR_CHARS_FOR_SAFE, for tests that need a verdict to survive the floor.
-  const OCR_TEXT_FULL_LABEL = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'INGREDIENTS: '.concat('rice, salt, sunflower oil, sugar, citric acid, natural flavor, '.repeat(3)) }] }] }) };
+  // Above MIN_OCR_CHARS_FOR_SAFE, with a heading and a closing full stop, for
+  // tests that need a verdict to survive the floor and the ingredient-list gate.
+  const OCR_TEXT_FULL_LABEL = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'INGREDIENTS: '.concat('rice, salt, sunflower oil, sugar, citric acid, natural flavor, '.repeat(3), 'sea salt.') }] }] }) };
   const OCR_EMPTY = { ok: true, json: async () => ({ responses: [{}] }) };
 
   let savedEnv;
@@ -708,6 +832,56 @@ describe('analyze handler analytics', () => {
     expect(trackScan).toHaveBeenCalledWith(
       expect.objectContaining({ verdict: 'caution', ocrChars: 3 })
     );
+  });
+
+  // End-to-end regression for the jev-sandbox finding: a label read with the
+  // top of the list (and its heading) out of frame, which Claude calls "safe"
+  // because the cut took the flour with it.
+  describe('ingredient-list gate', () => {
+    const claudeSafe = { mode: 'label', verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: 'Good news! No gluten ingredients here.', confidence: 'high' };
+    const ocr = (description) => ({ ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description }] }] }) });
+
+    function stubScan(analysis, ocrResponse) {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return ocrResponse;
+      }));
+    }
+
+    it('never returns "safe" when the start of the list is out of frame', async () => {
+      stubScan(claudeSafe, ocr('sugar, cocoa butter, whole milk powder, soy lecithin, natural vanilla flavor, salt, palm oil, cocoa.\nCONTAINS: MILK, SOY.'));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.explanation).not.toContain('Good news');
+      // The delivered verdict is recorded, with the reason the gate withheld safe.
+      expect(trackScan).toHaveBeenCalledWith(
+        expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading' })
+      );
+    });
+
+    it('passes a null listGate (omitted from the event) when the gate did not fire', async () => {
+      stubScan(claudeSafe, OCR_TEXT_FULL_LABEL);
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+      expect(res.body.verdict).toBe('safe');
+      expect(trackScan.mock.calls[0][0].listGate).toBeNull();
+    });
+
+    // The char floor fires first on a near-empty read; its copy is the more
+    // accurate one, and the gate must not overwrite it or double-report.
+    it('leaves a near-empty read to the char floor', async () => {
+      stubScan(claudeSafe, ocr('GF!'));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.explanation).toContain('only make out a few characters');
+      expect(trackScan.mock.calls[0][0].listGate).toBeNull();
+    });
   });
 
   it('records the app version and model from the request headers', async () => {
@@ -837,7 +1011,7 @@ describe('analyze handler analytics', () => {
   // caution share is measurable. A flag, never the claim text or the product.
   describe('gf_claim_present', () => {
     const analysis = { mode: 'label', verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: 'Labeled gluten-free.', confidence: 'high' };
-    const OCR_LABELED_GF = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'KETTLE CORN\nGluten Free\nINGREDIENTS: '.concat('popcorn, cane sugar, sunflower oil, sea salt, natural flavor, '.repeat(3)) }] }] }) };
+    const OCR_LABELED_GF = { ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description: 'KETTLE CORN\nGluten Free\nINGREDIENTS: '.concat('popcorn, cane sugar, sunflower oil, sea salt, natural flavor, '.repeat(3), 'turmeric.') }] }] }) };
 
     function stubScan(ocrResponse) {
       process.env.ANTHROPIC_API_KEY = 'test-key';

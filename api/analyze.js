@@ -292,6 +292,90 @@ function applySafeVerdictFloor(analysis, ocrChars) {
 }
 
 /**
+ * Ingredient-list headings, one alternation per language family. OCR reads a
+ * capital I as l, 1 or | often enough that the Latin forms accept all four.
+ */
+const INGREDIENT_HEADINGS = [
+  '[il1|]ngr[eé]di(?:ents?|entes|enti|ente|[eë]nten|enser)', // en ca fr es pt it ro nl sv da no
+  'zutaten', // de
+  'składniki', // pl
+  'složení', 'zloženie', // cs sk
+  'összetevők', // hu
+  'sastojci', 'sestavine', // hr sr bs, sl
+  'ainesosat', // fi
+  'içindekiler', // tr
+  'συστατικά', // el
+  'состав', 'склад', // ru, uk
+  'المكونات', 'רכיבים', // ar, he
+  '原材料名?', '配料表?', '원재료명?', // ja zh ko
+].join('|');
+
+// A heading is the word followed by a colon, or alone on its line (grocery
+// sites, some packs). The word inside running prose — a bioengineered-food
+// disclosure's "the ingredients from corn" — is not a heading.
+const INGREDIENT_HEADING_PATTERN = new RegExp(
+  `(?<!\\p{L})(?:${INGREDIENT_HEADINGS})\\s*[:：]|^[ \\t]*(?:${INGREDIENT_HEADINGS})[ \\t]*$`,
+  'imu',
+);
+
+// A full stop that ends a sentence, not a decimal ("4.9 OZ") or a numbered
+// colour ("Yellow No. 5").
+const LIST_END_PATTERN = /[.。](?!\s*\d)/;
+
+const NO_HEADING_EXPLANATION =
+  'I can\'t see where the ingredient list starts, so I can\'t call this safe — flour is often the first ingredient. Retake with the word "Ingredients" and the whole list in frame.';
+const NO_END_EXPLANATION =
+  "The ingredient list looks cut off before it ends, so I can't call this safe. Retake with the whole list in frame.";
+
+/**
+ * Does the OCR text show a whole ingredient list? Returns why not
+ * ('no_heading' | 'no_end'), or null when both ends are visible.
+ *
+ * Start: an ingredients heading anywhere in the read (Vision sometimes emits a
+ * fragment of the list above it). End: a full stop somewhere after the heading.
+ * Neither proves the whole list was captured — a side cut keeps both — but
+ * their absence is strong evidence it was not.
+ */
+function checkIngredientList(ocrText) {
+  if (typeof ocrText !== 'string') return 'no_heading';
+  const heading = INGREDIENT_HEADING_PATTERN.exec(ocrText);
+  if (!heading) return 'no_heading';
+  const afterHeading = ocrText.slice(heading.index + heading[0].length);
+  return LIST_END_PATTERN.test(afterHeading) ? null : 'no_end';
+}
+
+/**
+ * Safety gate: a label can only come back "safe" when the read shows where its
+ * ingredient list starts and ends.
+ *
+ * With part of the list out of frame, Claude judges the fragment it was given:
+ * no gluten word, so "safe". In the jev-sandbox truncation test (2026-09-18,
+ * 600 gluten labels, half the list cut) that happened 39 times, every one
+ * because the cut took the gluten word with it, and Claude's reply mentioned
+ * the cut in under a third of cases. The prompt's "incomplete → caution" rule
+ * cannot catch what the model does not notice, so the check lives in code.
+ * Replaying those 39: none carried a heading (the database text has none; a
+ * real photo cut at the top loses it), and all 13 end cuts lacked a full stop.
+ * All 8 real label photos in test-cases/ pass both checks.
+ *
+ * Labels only — menus have no heading and keep the prompt's partial-menu rule.
+ * The barcode path never comes here: 21% of Open Food Facts lists carry no
+ * full stop at all. Only ever downgrades. Mutates the analysis and returns the
+ * reason it withheld "safe" (for the `list_gate` scan property), or null.
+ */
+function applyIngredientListGate(analysis, ocrText) {
+  if (analysis.mode !== 'label' || analysis.verdict !== 'safe') return null;
+  const reason = checkIngredientList(ocrText);
+  if (!reason) return null;
+
+  analysis.verdict = 'caution';
+  analysis.confidence = 'low';
+  // Claude's reassurance ("Good news! ...") is exactly what must not survive.
+  analysis.explanation = reason === 'no_heading' ? NO_HEADING_EXPLANATION : NO_END_EXPLANATION;
+  return reason;
+}
+
+/**
  * Presence signal for the `gf_claim_present` analytics property: does the OCR
  * text carry a gluten-free claim phrase in any supported language?
  *
@@ -397,6 +481,9 @@ export default async function handler(req, res) {
     // Step 3: safety floor — a near-empty read can never come back "safe".
     // Applied before tracking so analytics records the delivered verdict.
     applySafeVerdictFloor(analysis, ocrChars);
+    // Step 4: nor can a label whose ingredient list runs out of frame. After
+    // the floor, whose copy is the more accurate one for a near-empty read.
+    const listGate = applyIngredientListGate(analysis, ocrText);
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
@@ -416,6 +503,8 @@ export default async function handler(req, res) {
       // Did the label carry a gluten-free claim? Measures the claim rule's
       // effect on the caution share (a flag, never the text).
       gfClaimPresent: detectGlutenFreeClaim(ocrText),
+      // Why a Claude "safe" was withheld as a cut-off list (a reason, never the text).
+      listGate,
       ocrMs,
       claudeMs,
       totalMs: Date.now() - startedAt,
@@ -609,6 +698,8 @@ export {
   normalizeVerdict,
   applySafeVerdictFloor,
   MIN_OCR_CHARS_FOR_SAFE,
+  checkIngredientList,
+  applyIngredientListGate,
   parseClaudeResponse,
   analyzeWithClaude, // real prompt + callClaude + parse path, for the live evals in tests/api/evals
   detectGlutenFreeClaim,

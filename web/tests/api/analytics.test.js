@@ -164,6 +164,18 @@ describe('buildScanProperties (gf_claim_present)', () => {
   });
 });
 
+describe('buildScanProperties (list_gate)', () => {
+  it('records why the ingredient-list gate withheld "safe"', () => {
+    expect(buildScanProperties({ method: 'ocr', verdict: 'caution', listGate: 'no_heading' }).list_gate).toBe('no_heading');
+    expect(buildScanProperties({ method: 'ocr', verdict: 'caution', listGate: 'no_end' }).list_gate).toBe('no_end');
+  });
+
+  it('omits list_gate when the gate did not fire', () => {
+    expect(buildScanProperties({ method: 'ocr', verdict: 'safe', listGate: null })).not.toHaveProperty('list_gate');
+    expect(buildScanProperties({ method: 'barcode', verdict: 'safe' })).not.toHaveProperty('list_gate');
+  });
+});
+
 describe('SCAN_FAILED_EVENT', () => {
   it('is the stable event name "scan_failed"', () => {
     expect(SCAN_FAILED_EVENT).toBe('scan_failed');
