@@ -16,7 +16,8 @@
 // v9: privacy policy discloses the review_prompt event (rating ask / write-review tap).
 // v10: privacy policy discloses the barcode flow + databases, the missed-barcode log
 //      line, Vercel serving both apps, and the gf-claim / cut-off-list event fields.
-const CACHE_NAME = 'glutenornot-v10';
+// v11: privacy policy discloses caution_reason (which kind of reason a caution gave).
+const CACHE_NAME = 'glutenornot-v11';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

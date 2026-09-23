@@ -1184,7 +1184,7 @@ describe('analyze handler analytics', () => {
       expect(res.body.explanation).not.toContain('Good news');
       // The delivered verdict is recorded, with the reason the gate withheld safe.
       expect(trackScan).toHaveBeenCalledWith(
-        expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading' })
+        expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading', cautionReason: 'incomplete' })
       );
     });
 

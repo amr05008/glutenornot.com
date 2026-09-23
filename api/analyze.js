@@ -556,6 +556,8 @@ export default async function handler(req, res) {
       gfClaimPresent: detectGlutenFreeClaim(ocrText),
       // Why a Claude "safe" was withheld as a cut-off list (a reason, never the text).
       listGate,
+      // Which specific reason a caution named (decision 006; an enum, never content).
+      cautionReason: analysis.caution_reason,
       ocrMs,
       claudeMs,
       totalMs: Date.now() - startedAt,

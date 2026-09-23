@@ -1030,7 +1030,7 @@ describe('barcode handler analytics', () => {
     expect(res.body.verdict).toBe('caution');
     expect(res.body.caution_reason).toBe('incomplete');
     expect(trackScan).toHaveBeenCalledWith(
-      expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true })
+      expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true, cautionReason: 'incomplete' })
     );
   });
 
@@ -1183,6 +1183,25 @@ describe('barcode handler analytics', () => {
       expect.objectContaining({ confidence: 'high', hadIngredientData: true })
     );
     expect(trackScanFailure).not.toHaveBeenCalled();
+  });
+
+  it('tracks the caution_reason Claude gave on an analyzed record (decision 006)', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = { verdict: 'caution', caution_reason: 'may_contain', explanation: 'Traces of wheat.', confidence: 'medium' };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ status: 1, product: { product_name: 'Rice Cakes', ingredients_text: 'rice, salt', traces_tags: ['en:gluten'] } }),
+      };
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.caution_reason).toBe('may_contain');
+    expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'caution', cautionReason: 'may_contain' }));
   });
 });
 
