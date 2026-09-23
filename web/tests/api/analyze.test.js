@@ -29,6 +29,7 @@ import handler, {
 import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import fixtures from '../fixtures/claude-responses.json';
 import { GF_CLAIM_CASES } from './evals/gf-claim-cases.js';
+import { CALIBRATION_CASES } from './evals/calibration-cases.js';
 import realLabelOcr from '../fixtures/real-label-ocr.json';
 
 describe('parseClaudeResponse', () => {
@@ -430,7 +431,7 @@ describe('checkIngredientList', () => {
 
   // The live evals call analyzeWithClaude directly, so the gate never runs on
   // them; this keeps every label the evals expect "safe" passing it for free.
-  it.each(GF_CLAIM_CASES.filter((c) => c.expect === 'safe').map((c) => [c.id, c.ocrText]))(
+  it.each([...GF_CLAIM_CASES, ...CALIBRATION_CASES].filter((c) => c.expect === 'safe').map((c) => [c.id, c.ocrText]))(
     'passes eval case %s, which the evals expect to be safe',
     (_id, ocrText) => {
       expect(checkIngredientList(ocrText)).toBeNull();
