@@ -489,6 +489,38 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList(text)).toBeNull();
   });
 
+  // Re-grill 3 (yellow B): an end marker inside a bracket that is still open,
+  // however many lines up it opened, is part of the list; so are allergen
+  // badges and in-list "may also contain" wording.
+  it.each([
+    'INGREDIENTS: SUGAR, CHOCOLATE (SUGAR, COCOA BUTTER,\ncontains milk and\nsoy), SALT, COCO',
+    'Zutaten: Zucker, Schokolade (Zucker, Kakaobutter,\nenthält Milch und\nSoja), Salz, Kak',
+    'INGREDIENTS: Rice, sugar, cocoa, natu\nALLERGEN FREE',
+    'INGREDIENTS: Rice, sugar, cocoa, natu\nAllergen-friendly recipe',
+    'INGREDIENTS: Rice, vegetable oil\nMAY ALSO CONTAIN CANOLA OIL, SUGAR, COCO',
+    'Ingredientes: arroz, aceite\nContiene: menos del 2% de sal, cacao',
+  ])('does not take this for the end either: %s', (text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  // Re-grill 3 (yellow C): complete lists with no full stop of their own,
+  // ended by an allergen statement the first allergen-word list didn't know.
+  it.each([
+    'INGREDIENTS: Rice, soybeans, cashews\nCONTAINS: SOYBEANS, CASHEWS',
+    'INGREDIENTS: Rice, whey\nCONTAINS: DAIRY',
+    'INGREDIENTS: Rice, shrimp, anchovies\nCONTAINS SHRIMP, ANCHOVIES',
+    'Ingredientes: arroz, almendras\nContiene: frutos de cáscara',
+    'Ingredientes: arroz, cebada\nContiene cereales con gluten',
+    "Ingrédients : riz, arachides\nContient de l'arachide",
+    'Zutaten: Reis, Soja\nEnthält: Soja',
+    'Zutaten: Reis, Haselnüsse\nEnthält Haselnüsse',
+    'Ingredienti: riso, nocciole\nContiene: frutta a guscio',
+    'Ingrediënten: rijst, soja\nBevat: soja',
+    'INGREDIENTS: Rice, whey\nALLERGY WARNING: CONTAINS MILK',
+  ])('takes this allergen statement for the end: %s', (text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
   it('treats a missing or non-string read as having no heading', () => {
     expect(checkIngredientList(undefined)).toBe('no_heading');
     expect(checkIngredientList('')).toBe('no_heading');

@@ -33,12 +33,18 @@ shows:
      list like "U.S." or "vit. C", and not the last of a "..." run);
    - an allergen statement that opens a line or follows a full stop. An
      advisory phrase counts as it is ("May contain", "Peut contenir", "Kan
-     sporen van…"). A bare "contains" counts only when an allergen word
-     follows it ("CONTAINS: MILK", "Contient du lait", "Enthält Milch").
+     sporen van…", but not an "ALLERGEN FREE" badge). A "contains" counts with
+     a colon ("CONTAINS: SOYBEANS", "Enthält: Soja") unless a quantity follows
+     it. Without a colon it counts only before an allergen word ("Contient du
+     lait").
    - So in-list wording never ends a list, in any language: "Contiene menos de
      2%", "CONTAINS ONE OR MORE OF THE FOLLOWING:". Nor does a statement led by
-     a bracket, or one that closes a bracket it didn't open ("enthält Soja),
-     Kakao").
+     a bracket, one that closes a bracket it didn't open ("enthält Soja),
+     Kakao"), or one inside a bracket opened in the two lines above it ("(sugar,
+     cocoa butter,\ncontains milk and\nsoy)").
+   - The bracket check looks only two lines up, and only at allergen
+     statements. Real OCR drops brackets: IMG_6212's "[ORGANIC BLACK QUINOA"
+     never closes, and a whole-list check made two complete real photos fail.
    On a two-product frame, every list must pass.
 
 `list_gate` (`no_heading` | `no_end`) on the OCR `scan` event records when it
@@ -81,6 +87,11 @@ fired.
       blocked one-paragraph bilingual labels.
   - It also proposed the allergen-word rule for a bare "contains", which
     replaced a word-exclusion list that kept missing other languages.
+  - Its third check (`fe2489d`) found one red: the Data Retention sentence left
+    out crash reports and the rate-the-app flag. Its yellows became the
+    colon-form rule, more allergen words (soja, species names, dairy) and the
+    nearby-bracket check. The real-read fixture caught this round's first
+    bracket attempt blocking complete photos.
 - **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
   of the lists Claude called `safe` (95 of 272). This overstates the real
   cost, because that text is flattened to one line: contributors paste
@@ -113,6 +124,10 @@ fired.
   abbreviation ("vit.\n"), an in-list full stop in a multi-part EU list
   ("…butter.\nCream (60%): …"), and text beside the list that ends in one
   ("…Inc.\n", a Nutrition Facts footnote).
+- **An unbracketed in-list "contains milk" wrapped to a line start** reads as
+  the allergen statement. Text alone can't tell the two apart. In real lists,
+  "contains" nearly always follows a "(", which is blocked. So is a bracket
+  opened three or more lines above.
 - **A top cut that leaves a sub-heading starting its own line** still passes
   ("CHEESE SAUCE MIX\nINGREDIENTS:", or a meal kit's seasoning section after
   the tortilla section is cut). Same-line spellings are caught.
@@ -133,8 +148,8 @@ fired.
 - **A few complete lists with no full stop of their own are blocked:**
   - an allergen statement in brackets ("(CONTAINS: MILK)");
   - "CONTAINS THE FOLLOWING ALLERGENS: MILK";
-  - a "contains" that names no allergen ("CONTAINS: 100% JUICE");
-  - an allergen word the list doesn't know.
+  - "CONTAINS: 100% JUICE";
+  - a colon-less "contains" before an allergen word the list doesn't know.
 - **US supplements and OTC drugs can't pass.** "Other ingredients:" and
   "Inactive ingredients:" deliberately don't count as headings, because their
   main ingredients sit in the Facts table above them, where a top cut could
