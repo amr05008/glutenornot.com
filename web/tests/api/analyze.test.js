@@ -312,12 +312,27 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList('Zutaten: Reis, Zucker, Salz.\n14.10.2026')).toBeNull();
   });
 
-  // Complete lists often carry no full stop of their own; the allergen
-  // statement that follows them by regulation marks the end just as well.
-  it('accepts an allergen or advisory statement on a later line as the end', () => {
-    expect(checkIngredientList('INGREDIENTS: Almonds, sea salt\nCONTAINS: TREE NUTS (ALMONDS)')).toBeNull();
-    expect(checkIngredientList('Ingrédients : riz, sucre, sel\nPeut contenir des traces de lait')).toBeNull();
-    expect(checkIngredientList('INGREDIËNTEN: rijst, suiker, zout\nKan sporen van melk bevatten')).toBeNull();
+  // Decision 005 T1: an allergen statement does not end a list; only a
+  // line-ending full stop does. Four review rounds each found a new way for a
+  // "contains" line to let a cut list through (in-list wording in seven
+  // languages, quantity phrasing, brackets OCR drops), while every complete
+  // real read ends in a full stop anyway. The cost: a complete list with no
+  // full stop anywhere after it is held at caution, and the copy asks for the
+  // line below.
+  it.each([
+    'INGREDIENTS: Almonds, sea salt\nCONTAINS: TREE NUTS (ALMONDS)',
+    'Ingrédients : riz, sucre, sel\nPeut contenir des traces de lait',
+    'INGREDIËNTEN: rijst, suiker, zout\nKan sporen van melk bevatten',
+    'INGREDIENTS: Corn, sunflower oil, salt. CONTAINS: MILK',
+    'Zutaten: Reis, Soja\nEnthält: Soja',
+    'INGREDIENTS: Rice, whey\nALLERGY WARNING: CONTAINS MILK',
+  ])('does not take an allergen statement for the end: %s', (text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  it('passes a complete list once the line below it (with its full stop) is in frame', () => {
+    expect(checkIngredientList('INGREDIENTS: Almonds, sea salt\nCONTAINS: TREE NUTS (ALMONDS).')).toBeNull();
+    expect(checkIngredientList('INGREDIENTS: Corn, sunflower oil, salt. CONTAINS: MILK\nDistributed by Example Foods Co.')).toBeNull();
   });
 
   it('does not treat a mid-list "contains 2% or less of" line as the end', () => {
@@ -366,10 +381,6 @@ describe('checkIngredientList', () => {
     'INGREDIENTS: rice, sugar, cocoa, salt, natu\nDist. by Acme Foods Inc',
   ])('does not count an abbreviation in a cut list as its end: %s', (text) => {
     expect(checkIngredientList(text)).toBe('no_end');
-  });
-
-  it('accepts an allergen statement after a full stop on the same line', () => {
-    expect(checkIngredientList('INGREDIENTS: Corn, sunflower oil, salt. CONTAINS: MILK')).toBeNull();
   });
 
   // A complete first list must not vouch for a cut second one.
@@ -478,20 +489,8 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList(text)).toBe('no_end');
   });
 
-  it.each([
-    'Ingrédients : riz, sucre, lait\nContient du lait',
-    'Ingredientes: arroz, azúcar, leche\nContiene leche',
-    'Zutaten: Reis, Zucker, Milch\nEnthält Milch',
-    'Ingrediënten: rijst, suiker, melk\nBevat melk',
-    'Ingrédients : riz, sucre, lait\nAllergènes : lait',
-    'INGREDIENTS: Rice, sugar, whey\nContains milk',
-  ])('takes an allergen statement in any supported language for the end: %s', (text) => {
-    expect(checkIngredientList(text)).toBeNull();
-  });
-
-  // Re-grill 3 (yellow B): an end marker inside a bracket that is still open,
-  // however many lines up it opened, is part of the list; so are allergen
-  // badges and in-list "may also contain" wording.
+  // Re-grill 3 (yellow B): in-list wording that wraps onto a line start never
+  // ends a list — bracketed "contains", allergen badges, "may also contain".
   it.each([
     'INGREDIENTS: SUGAR, CHOCOLATE (SUGAR, COCOA BUTTER,\ncontains milk and\nsoy), SALT, COCO',
     'Zutaten: Zucker, Schokolade (Zucker, Kakaobutter,\nenthält Milch und\nSoja), Salz, Kak',
@@ -501,24 +500,6 @@ describe('checkIngredientList', () => {
     'Ingredientes: arroz, aceite\nContiene: menos del 2% de sal, cacao',
   ])('does not take this for the end either: %s', (text) => {
     expect(checkIngredientList(text)).toBe('no_end');
-  });
-
-  // Re-grill 3 (yellow C): complete lists with no full stop of their own,
-  // ended by an allergen statement the first allergen-word list didn't know.
-  it.each([
-    'INGREDIENTS: Rice, soybeans, cashews\nCONTAINS: SOYBEANS, CASHEWS',
-    'INGREDIENTS: Rice, whey\nCONTAINS: DAIRY',
-    'INGREDIENTS: Rice, shrimp, anchovies\nCONTAINS SHRIMP, ANCHOVIES',
-    'Ingredientes: arroz, almendras\nContiene: frutos de cáscara',
-    'Ingredientes: arroz, cebada\nContiene cereales con gluten',
-    "Ingrédients : riz, arachides\nContient de l'arachide",
-    'Zutaten: Reis, Soja\nEnthält: Soja',
-    'Zutaten: Reis, Haselnüsse\nEnthält Haselnüsse',
-    'Ingredienti: riso, nocciole\nContiene: frutta a guscio',
-    'Ingrediënten: rijst, soja\nBevat: soja',
-    'INGREDIENTS: Rice, whey\nALLERGY WARNING: CONTAINS MILK',
-  ])('takes this allergen statement for the end: %s', (text) => {
-    expect(checkIngredientList(text)).toBeNull();
   });
 
   it('treats a missing or non-string read as having no heading', () => {

@@ -28,24 +28,11 @@ shows:
    OCR's semicolon), or alone on its line above a comma-separated list.
    - A bilingual heading counts ("INGREDIENTS / INGRÉDIENTS :").
    - Roughly 35 languages.
-2. **The end:** after every heading, before the next one, one of:
-   - a full stop that ends a line or the read (not one inside the surviving
-     list like "U.S." or "vit. C", and not the last of a "..." run);
-   - an allergen statement that opens a line or follows a full stop. An
-     advisory phrase counts as it is ("May contain", "Peut contenir", "Kan
-     sporen van…", but not an "ALLERGEN FREE" badge). A "contains" counts with
-     a colon ("CONTAINS: SOYBEANS", "Enthält: Soja") unless a quantity follows
-     it. Without a colon it counts only before an allergen word ("Contient du
-     lait").
-   - So in-list wording never ends a list, in any language: "Contiene menos de
-     2%", "CONTAINS ONE OR MORE OF THE FOLLOWING:". Nor does a statement led by
-     a bracket, one that closes a bracket it didn't open ("enthält Soja),
-     Kakao"), or one inside a bracket opened in the two lines above it ("(sugar,
-     cocoa butter,\ncontains milk and\nsoy)").
-   - The bracket check looks only two lines up, and only at allergen
-     statements. Real OCR drops brackets: IMG_6212's "[ORGANIC BLACK QUINOA"
-     never closes, and a whole-list check made two complete real photos fail.
-   On a two-product frame, every list must pass.
+2. **The end:** after every heading and before the next one, a full stop that
+   ends a line or the read. It must not be one inside the surviving list, like
+   "U.S." or "vit. C", and not the last of a "..." run. On a two-product frame,
+   every list must pass. **An allergen statement ("Contains: milk") does not
+   count as the end.** See T1.
 
 `list_gate` (`no_heading` | `no_end`) on the OCR `scan` event records when it
 fired.
@@ -66,11 +53,11 @@ fired.
   - All 8 complete label reads pass (6 iPhone photos, 2 grocery screenshots).
   - Of the top-cropped reads, 4 of 4 with any text are caught.
   - Of the bottom-cropped reads that actually cut the list, 2 of 2 are caught.
-  - One of the two side crops is caught (pistachios cut to "Pistachios, se").
+  - Both side crops are caught. The pistachio crop is cut to "Pistachios,
+    se", and IMG_6212 cut on its right edge keeps no line-ending full stop.
   - These reads are committed as `web/tests/fixtures/real-label-ocr.json` and
     asserted, so the evidence is re-checked on every change without Vision.
-    The IMG_6212 side-crop leak is pinned there as an expected pass, so a
-    change to it is deliberate.
+
 - **Every OCR eval label written to be `safe` passes.** A unit test keeps it
   that way, because the live evals never run the gate.
 - **Three adversarial reviews on PR #31:**
@@ -92,6 +79,13 @@ fired.
     colon-form rule, more allergen words (soja, species names, dairy) and the
     nearby-bracket check. The real-read fixture caught this round's first
     bracket attempt blocking complete photos.
+  - Its fourth check (`147e573`) found one red: the colon form let wrapped
+    in-list "CONTAINS:" through in all seven languages, reversing its own
+    advice. That was the fourth round in which the allergen-statement end
+    marker opened a new false-safe shape. The real reads settled it: all 8
+    complete reads end in a line-ending full stop, and the only real read the
+    marker ever passed was a side crop. So the marker was removed (T1), which
+    also removed about 60 lines of regex.
 - **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
   of the lists Claude called `safe` (95 of 272). This overstates the real
   cost, because that text is flattened to one line: contributors paste
@@ -100,13 +94,17 @@ fired.
 
 ## Toggles (still flippable)
 
-- **T1: the end rule.** A line-ending full stop OR an allergen line is the
-  current setting.
-  - Counting any sentence-ending full stop would pass more complete lists, but
-    it also let abbreviations in a cut list ("U.S.", "vit. C") and a mid-line
-    full stop in nearby text ("CA 93249. Product of") through.
-  - Dropping the allergen line would catch more side cuts, but it would block
-    complete lists that have no full stop of their own.
+- **T1: the end rule.** The current setting is a line-ending full stop only.
+  An allergen statement is off.
+  - Turning the allergen statement on would pass complete lists that have no
+    full stop anywhere after them. Across four review rounds, though, it kept
+    letting cut lists through: in-list "contains" wording in seven languages,
+    quantity phrasing ("CONTAINS: UNDER 2%"), and brackets OCR drops. On real
+    photos it never passed a complete read that a full stop didn't already
+    pass.
+  - Counting any sentence-ending full stop, not just a line-ending one, would
+    let abbreviations in a cut list ("U.S.", "vit. C") and a mid-line full stop
+    in nearby text through.
   - Dropping the end rule entirely leaves end cuts to the prompt.
 - **T2: menus are exempt.** A response with `mode: "menu"` and at least one
   dish is not gated. The prompt's partial-menu rule covers menus.
@@ -117,20 +115,15 @@ fired.
 
 ## Known leaks
 
-- **A side cut that keeps the allergen line or a line-ending full stop.**
-  IMG_6212 cut on its right edge passes on "CONTAINS: WHEAT". Wheat itself
-  would be flagged. The risk is barley, rye or malt at a line's right edge.
-- **A full stop that happens to end a line reads as the end.** That covers an
-  abbreviation ("vit.\n"), an in-list full stop in a multi-part EU list
-  ("…butter.\nCream (60%): …"), and text beside the list that ends in one
-  ("…Inc.\n", a Nutrition Facts footnote).
-- **An unbracketed in-list "contains milk" wrapped to a line start** reads as
-  the allergen statement. Text alone can't tell the two apart. In real lists,
-  "contains" nearly always follows a "(", which is blocked. So is a bracket
-  opened three or more lines above.
-- **A top cut that leaves a sub-heading starting its own line** still passes
-  ("CHEESE SAUCE MIX\nINGREDIENTS:", or a meal kit's seasoning section after
-  the tortilla section is cut). Same-line spellings are caught.
+- **A full stop that happens to end a line reads as the end.** This covers:
+  - an abbreviation ("vit.\n");
+  - an in-list full stop in a multi-part EU list ("…butter.\nCream (60%): …");
+  - text beside the list that ends in one ("…Inc.\n", a Nutrition Facts
+    footnote).
+  A side crop that keeps such a line passes the same way.
+- **A top cut that leaves a sub-heading starting its own line** still passes.
+  Examples: "CHEESE SAUCE MIX\nINGREDIENTS:", or a meal kit's seasoning section
+  after the tortilla section is cut. The same-line spellings are caught.
 - **A model-chosen `mode: "menu"` with dishes skips the gate.** A label
   misread as a menu is unlikely, but it would get through.
 - **A cut that removes only an advisory below a complete list.** The list is
@@ -145,11 +138,10 @@ fired.
   stop.
 - **Single-ingredient packs with no printed list can't pass.** The copy points
   phone users at the barcode.
-- **A few complete lists with no full stop of their own are blocked:**
-  - an allergen statement in brackets ("(CONTAINS: MILK)");
-  - "CONTAINS THE FOLLOWING ALLERGENS: MILK";
-  - "CONTAINS: 100% JUICE";
-  - a colon-less "contains" before an allergen word the list doesn't know.
+- **A complete list with no line-ending full stop anywhere after it is held at
+  caution.** An example is a tight crop that ends on "CONTAINS: MILK". The
+  retake copy asks for the line below, which almost always carries one (an
+  address, "Store in a cool, dry place.").
 - **US supplements and OTC drugs can't pass.** "Other ingredients:" and
   "Inactive ingredients:" deliberately don't count as headings, because their
   main ingredients sit in the Facts table above them, where a top cut could

@@ -336,83 +336,14 @@ const INGREDIENT_HEADING_PATTERN = new RegExp(
 
 // The list's end: a full stop that ends a line or the read — not one inside
 // the surviving part of a cut list ("U.S. grown", "vit. C", "bzw."), not the
-// last of a "..." run (a grocery site's "natu..." cut) — or an allergen
-// statement, which by regulation follows the list (many complete lists carry
-// no full stop of their own). The statement opens a line or follows a full
-// stop and isn't led by a bracket. An advisory phrase counts as it is ("May
-// contain", "Peut contenir", "Kan sporen van" — not an "ALLERGEN FREE"
-// badge); "contains" counts with a colon ("CONTAINS: SOYBEANS", "Enthält:
-// Soja") unless a quantity follows it, or without one only before an allergen
-// word ("Contient du lait"). So in-list wording in any language ("Contiene
-// menos de 2%", "CONTAINS ONE OR MORE OF THE FOLLOWING:") never ends a list.
-// Nor does a statement inside a bracket opened just above it (listHasEnd).
-// Known leaks (decision 005): a full stop that happens to end a
-// line inside or beside a cut list, and an unbracketed in-list "contains milk"
-// wrapped to a line start.
-const ADVISORY_PHRASE =
-  'may contain|puede contener|peut contenir|kan sporen|kann spuren|pot contenir|può contenere|allerg(?:ens?|y advice|y information|y warning|ènes|eni|enen|ene)|al[eé]rgenos';
-const CONTAINS_WORD = 'contains|contiene|contient|bevat|enthält|conté';
-// Quantity or choice wording that keeps a "contains" inside the list.
-const IN_LIST_WORD = String.raw`\d|≤|<|(?:less|one|two|any|up to|the following|free|friendly|menos|moins|meno|minder|weniger|un[oae]?|eine?|een|één)(?!\p{L})`;
-const ALLERGEN_WORD = [
-  'milk|dairy|soya?|soybeans?|wheat|eggs?|peanuts?|(?:tree |brazil )?nuts?|almonds?|cashews?|walnuts?|pecans?|hazelnuts?|pistachios?|macadamias?|coconuts?|fish|shellfish|crustaceans?|shrimp|prawns?|crab|lobster|anchov(?:y|ies)|cod|salmon|tuna|sesame|gluten|cereals?|mustard|celery|lupin|sul[pf]hites?|molluscs?|barley|rye|oats', // en
-  'leche|soja|trigo|huevos?|cacahuetes?|man[ií]|frutos de c[aá]scara|avellanas|nueces|cereales|pescado|s[eé]samo|mostaza|apio|crust[aá]ceos|moluscos|sulfitos', // es
-  'lait|bl[eé]|[œo]e?ufs?|arachides?|fruits à coque|noisettes|poissons?|moutarde|c[eé]leri|crustac[eé]s|mollusques|sulfites|c[eé]r[eé]ales', // fr
-  'melk|tarwe|eieren|ei|pinda|noten|vis|sesam|mosterd|selderij|schaaldieren|granen', // nl
-  String.raw`milch|weizen|eier|erdn[üu]sse|schalenfr[üu]chte|\p{L}*n[üu]sse|fisch|senf|sellerie|krebstiere|getreide`, // de
-  'llet|blat|ous?|cacauets?|peix|s[eè]sam|mostassa|api|cereals', // ca
-  'latte|soia|frumento|grano|uova|arachidi|frutta a guscio|nocciole|pesce|senape|sedano|glutine|cereali', // it
-].join('|');
+// last of a "..." run (a grocery site's "natu..." cut). An allergen statement
+// ("Contains: milk") deliberately does not count: every complete real read in
+// test-cases/ ends in a line-ending full stop, while a "contains" line kept
+// letting cut lists through — in-list wording in seven languages, quantity
+// phrasing, brackets OCR drops — and the only real read it ever passed was a
+// side crop (decision 005, T1). Known leak: a full stop that happens to end a
+// line inside or beside a cut list.
 const LINE_END_FULL_STOP = new RegExp(String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$)`, 'mu');
-const ALLERGEN_STATEMENT = new RegExp(
-  String.raw`(?:^|[.。][ \t\u00a0]+)[ \t\p{Po}\p{Pd}]*` +
-    `(?:(?:${ADVISORY_PHRASE})(?![ \\t:-]*(?:${IN_LIST_WORD}))` +
-    `|(?:${CONTAINS_WORD})[ \\t]*[:：](?![ \\t]*(?:${IN_LIST_WORD}))` +
-    `|(?:${CONTAINS_WORD})[ \\t]+(?:(?:du|de la|des|de|del|della|la|le|les)[ \\t]+)?(?:[ld]['’])?(?:${ALLERGEN_WORD})(?!\\p{L}))` +
-    String.raw`(?![^\r\n(]*\))`,
-  'gimu', // g for matchAll only — never call .test/.exec on it
-);
-
-const OPENING_BRACKETS = '([{（［';
-const CLOSING_BRACKETS = ')]}）］';
-
-/** How many brackets are still open at the end of `text` (extra closes don't bank). */
-function openBracketDepth(text) {
-  let depth = 0;
-  for (const ch of text) {
-    if (OPENING_BRACKETS.includes(ch)) depth += 1;
-    else if (CLOSING_BRACKETS.includes(ch)) depth = Math.max(0, depth - 1);
-  }
-  return depth;
-}
-
-/** Where the line `lines` above the one holding `index` starts. */
-function lineStartAbove(text, index, lines) {
-  let at = index;
-  for (let n = 0; n <= lines; n += 1) {
-    const newline = text.lastIndexOf('\n', at - 1);
-    if (newline < 0) return 0;
-    at = newline;
-  }
-  return at + 1;
-}
-
-/**
- * Does this list show its end? A line-ending full stop always counts. An
- * allergen statement counts unless a bracket opened in the two lines above it
- * is still open — a wrapped "(sugar, cocoa butter,\ncontains milk and\nsoy)".
- * Only two lines: OCR drops brackets (IMG_6212's "[ORGANIC BLACK QUINOA"
- * never closes), and one lost ")" near the top must not blind every
- * statement below it.
- */
-function listHasEnd(list) {
-  if (LINE_END_FULL_STOP.test(list)) return true;
-  for (const statement of list.matchAll(ALLERGEN_STATEMENT)) {
-    const nearby = list.slice(lineStartAbove(list, statement.index, 2), statement.index);
-    if (openBracketDepth(nearby) === 0) return true;
-  }
-  return false;
-}
 
 const NO_HEADING_EXPLANATION =
   'I can\'t see where the ingredient list starts, so I can\'t call this safe — flour is often the first ingredient. Retake with the word "Ingredients" and the whole list in frame.';
@@ -428,7 +359,7 @@ const NO_END_EXPLANATION =
  *
  * Start: an ingredients heading anywhere in the read (Vision sometimes emits a
  * fragment of the list above it). End: after every heading, before the next
- * one, a line-ending full stop or an allergen statement — on a two-product
+ * one, a line-ending full stop — on a two-product
  * frame a complete first list must not vouch for a cut second one. Neither
  * proves the whole list was captured — a side cut keeps both — but their
  * absence is strong evidence it was not.
@@ -439,7 +370,7 @@ function checkIngredientList(ocrText) {
   if (headings.length === 0) return 'no_heading';
   for (const [i, heading] of headings.entries()) {
     const list = ocrText.slice(heading.index + heading[0].length, headings[i + 1]?.index ?? ocrText.length);
-    if (!listHasEnd(list)) return 'no_end';
+    if (!LINE_END_FULL_STOP.test(list)) return 'no_end';
   }
   return null;
 }

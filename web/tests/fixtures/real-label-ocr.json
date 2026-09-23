@@ -93,8 +93,8 @@
     },
     {
       "id": "IMG_6212-side-cut",
-      "capture": "same photo, right edge cropped off — KNOWN LEAK (decision 005): passes on the surviving \"CONTAINS: WHEAT\" line",
-      "expect": null,
+      "capture": "same photo, right edge cropped off (every line-ending full stop cut away; the surviving \"CONTAINS: WHEAT\" line does not count as the end)",
+      "expect": "no_end",
       "text": "100\n00\n-Abse\n9219\nore\nng\nHORE OF\nS DAILY\nA\nLDPE\nPLEASE RECYCLE\nOR REUSE THIS BAG\nNS OR COMMENTS?\nDAVESHILLERBREAD.COM/CONTACT\n13764 02713\n8\nTotal\nDieta\nTotal St\nIncludes\nProtein 3g\nVitamin Do\nCalcium 20\nIron 0.6mg\nPotassium\nThe % Daily Va\nin a serving of\ncalories a day\nINGREDIENTS: ORGANIC WHO\nWHEAT), WATER, ORGANIC C\nWHOLE FLAX SEEDS, ORGANI\nQUINOA, ORGANIC RED QUIN\nORGANIC TRITICALE, ORGANIC\nORGANIC ROLLED RYE, ORG\nORGANIC BROWN RICE FLOUR\nKAMUTO KHORASAN WHEAT,\nFLOUR, ORGANIC POPPY SEED\nLESS OF EACH OF THE FOLLO\nWHEAT FLOUR, ORGANIC VINEG\nCONTAINS: WHEAT\nDISTRIBUTED BY\nDKB-ALPINE ORG\nBAKERIES GROU\n5209 SE INTERNA\nMILWAUKIE, OR S\nCERTIFIED ORGA"
     }
   ]
