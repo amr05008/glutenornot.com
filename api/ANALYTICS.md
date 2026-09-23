@@ -24,7 +24,7 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
   label was delivered as `caution` because the ingredient list looked cut off:
   `no_heading` (no "Ingredients:"-style heading in the read — the start of the
   list, where flour usually sits, was out of frame) or `no_end` (a heading but
-  no full stop or allergen statement after it — cut before the end). `applyIngredientListGate` in
+  no line-ending full stop or allergen statement after it — cut before the end). `applyIngredientListGate` in
   `api/analyze.js`, added 2026-09-22 after the jev-sandbox truncation test. Its
   count over OCR label scans is the gate's cost in withheld `safe` verdicts; the
   `verdict` on the event is the delivered one. A reason, never the text.

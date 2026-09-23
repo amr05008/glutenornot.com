@@ -23,9 +23,9 @@ On the photo path, `applyIngredientListGate` (`api/analyze.js`, after the char
 floor) turns a `safe` into `caution`/low with retake copy unless the OCR text
 shows:
 
-1. **The start:** an ingredients heading that starts its line, optionally after
-   a two-letter language code, followed by a colon (or OCR's semicolon), or
-   alone on its line above a comma-separated list.
+1. **The start:** an ingredients heading that starts its line (or follows a
+   sentence on it), optionally after a language code, followed by a colon (or
+   OCR's semicolon), or alone on its line above a comma-separated list.
    - A bilingual heading counts ("INGREDIENTS / INGRÉDIENTS :").
    - Roughly 35 languages.
 2. **The end:** after every heading, before the next one, one of:
@@ -33,7 +33,8 @@ shows:
      list like "U.S." or "vit. C", and not the last of a "..." run);
    - an allergen or advisory statement that opens a line or follows a full
      stop ("Contains:", "May contain", "Peut contenir", "Kan sporen van…"),
-     but not the in-list "Contains 2% or less of".
+     but not in-list wording that wraps onto a line: "Contains 2% or less of",
+     "CONTAINS ONE OR MORE OF THE FOLLOWING:", a bracketed "(contiene leche)".
    On a two-product frame, every list must pass.
 
 `list_gate` (`no_heading` | `no_end`) on the OCR `scan` event records when it
@@ -56,10 +57,17 @@ fired.
   - Of the top-cropped reads, 4 of 4 with any text are caught.
   - Of the bottom-cropped reads that actually cut the list, 2 of 2 are caught.
   - One of the two side crops is caught (pistachios cut to "Pistachios, se").
+  - These reads are committed as `web/tests/fixtures/real-label-ocr.json` and
+    asserted, so the evidence is re-checked on every change without Vision.
 - **Every OCR eval label written to be `safe` passes.** A unit test keeps it
   that way, because the live evals never run the gate.
-- **Two adversarial reviews on PR #31:** one in-session agent and one Opus 5.5
-  session in Herdr. Both said SHIP. Their findings are folded in.
+- **Three adversarial reviews on PR #31:**
+  - An in-session agent reviewed `974ac2e` and said SHIP.
+  - An Opus 5.5 session in Herdr reviewed `974ac2e` and said SHIP.
+  - The same Opus session re-grilled the fixes (`3743ac3..7c6af71`) and said
+    DON'T SHIP. Its two red findings were a policy line contradicted by a
+    barcode log, and an allergen-marker regression. Both are fixed in the
+    following commit, and every finding is folded in.
 - **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
   of the lists Claude called `safe` (95 of 272). This overstates the real
   cost, because that text is flattened to one line: contributors paste
@@ -71,8 +79,8 @@ fired.
 - **T1: the end rule.** A line-ending full stop OR an allergen line is the
   current setting.
   - Counting any sentence-ending full stop would pass more complete lists, but
-    it also let abbreviations in a cut list ("U.S.", "vit. C") and a nearby
-    address line through.
+    it also let abbreviations in a cut list ("U.S.", "vit. C") and a mid-line
+    full stop in nearby text ("CA 93249. Product of") through.
   - Dropping the allergen line would catch more side cuts, but it would block
     complete lists that have no full stop of their own.
   - Dropping the end rule entirely leaves end cuts to the prompt.
@@ -88,7 +96,13 @@ fired.
 - **A side cut that keeps the allergen line or a line-ending full stop.**
   IMG_6212 cut on its right edge passes on "CONTAINS: WHEAT". Wheat itself
   would be flagged. The risk is barley, rye or malt at a line's right edge.
-- **An abbreviation that happens to end a line** ("vit.\n") reads as an end.
+- **A full stop that happens to end a line reads as the end.** That covers an
+  abbreviation ("vit.\n"), an in-list full stop in a multi-part EU list
+  ("…butter.\nCream (60%): …"), and text beside the list that ends in one
+  ("…Inc.\n", a Nutrition Facts footnote).
+- **A top cut that leaves a sub-heading starting its own line** still passes
+  ("CHEESE SAUCE MIX\nINGREDIENTS:", or a meal kit's seasoning section after
+  the tortilla section is cut). Same-line spellings are caught.
 - **A model-chosen `mode: "menu"` with dishes skips the gate.** A label
   misread as a menu is unlikely, but it would get through.
 - **A cut that removes only an advisory below a complete list.** The list is
@@ -99,8 +113,15 @@ fired.
 - **CJK labels effectively can't reach `safe` by photo.** Their lists rarely
   end in 。 and are often laid out as tables without a colon. There were 0
   Japanese, Chinese or Korean photo scans in the 180 days to 2026-09-22.
+- **Thai labels can't reach `safe` by photo either:** Thai script has no full
+  stop.
 - **Single-ingredient packs with no printed list can't pass.** The copy points
   phone users at the barcode.
+- **US supplements and OTC drugs can't pass.** "Other ingredients:" and
+  "Inactive ingredients:" deliberately don't count as headings, because their
+  main ingredients sit in the Facts table above them, where a top cut could
+  remove them. The copy asks for the word "Ingredients", which those labels
+  never print on its own.
 - **Every OCR verdict-share read that spans 2026-09-22 must account for
   `list_gate`.** The delivered verdict now includes these downgrades. This
   applies above all to the gluten-free-claim step-9 read (~2026-09-25): group

@@ -29,6 +29,7 @@ import handler, {
 import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import fixtures from '../fixtures/claude-responses.json';
 import { GF_CLAIM_CASES } from './evals/gf-claim-cases.js';
+import realLabelOcr from '../fixtures/real-label-ocr.json';
 
 describe('parseClaudeResponse', () => {
   it('extracts correctly structured response from valid JSON', () => {
@@ -406,6 +407,42 @@ describe('checkIngredientList', () => {
     },
   );
 
+  // PR #31 Opus re-grill (red 2): in-list "contains" wording that wraps onto a
+  // new line must not read as the allergen statement that ends the list.
+  it.each([
+    'INGREDIENTS: Potato chips, vegetable oil\n(CONTAINS ONE OR MORE OF THE FOLLOWING: CORN, SOYBEAN',
+    'INGREDIENTS: Rice, sugar\nCONTAINS ONE OR MORE OF: salt, cocoa',
+    'INGREDIENTS: Rice, sugar\nCONTAINS: 2% OR LESS OF salt, cocoa',
+    'INGREDIENTS: Rice, sugar\nCONTAINS TWO PERCENT OR LESS OF salt',
+    'INGREDIENTES: arroz, azúcar, suero\n(contiene leche), cacao, sa',
+    'Zutaten: Reis, Zucker, Molke\n(enthält Milch), Kakao, Sa',
+  ])('does not take in-list "contains" wording for the end: %s', (text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  it.each([
+    ['a heading after a sentence on the same line', 'Keep refrigerated. INGREDIENTS: Rice, sugar, salt.'],
+    ['a bilingual heading split by a dash', 'INGREDIENTS - INGRÉDIENTS : Riz, sucre, sel.'],
+    ['an Arabic heading above a list with Arabic commas', 'المكونات\nأرز، سكر، ملح.'],
+    ['a doubled full stop from OCR', 'INGREDIENTS: Rice, sugar, salt..'],
+  ])('recognises %s', (_label, text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
+  it('does not take any two letters for a language code', () => {
+    expect(checkIngredientList('sugar, cocoa, salt\nOF INGREDIENTS: salt.')).toBe('no_heading');
+  });
+
+  // Real Google Vision reads of the maintainer's own label photos, complete and
+  // cropped (fixture header says how they were made). Synthetic strings can't
+  // show what OCR actually emits; these do.
+  it.each(realLabelOcr.cases.map((c) => [c.id, c.capture, c.expect, c.text]))(
+    'real read %s (%s) → %s',
+    (_id, _capture, expected, text) => {
+      expect(checkIngredientList(text)).toBe(expected);
+    },
+  );
+
   it('treats a missing or non-string read as having no heading', () => {
     expect(checkIngredientList(undefined)).toBe('no_heading');
     expect(checkIngredientList('')).toBe('no_heading');
@@ -476,6 +513,14 @@ describe('applyIngredientListGate', () => {
     expect(analysis.menu_items[0].verdict).toBe('caution');
     expect(analysis.menu_items[1]).toBeNull();
     expect(analysis.menu_items[2].verdict).toBe('unsafe');
+  });
+
+  it('keeps an unsafe verdict at its confidence when only an item badge is downgraded', () => {
+    const analysis = { ...safeLabel(), verdict: 'unsafe', confidence: 'high', menu_items: [{ name: 'x', verdict: 'safe' }] };
+    expect(applyIngredientListGate(analysis, START_CUT)).toBe('no_heading');
+    expect(analysis.verdict).toBe('unsafe');
+    expect(analysis.confidence).toBe('high');
+    expect(analysis.menu_items[0].verdict).toBe('caution');
   });
 
   it('gates a "menu" response that carries no items', () => {

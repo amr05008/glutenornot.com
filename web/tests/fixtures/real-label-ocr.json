@@ -1,0 +1,95 @@
+{
+  "_about": "Real Google Cloud Vision reads (TEXT_DETECTION, 1024px JPEG, EXIF orientation applied) of the maintainer's own label photos and two grocery-site screenshots in test-cases/ (gitignored images) — packaging text, never user scans. Crops made with sharp at the heading's bounding box. Pins the ingredient-list gate (decision 005) against real OCR output. 2026-09-22.",
+  "cases": [
+    {
+      "id": "IMG_6207",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "Jei\nKETTLE\nEST. 2013\nTTLECORN\nn salty\nBACON'N CHEESE\nFINGER-LICKIN' GOOD\nIngredients: Com, Sugar, Canola Oil, Salt, Whey (Milk), Cheese Blend (Cheddar Cheese\nPasteurized Milk, Cheese Culture, Enzymes], Whey (Milk), Salt, Disodium Phosphate,\nFD&C Yellow #5 (E102), FD&C Yellow #6 (E110)), Lactose, Hydrolyzed Soy Protein, Nonfat Dry Milk,\nNatural & Artificial Flavor, Onion Powder, Natural Smoke Flavor, FD&C Yellow #5 Lake (E102).\nFD&C Yellow #6 Lake (E110), Silicon Dioxide (Flow Agent), FD&C Red #40 Lake (E129).\nand FD&C Blue #1 (E133). Contains: Milk and Soy.\nThis product is produced in a facility that may also process nuts, and may also\nbe produced on machinery that processes nuts.\nGLUTEN FREE | 80Z (227G) | WHOLE GRAIN\n243 HARTFORD TPKE, VERNON, CT 06066 860-402-2811\nLICENSE #: FME.0001082"
+    },
+    {
+      "id": "IMG_6208",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "02 (282) PACKETS NET WIT 8.07 (2240).\nSERVING\nCHEWY\nThe %D\nIn a serving\nalories a day &\n2022 Ori\nNutrition Fa\n6 servings per containe\nServing Size 1 packag\nAmount per Serving\nCalories 2\nTotal Fat 5g\nSaturated Fat 0g\nTrans Fat 0g\nCholesterol Omg\nSodium 75mg\n%D\nTotal Carbohydrate 38g\nDietary Fiber 3g\nabsolutely!\nGLUTEN FREE\nNutrition Facts\nAbout 9 servings per container\nServing size\nAmount per serving\nCalories\nTotal Fat 2g\n9 pieces (14g)\ntrunch\n70\n% Daily Value*\n3%\nSaturated Fat 0.5g\n3%\nTrans Fat 0g\n2%\nCholesterol 5mg\n3%\nTotal Sugars 19g\nSodium 65mg\nIncludes 14g Added Sugar\nTotal Carbohydrate 12g\n4%\nProtein 30\n0%\nDietary Fiber 0g\nONO\nNON\nVit D 1mop 6%\nIron 0.9\nTotal Sugars Og\nCalcium 20mg 2%\nPotas. 130\nThe Duly Vine 10V) tells you how\nly 2.000 e\ngeneral nution advice\nfood contribute\nday k\nINGREDIENTS: Whole Wheat Flour, Fig\nSuper Brown Rice Syrup, Blueberry Fin\ngr, Naturaty Milled Sugar, Rice Starch\nBemes, Apple Peeder, Natural Flavor\nOc Ac Locust Bean Gum, Canola O\nGrain Dabs Glycerts Fruit Juice (for color\nCitric Acid, Baking Soda\nCONTAINS WHEAT,\nSTANITED BY KATORE'S BAKERY, LLC, REN\nWOWWA SOCIE PLANUT AND TREE NUT F\nSONY\nOHM\nง3วาร\n09\nVitamin D Omcg\nCalcium Omg\nIron Omg\nPotassium 40mg\n*The % Daily Value (DV) tells you how much a nutrient\nin a serving of food contributes to a daily diet. 2,000\ncalories a day is used for general nutrition advice.\nIngredients: Tapioca Starch, Water,\nPotato Starch, Potato Flakes, Palm Oil,\nHoney, Egg Yolks, Natural Vinegar, Salt.\nContains: Eggs. May contain: Sesame.\nProduced in a nut free facility.\nManufactured for:\nKenover Marketing Corp.\nBayonne NJ 07002 USA\nProduct of Israel\nברכתו שהכל\nStore in a cool, dry place.\nIncludes Og Added Sugars\n0%\nProtein Og\n0%\n0%\n0%\n0%\nes"
+    },
+    {
+      "id": "IMG_6209",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "Nutrition Facts\n6 servings per container\nServing Size 1 package (57g)\nAmount per Serving\nCalories\n200\n% Daily Value*\nTotal Fat 5g\n6%\nSaturated Fat 0g\n0%\nTrans Fat 0g\nCholesterol Omg\n0%\nSodium 75mg\n3%\nTotal Carbohydrate 38g\n14%\nDietary Fiber 3g\n11%\nTotal Sugars 19g\nabsolutely!\nGLUTEN FREE\nGRAIN FREE\nrackers\nORIGINAL\nIncludes 14g Added Sugars 28%\nProtein 3g\nVit. D 1mcg 6%\nCalcium 20mg 2%\nIron 0.9mg 6%\nPotas. 130mg 2%\nThe % Daily Value (DV) tells you how much a\nnutrient in a serving of food c\nd contributes to a\ndaily diet. 2,000 calories a day is used for\ngeneral nutrition advice.\nSugar, Brown Rice\nINGREDIENTS: Whole Wheat Flour, Fig Paste, Cane\nRice Syrup, Blueberry Filling (Cane\nSugar, Naturally Milled Sugar, Rice Starch, Glycerin,\nBlueberries, Apple Powder, Natural Flavors, Pectin,\nCitric Acid, Locust Bean Gum), Canola Oil, Whole\nNatural Flavor, Citric Acid, Baking Soda.\nGrain Oats, Glycerin, Fruit Juice (for color), Sea Salt,\nCONTAINS WHEAT.\nDISTRIBUTED BY NATURE'S BAKERY, LLC, RENO, NV 89511\nMADE IN A DEDICATED PEANUT AND TREE NUT FREE FACILITY\nОУЗНЯ ЗІМУ980\nS3Iษกางง\nGLUTEN\nDAIRY FREE"
+    },
+    {
+      "id": "IMG_6210",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "Resea aule rore\nSNACK FACTORY\nPutge Crisps\nTHIN CRUNCHY PRETZEL CRACKERS\nGLUTEN FREE\nORIGINAL\nDELI STYLE\nRethink\npack Factory Gluten Free Pretzel\nCrispsve all the flavor, crunch,\ndeliciousness of our perfectly\nsalted Original Pretzel Crisps, but\nwith none of the gluten.\nWhether you like them plain, dipped, or paired\nwith your favorite toppings, we're sure you'll\nenjoy this wholesome snack as much as we do.\nOne bite and you'll Rethink Your Pretzell\npretzelcrisps.com|0000PretzelCrisps\nSecond Appetizer:\nCrispy Cucumber Salsa\nCucumber, Tomato, Red Onion,\nJalapeño, Cilantro, Sour Cream\n2004-21 All\nserved.\nYour Pre, and adir designs are trad\nUCH\nServing\ntrition Facts\n10xFg/about 14 erackar\nAmount p\nerving\nCalores\n110\n% Daily Value\nTotal Fat 3g\nSaturated Fat 1.5g\n4%\n8%\nTrans Fat 0g\nCholesterol Omg\n0%\nSodium 350mg\n15%\nTotal Carbohydrate 22g\n8%\nDie\nFiber 2g\n7%\nTotal Sugars 19\nIncludes <10 Added Sug\n2%\nProtein Og\nVitamin D 0mcg\nCum Omg\nIn g\nPotassium Omg\n\"The % Daily Value Des you how mu\na serving of food contributes to a day de 2000\na day is used for general non advice\n-0%\n0%\n0%\n0%\nINGREDIENTS: Cornstarch, Potato Starch,\nRice Flour, Corn Fiber, Palm Oil, Sugar,\nSodium Carboxymethylcellulose, Salt,\nSunflower Lecithin, Sodium Bicarbonate,\nSodium Acid Pyrophosphate, Yeast\nExtract, Citric Acid, Inulin, Soda.\nDistributed by Snyder-Lance, In\nChart C 28277\nContains bloengineered food ingredients The\nIngredients from com and sugar in th\nProduct come from genetically c\nBest if used by ce on acige\nPARE\n49509 25006\nSnyder's-Lance, Inc."
+    },
+    {
+      "id": "IMG_6211",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "Wonderfu\nPISTACHIOS\nPROTEIN POWER\nCrack open a scrumptious\nway to get 12% of your daily\nprotein value with deliciously\nseasoned Roasted & Salted\nWonderful Pistachios.\nHEART\nScientific evidence\nsuggests But does\nnot prove that eating\nHEALTHY 1.5 ounces per day of\nmest nuts, such as pistachios,\nas part of a diet low in saturated\nfat and cholesterol may reduce the\nrisk of heart disease. See nutrition\ninformation for fat content.\n2024 Wonderful Pistachios &\nAlmonds LLC. All Rights Reserved.\nWONDERFUL, GET CRACKIN\nthe accompanying logos and\ntrade dress are trademarks of\nWonderful Pistachios & Almonds\nLLC or its affiliates\nNON\nScan here to Get Crack\nGMO D\nProject\nVERIFIED\nGluten-Free\nNutrition Facts\nAbout 9 servings per package\nServing Size 1 cup with shells (28g\nwithout is about 49 pistachios\nAmount per serving\nCalories\nTotal Fat 13g\nSaturated Fat 1.5g\nTrans Fat 0g\n160\n% Daily Value*\nPolyunsaturated Fat 3.5g\nMonounsaturated Fat 7g\nCholesterol Omg\nSodium 1.35mg\nTotal Carbohydrate 8g\nDietary Fiber 3g\nTotal Sugars 2g\nIncludes Og Added Sugars\nProtein 6g\nVitamin D Omcg\n17%\n8%\n0%\n6%\n3%\n11%\nCalcium 30mg\nIron 1.1mg\n6%\nPotassium 280mg\n6%\nThiamin 0.19mg\n15%\nVitamin B 0.31mg\n20%\nPhosphorus 130mg\n10%\nMagnesium 30mg\n8%\nCopper 0.36mg\n40%\nManganese 0.35mg\n15%\n014113 91002\nThe % Daily Value (DV) tells you how much a nuthent\nin a serving of food contributes to a daily diet 2,000\ncalories a day is used for general nuthton advice\nIngredients: Pistachios, sea salt.\nProduced by Wonderful Pistachios,\nLost Hills, CA 93249. Product of U.S.A.\nQuestions or Comments?\nCall:\n1-877-450-9493\nIM.\nF USED\nJUL 13\n220156259601"
+    },
+    {
+      "id": "IMG_6212",
+      "capture": "complete iPhone photo",
+      "expect": null,
+      "text": "100\n1,7g 160\nore\nng\nHORE OF\nSDAILY\nA\nLDPE\nPLEASE RECYCLE\nOR REUSE THIS BAG\ndbs ONS OR COMMENTS?\n9219m\n13764 02713\"\n8\nDAVESILLERBREAD.COM/CONTACT\nProtein 3g\nDieta\nTotal Su 149\nIncludes Sy\n12%\nSTA\nSugars\n5%\n2%\nVitamin D\nOmcg\nCalcium 20mg\n0%\n0%\nSECO\nEveryone\nDave's Ki\nfirst-han\n4%\nPotassium 60mg\nsparks\n0%\nwith cr\nIron 0.6mg\n*The % Daily Value (DV) tells you how much a nutrient\nin a serving of food contributes to a daily diet. 2,000\ncalories a day is used for general nutrition advice.\nINGREDIENTS: ORGANIC WHOLE WHEAT (ORGANIC WHOLE WHEAT FLOUR, ORGANIC CRACKED WHOLE\nWHEAT), WATER, ORGANIC CANE SUGAR, ORGANIC 21 WHOLE GRAINS AND SEEDS MIX (ORGANIC\nWHOLE FLAX SEEDS, ORGANIC SUNFLOWER SEEDS, ORGANIC TRI-COLOR QUINOA [ORGANIC BLACK\nQUINOA, ORGANIC RED QUINOA, ORGANIC WHITE GJINDAL, ORGANIC GROUND WHOLE FLAX SEEDS,\nORGANIC TRITICALE, ORGANIC PUMPKIN SEEDS, ORGANIC ROLLED BARLEY, ORGANIC ROLLED OATS\nORGANIC ROLLED RYE, ORGANIC BLUE CORNMEAL, ORGANIC MILLET, ORGANIC ROLLED SPELT\nORGANIC BROWN RICE FLOUR, ORGANIC AMARANTH FLOUR, ORGANIC YELLOW CORNMEAL, ORGANIC\nKAMUTO KHORASAN WHEAT, ORGANIC QUINOA, ORGANIC SORGHUM FLOUR, ORGANIC BUCKWHEAT\nFLOUR, ORGANIC POPPY SEEDS), ORGANIC OAT FIBER, ORGANIC WHEAT GLUTEN, CONTAINS 2% OR\nLESS OF EACH OF THE FOLLOWING: ORGANIC MOLASSES, YEAST, SEA SALT, ORGANIC CULTURED\nWHEAT FLOUR, ORGANIC VINEGAR, ORGANIC ACEROLA CHERRY POWDER, ENZYMES 786-061623\nCONTAINS: WHEAT.\nDISTRIBUTED BY:\nDKB-ALPINE ORGANIC\nBAKERIES GROUP, LLC\n5209 SE INTERNATIONAL WAY\nMILWAUKIE, OR 97222\nCERTIFIED ORGANIC BY: QAI INC.\nCERTIFIED ORGANIC\nyour s\nComp\nof Se\nDA\n20 6:02 1"
+    },
+    {
+      "id": "grocery-1",
+      "capture": "complete grocery-site screenshot",
+      "expect": null,
+      "text": "Grocery > Pantry > Breakfast & Cereal > Cereal & Granola > Granola\nKIND Healthy Grains Clusters, Peanut\nButter\nShop all KIND\n$6.99/ea 11oz $0.64/oz\nSNAP\nEXPRESS delivery available\nAdd to list\nDescription Nutrition\nIngredients\nWhole Grain Blend (Oats, Brown Rice, Buckwheat, Millet, Amaranth, Quinoa), Dried\nCane Syrup, Soy Crisp (Soy Protein Isolate, Tapioca Starch, Calcium Carbonate),\nPeanut Butter, Peanut Oil, Tapioca Syrup, Peanuts, Peanut Flour, Brown Rice Syrup,\nSalt, Vitamin E (To Maintain Freshness).\nMade in a facility that processes tree nuts and sesame seeds."
+    },
+    {
+      "id": "grocery-2",
+      "capture": "complete grocery-site screenshot",
+      "expect": null,
+      "text": "Frozen > Meals & Entrées > Grab & Go\nSmucker's Uncrustable Sandwich Peanut\nButter & Strawberry\nShop all Smucker's\n$11.79/ea 10ct, 2oz ea $0.59/oz\nSNAP\nAdd to list\nDescription Nutrition\nIngredients\nBread: Enriched Unbleached Flour (Wheat Flour, Malted Barley Flour, Niacin, Ferrous\nSulfate, Thiamin Mononitrate, Riboflavin, Folic Acid), Water, Unbleached Whole\nWheat Flour, Sugar, Yeast, Soybean Oil, Contains 2% of Less Of: Salt, Dough\nConditioner (Enzymes, Ascorbic Acid, Calcium Peroxide).\nPeanut Butter: Peanut Butter: Peanuts, Sugar, Contains 2% Of Molasses, Fully\nHydrogenated Vegetable Oils (Rapeseed and Soybean), Mono and Diglycerides, Salt.\nStrawberry Jam: Sugar, Strawberries, Contains 2% or Less Of: Pectin, Citric Acid,\nPotassium Sorbate (Preservative)."
+    },
+    {
+      "id": "IMG_6207-top-cut",
+      "capture": "same photo, top of the list cropped off",
+      "expect": "no_heading",
+      "text": "Natural & Artificial Flavor, Onion Powder, Natural Smoke Flavor, FD&C Yellow #5 Lake (E12).\nFD&C Yellow #6 Lake (E110), Silicon Dioxide (Flow Agent), FD&C Red #40 Lake (E129),\nand FD&C Blue #1 (E133). Contains: Milk and Soy.\nThis products produced in a facility that may also process nuts, and may also\nbe produced on machinery that processes nuts\nGLUTEN FREE 80Z (227G) | WHOLE GRAIN\n243 HARTFORD TPKE, VERNON, CT 06066 860-402-2811\nLICENSE #: FME.0001082"
+    },
+    {
+      "id": "IMG_6209-top-cut",
+      "capture": "same photo, top of the list cropped off",
+      "expect": "no_heading",
+      "text": "Blueberries, Apple Powder, Natural Flavors, Pectin,\narch, Glycerin,\nCitric Acid, Locust Bean Gum), Canola Oil, Whole\nGrain Oats, Glycerin, Fruit Juice (for color), Sea Salt,\nNatural Flavor Citric Acid, Baking Soda.\nCONTAINS WHEAT.\nSTRIBUTED NATURE'S BAKERY, LLC, RENO, NV 89511\nNADE IN AUTRICATED PEANUT AND TREE NUT FREE FACILITY\nS3180างจ"
+    },
+    {
+      "id": "IMG_6210-top-cut",
+      "capture": "same photo, top of the list cropped off",
+      "expect": "no_heading",
+      "text": "Second Appetizer:\nCrispy Cucumber Salsa\nCucumber. Tomato, Red Onion,\nJalapeño, Cilantro, Sour Cream\n2004-1 Aved\nYour Prat, and der designs are trad\nUCH\nBed by date on ack\n0\nPARE\nSnyder's-Lance, Inc\n49509 25006"
+    },
+    {
+      "id": "IMG_6212-top-cut",
+      "capture": "same photo, top of the list cropped off",
+      "expect": "no_heading",
+      "text": "rate 149\nmcg\nSugars\n5%\n2%\nSTA\nSECO\nEng\n60mg\n0%\nEveryone\n0%\nDave's Ki\nfirst-han\n4%\nsparks\n0%\nwith cr\nyour s\nComp\ne (DV) tells you how much a nut\nDod contributes to a daily diet. 2,000\nS used for general nutrition advice.\nWHEAT (ORGANIC WHOLE WHEAT FLOUR, ORGANIC CRACKED WHOLE\nE SUGAR, ORGANIC 21 WHOLE GRAINS AND SEEDS MOX ORGANIC\nSUNFLOWER SEEDS, ORGANIC TRI-COLOR QUINOA (ORGANIC BLACK\nORGANIC HMITE GJINDAL ORGANIC GROUND WHOLE FLAX SEEDS\nPUMPKIN SEEDS, ORGANIC ROLLED BARLEY, ORGANIC ROLLED OATS\nC BLUE CORNMEAL, ORGANIC MILLET, ORGANIC ROLLED SPELT\nORGANIC AMARANTH FLOUR, ORGANIC YELLOW CORNMEAL, ORGANIC\nRGANIC QUINDA, ORGANIC SORGHUM FLOUR, ORGANIC BUCKWHEAT\nORGANIC OAT FIBER, ORGANIC WHEAT GLUTEN, CONTAINS 2% OR\nNG: ORGANIC MOLASSES, YEAST, SEA SALT, ORGANIC CULTURED\nORGANIC ACEROLA CHERRY POWDER, ENZYMES 785-061623\nof Se\nDA\nANIC\nLLC\nTIONAL WAY\n7222\nIC BY: QAI INC.\nCERTIFIED ORGANIC\nFEREN"
+    },
+    {
+      "id": "IMG_6207-bottom-cut",
+      "capture": "same photo, bottom of the list cropped off",
+      "expect": "no_end",
+      "text": "Je\nEST. 2013\nSKETTLE\nKETTLECORN\nsalty\nBACON'N CHEESE\nFINGER-LICKIN' GOOD\nIngredients: Com, Sugar, Canola Oil, Salt, Whey (Milk), Cheese Blend (Cheddar Cheese\nPasteurized Milk, Cheese Culture, Enzymes), Whey (Milk), Salt, Disodium Phosphate,\n(110) Lactose Hydrolyzed Soy Protein, Nonfat Dry Milk,"
+    },
+    {
+      "id": "IMG_6209-bottom-cut",
+      "capture": "same photo, bottom of the list cropped off",
+      "expect": "no_end",
+      "text": "Nutrition Facts\n6 servings per container\nServing Size 1 package (57g)\nAmount par Serving\nCalories\n200\nabsolutely!\nGLUTEN FREE\nGRAIN FREE\nCrackers\nORIGINAL\n% Daily Value*\nTotal Fat 5g\n6%\nSaturated Fat 0g\n0%\nTrans Fat 0g\nCholesterol Omg\n0%\nSodium 75mg\n3%\nTotal Carbohydrate 38g\n14%\n(c)\nDietary Fiber 3g\n11%\nTotal Sugars 19g\nIncludes 14g Added Sugars 28%\nProtein 3g\nVit. D 1mcg 6%\nIron 0.9mg 6%\nCalcium 20mg 2%\n.\nPotas. 130mg 2%\nThe % Daily Value (DV) tells you how much a\nnutrient in a serving of food contributes to a\ndaily diet. 2.000 calories a day is used for\ngeneral nutrition advice\nINGREDIENTS: Whole Wheat Flour, Fig Paste, Cane\nSugar, Brown Rice Syrup, Blueberry Filling (Cane\nSugar, Naturally Milad Sunne\nGLUTEN\nFREE\nDAIRY FREE"
+    },
+    {
+      "id": "IMG_6211-side-cut",
+      "capture": "same photo, right edge of the one-line list cropped off (\"Pistachios, se\")",
+      "expect": "no_end",
+      "text": "Wonderful\nPISTACHIOS\nPROTEIN POWER\nCrack open a scrumptious\nway to get 12% of your daily\nprotein value with deliciously\nseasoned Roasted & Salted,\nWonderful Pistachios.\nHEART\nScientific evidence\nsuggests But does\nnot prove that eating\nHEALTHY 1.5 ounces per day of\nmest nuts, such as pistachios,\nas part of a diet low in saturated\nfat and cholesterol may reduce the\nrisk of heart disease. See nutrition\nInformation for fat content.\n2024 Wonderful Pistachios\nAlmonds LLC. All Rights Reserved.\nWONDERFUL, GET CRACKIN\nthe accompanying logos and\ntrade dress are trademarks of\nWonderful Pistachios & Almonds\nLLC or its affiliate\nNON\nGMO\nProject\nVERIFIED\nGluten-Free\nScan here to Get Crack\n014113 91002\nNutrition Fa\nAbout 9 servings per p\nServing Size 1 cup with she\nwithout ss/about 49 pis\nAmount per serving\nCalories\n% Di\nTotal Fat 13g\nSaturated Fat 1.5g\nTrans Fat 0g\nPolyunsaturated Fat 3.5\nMonounsaturated Fat 7g\nCholesterol Omg\nSodium 135mg\nTotal Carbohydrate 8g\nDietary Fiber 3g\nTotal Sugars 2g\nIncludes Og Added Sugars\nProtein 6g\nVitamin D Omcg\nCalcium 30mg\nIron 1.1mg\nPotassium 280mg\nThiamin 0.19mg\nVitamin B. 0.31mg\nPhosphorus 130mg\nMagnesium 30mg\nCopper 0.36mg\nManganese 0.35mg\nThe % Daily Value (DV) tells you how muc\nin a serving of food contributes to a daily d\ncalories a day is used for general nuntiona\nIngredients: Pistachios, se\nProduced by Wonderful Pista\nLost Hills, CA 93249. Product of\nQuestions or Comments?\nCall: 1-877-450-9493\n(\nF USED\nJUL 13\n228156259601"
+    }
+  ]
+}

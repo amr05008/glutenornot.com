@@ -559,6 +559,25 @@ describe('lookup timeouts', () => {
     expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
+  // Privacy policy (2026-09-22): the only barcode written to server logs is one
+  // no database recognizes. A hit must log which padding form matched, never
+  // the number itself.
+  it('lookupOpenFoodFacts never logs the barcode on a hit', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 1, product: { product_name: 'X', ingredients_text: 'water' } }),
+    }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await lookupOpenFoodFacts('012345678905');
+      const logged = log.mock.calls.flat().map(String).join(' ');
+      expect(logged).toContain('Open Food Facts hit');
+      expect(logged).not.toMatch(/\d{8,}/);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('lookupOpenFoodFacts returns null (a miss) when every variant times out', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
       Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),

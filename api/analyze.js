@@ -313,31 +313,40 @@ const INGREDIENT_HEADINGS = [
   '原材料名?', '配料表?', '成分', '원재료명?(?:[ \t]*및[ \t]*함량)?', // ja, zh, zh-TW, ko
 ].join('|');
 
-// A heading starts its line — after bullets or a two-letter language code
-// ("DE Zutaten:", "(FR) Ingrédients :") — and takes a colon (or OCR's
-// semicolon), or stands alone on its line above a comma-separated list
-// (grocery sites). Bilingual packs print both languages on one heading
-// ("INGREDIENTS / INGRÉDIENTS :"). Words before it on the line make it
-// something else: after a top cut, "CHEESE SAUCE MIX INGREDIENTS:" or "…OF THE
-// FOLLOWING INGREDIENTS:" must not stand in for the list's own heading, nor
-// "the ingredients from corn" in a bioengineered-food disclosure.
-const HEADING_WORDS = `(?:${INGREDIENT_HEADINGS})(?:[ \\t]*[/|,][ \\t]*(?:${INGREDIENT_HEADINGS}))*`;
+// A heading starts its line (or follows a sentence on it: "Keep refrigerated.
+// INGREDIENTS:"), optionally after bullets or a language code ("DE Zutaten:",
+// "(FR) Ingrédients :"), and takes a colon (or OCR's semicolon) — or stands
+// alone on its line above a comma-separated list (grocery sites). Bilingual
+// packs print both languages on one heading ("INGREDIENTS / INGRÉDIENTS :").
+// Other words before it on the same line make it something else: the
+// bioengineered-food disclosure's "the ingredients from corn", or — after a top
+// cut — "CHEESE SAUCE MIX INGREDIENTS:". A sub-heading that starts its own line
+// still counts, so a top cut that leaves one behind is a known leak (decision
+// 005). "Other ingredients:" (supplements) and "Inactive ingredients:" (OTC
+// drugs) deliberately don't match: their main ingredients sit in a Facts table
+// above that heading.
+const LANGUAGE_CODES = 'en|fr|de|nl|es|it|pt|ca|pl|cs|cz|sk|hu|hr|sr|bs|sl|si|fi|sv|se|da|dk|no|nb|el|gr|tr|ru|uk|ua|bg|ro|lt|lv|et|ee|mt|ar|he|ja|zh|ko|vi|th|id|gb|us|ie|be|at|ch|lu';
+const HEADING_WORDS = `(?:${INGREDIENT_HEADINGS})(?:[ \\t]*[/|,\\-–—][ \\t]*(?:${INGREDIENT_HEADINGS}))*`;
 const INGREDIENT_HEADING_PATTERN = new RegExp(
-  String.raw`^[ \t\p{P}\p{S}]*(?:\p{L}{2}\)?[ \t]*[:/|-]?[ \t]+)?` + `${HEADING_WORDS}[ \\t\\u00a0]*[:：;]` +
-    `|^[ \\t\\p{P}\\p{S}]*${HEADING_WORDS}[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，])`,
+  String.raw`(?:^[ \t\p{P}\p{S}]*|[.。][ \t]+)(?:\(?(?:${LANGUAGE_CODES})\)?[ \t]*[:/|-]?[ \t]+)?` +
+    `${HEADING_WORDS}[ \\t\\u00a0]*[:：;]` +
+    `|^[ \\t\\p{P}\\p{S}]*${HEADING_WORDS}[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，،])`,
   'gimu', // g for matchAll only — never call .test/.exec on it
 );
 
 // The list's end: a full stop that ends a line or the read — not one inside
 // the surviving part of a cut list ("U.S. grown", "vit. C", "bzw."), not the
-// last of a run of dots (a grocery site's "natu..." cut) — or an allergen or
+// last of a "..." run (a grocery site's "natu..." cut) — or an allergen or
 // advisory statement that opens a line or follows a full stop, which by
 // regulation comes after the list (many complete lists carry no full stop of
-// their own). Not the in-list "Contains 2% or less of". An abbreviation that
-// happens to end a line still reads as an end: a known leak.
+// their own). Not in-list wording that wraps onto a new line: a bracketed
+// "(contiene leche)", "Contains 2% or less of", "CONTAINS ONE OR MORE OF THE
+// FOLLOWING:". Still read as an end, and so known leaks: an abbreviation or an
+// in-list full stop ("…butter.\nCream (60%): …") that happens to end a line,
+// and text beside the list that ends in a full stop.
 const LIST_END_PATTERN = new RegExp(
-  String.raw`(?<![.。])[.。][ \t\u00a0]*(?:\r?\n|$)` +
-    String.raw`|(?:^|[.。][ \t\u00a0]+)[ \t\p{P}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t]*(?:\d|less|under))`,
+  String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$)` +
+    String.raw`|(?:^|[.。][ \t\u00a0]+)[ \t\p{Po}\p{Pd}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t:]*(?:\d|less|under|one or more|up to|two|the following))`,
   'imu',
 );
 
@@ -411,7 +420,8 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
   if (items) {
     analysis.menu_items = items.map((item) => (item?.verdict === 'safe' ? { ...item, verdict: 'caution' } : item));
   }
-  analysis.confidence = 'low';
+  // An unsafe verdict stays as sure as it was; only what we downgraded is unsure.
+  if (analysis.verdict !== 'unsafe') analysis.confidence = 'low';
   return reason;
 }
 
