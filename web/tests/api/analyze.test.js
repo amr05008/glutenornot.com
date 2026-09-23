@@ -821,8 +821,33 @@ describe('CLAUDE_PROMPT gluten-free label claims', () => {
     expect(CLAUDE_PROMPT).toContain("Labeled gluten-free — that's a regulated claim");
   });
 
-  it('still keeps the general be-conservative rule (guard — everything the block does not name)', () => {
-    expect(CLAUDE_PROMPT).toContain('Be conservative—when uncertain, use "caution"');
+  // Decision 006 replaced "Be conservative—when uncertain, use caution" with a
+  // named-reason rule; this guard keeps the conservative half of it.
+  it('still never returns safe on a guess (guard — everything the block does not name)', () => {
+    expect(CLAUDE_PROMPT).toContain('When one applies, use caution — never "safe" on a guess.');
+  });
+});
+
+describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
+  it('asks for one caution_reason from the fixed list on a label caution', () => {
+    expect(CLAUDE_PROMPT).toContain('"caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"');
+  });
+
+  it('says ingredients whose source labeling law covers are not a reason on their own', () => {
+    const [, block = ''] = CLAUDE_PROMPT.split('#### Not a reason for caution on its own');
+    for (const term of ['natural flavors', 'spices', 'maltodextrin', 'dextrin', 'modified (food) starch', 'glucose syrup', 'caramel color', 'hydrolyzed vegetable/plant protein of unstated source']) {
+      expect(block.split('####')[0]).toContain(term);
+    }
+  });
+
+  it('keeps meat products, soy sauce and yeast extract as undeclared_source (T3–T5)', () => {
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*meat or poultry product/);
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[\s\S]*soy sauce[\s\S]*yeast extract/);
+  });
+
+  it('no longer tells the model to caution whenever it is uncertain', () => {
+    expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
+    expect(CLAUDE_PROMPT).not.toContain("The 'natural flavors' could contain gluten");
   });
 });
 
