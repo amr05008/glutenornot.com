@@ -443,6 +443,52 @@ describe('checkIngredientList', () => {
     },
   );
 
+  // PR #31 Opus re-grill 2 (red C): a heading after a full stop mid-line must
+  // not swallow the previous list's closing full stop — one-paragraph bilingual
+  // and multi-language packs run exactly like this.
+  it.each([
+    'INGREDIENTS: rice, sugar, salt. INGRÉDIENTS : riz, sucre, sel.',
+    'INGREDIENTS: rice, sugar, milk. CONTAINS: MILK. INGRÉDIENTS : riz, sucre, lait. CONTIENT : LAIT.',
+    'GB Ingredients: rice, sugar, salt. FR Ingrédients : riz, sucre, sel. DE Zutaten: Reis, Zucker, Salz.',
+  ])('passes a complete one-paragraph multi-language label: %s', (text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
+  it('still flags a cut second list in a one-paragraph bilingual label', () => {
+    expect(checkIngredientList('INGREDIENTS: rice, sugar, salt. INGRÉDIENTS : riz, sucre, s')).toBe('no_end');
+  });
+
+  // Re-grill 2 (yellow D): a bare "contains" only ends the list when an
+  // allergen follows it; in-list "contains" wording in any language doesn't.
+  it.each([
+    'Ingredientes: arroz, aceite\nContiene menos de 2% de sal, cacao',
+    'Ingrédients : riz, huile\nContient moins de 2 % de sel, cacao',
+    'Ingredienti: riso, olio\ncontiene meno del 2% di sale, cacao',
+    'Ingrediënten: rijst, olie\nbevat minder dan 2% zout, cacao',
+    'Zutaten: Reis, Öl\nenthält weniger als 2% Salz, Kakao',
+    'Ingredientes: arroz, aceite vegetal\ncontiene uno o más de: girasol, colza',
+    'Ingrédients : riz, huile végétale\ncontient une ou plusieurs de : tournesol, colza',
+    'INGREDIENTS: Rice, vegetable oil\nCONTAINS ONE OF THE FOLLOWING: CANOLA, SUNFLOWER',
+    'INGREDIENTS: Rice, vegetable oil\nCONTAINS CANOLA AND/OR SUNFLOWER OIL, salt',
+    'INGREDIENTS: Rice, sugar\nCONTAINS; salt, cocoa',
+    'INGREDIENTS: Rice, sugar\nCONTAINS ≤2% salt, cocoa',
+    'INGREDIENTS: Rice, vegetable oil\nmay contain one or more of the following: canola, soybean',
+    'Zutaten: Zucker, Emulgator Lecithine (Raps,\nenthält Soja), Kakao, Sa',
+  ])('does not take in-list wording for the end: %s', (text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  it.each([
+    'Ingrédients : riz, sucre, lait\nContient du lait',
+    'Ingredientes: arroz, azúcar, leche\nContiene leche',
+    'Zutaten: Reis, Zucker, Milch\nEnthält Milch',
+    'Ingrediënten: rijst, suiker, melk\nBevat melk',
+    'Ingrédients : riz, sucre, lait\nAllergènes : lait',
+    'INGREDIENTS: Rice, sugar, whey\nContains milk',
+  ])('takes an allergen statement in any supported language for the end: %s', (text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
   it('treats a missing or non-string read as having no heading', () => {
     expect(checkIngredientList(undefined)).toBe('no_heading');
     expect(checkIngredientList('')).toBe('no_heading');

@@ -328,7 +328,7 @@ const INGREDIENT_HEADINGS = [
 const LANGUAGE_CODES = 'en|fr|de|nl|es|it|pt|ca|pl|cs|cz|sk|hu|hr|sr|bs|sl|si|fi|sv|se|da|dk|no|nb|el|gr|tr|ru|uk|ua|bg|ro|lt|lv|et|ee|mt|ar|he|ja|zh|ko|vi|th|id|gb|us|ie|be|at|ch|lu';
 const HEADING_WORDS = `(?:${INGREDIENT_HEADINGS})(?:[ \\t]*[/|,\\-–—][ \\t]*(?:${INGREDIENT_HEADINGS}))*`;
 const INGREDIENT_HEADING_PATTERN = new RegExp(
-  String.raw`(?:^[ \t\p{P}\p{S}]*|[.。][ \t]+)(?:\(?(?:${LANGUAGE_CODES})\)?[ \t]*[:/|-]?[ \t]+)?` +
+  String.raw`(?:^[ \t\p{P}\p{S}]*|(?<=[.。][ \t]+))(?:\(?(?:${LANGUAGE_CODES})\)?[ \t]*[:/|-]?[ \t]+)?` +
     `${HEADING_WORDS}[ \\t\\u00a0]*[:：;]` +
     `|^[ \\t\\p{P}\\p{S}]*${HEADING_WORDS}[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，،])`,
   'gimu', // g for matchAll only — never call .test/.exec on it
@@ -336,17 +336,36 @@ const INGREDIENT_HEADING_PATTERN = new RegExp(
 
 // The list's end: a full stop that ends a line or the read — not one inside
 // the surviving part of a cut list ("U.S. grown", "vit. C", "bzw."), not the
-// last of a "..." run (a grocery site's "natu..." cut) — or an allergen or
-// advisory statement that opens a line or follows a full stop, which by
-// regulation comes after the list (many complete lists carry no full stop of
-// their own). Not in-list wording that wraps onto a new line: a bracketed
-// "(contiene leche)", "Contains 2% or less of", "CONTAINS ONE OR MORE OF THE
-// FOLLOWING:". Still read as an end, and so known leaks: an abbreviation or an
-// in-list full stop ("…butter.\nCream (60%): …") that happens to end a line,
-// and text beside the list that ends in a full stop.
+// last of a "..." run (a grocery site's "natu..." cut) — or an allergen
+// statement, which by regulation follows the list (many complete lists carry
+// no full stop of their own). The statement opens a line or follows a full
+// stop, isn't led by a bracket, and doesn't close a bracket it didn't open
+// ("enthält Soja), Kakao" is still inside the list). An advisory phrase counts
+// as it is ("May contain", "Peut contenir", "Kan sporen van"); a bare
+// "contains" only with an allergen after it ("CONTAINS: MILK", "Contient du
+// lait"), so in-list wording in any language ("Contiene menos de 2%",
+// "CONTAINS ONE OR MORE OF THE FOLLOWING:") never ends a list. Still read as
+// an end, and so known leaks (decision 005): an abbreviation or in-list full
+// stop ("…butter.\nCream (60%): …") that happens to end a line, and text
+// beside the list that ends in a full stop.
+const ADVISORY_PHRASE =
+  "may (?:also )?contain|puede contener|peut contenir|kan sporen|kann spuren|pot contenir|può contenere|allerg(?:ens?|y advice|y information|ènes|eni|enen|ene)|al[eé]rgenos";
+const CONTAINS_WORD = 'contains|contiene|contient|bevat|enthält|conté';
+const ALLERGEN_WORD = [
+  'milk|soya?|wheat|eggs?|peanuts?|(?:tree )?nuts?|almonds?|fish|shellfish|crustaceans?|sesame|gluten|mustard|celery|lupin|sul[pf]hites?|molluscs?|barley|rye|oats', // en
+  'leche|trigo|huevos?|cacahuetes?|man[ií]|pescado|s[eé]samo|mostaza|apio|crust[aá]ceos|moluscos|sulfitos', // es
+  "lait|bl[eé]|[œo]e?ufs?|arachides?|fruits à coque|poissons?|moutarde|c[eé]leri|crustac[eé]s|mollusques|sulfites", // fr
+  'melk|tarwe|eieren|ei|pinda|noten|vis|sesam|mosterd|selderij|schaaldieren', // nl
+  'milch|weizen|eier|erdn[üu]sse|schalenfr[üu]chte|n[üu]sse|fisch|senf|sellerie|krebstiere', // de
+  'llet|blat|ous?|cacauets?|peix|s[eè]sam|mostassa|api', // ca
+  'latte|soia|frumento|grano|uova|arachidi|pesce|senape|sedano|glutine', // it
+].join('|');
 const LIST_END_PATTERN = new RegExp(
   String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$)` +
-    String.raw`|(?:^|[.。][ \t\u00a0]+)[ \t\p{Po}\p{Pd}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t:]*(?:\d|less|under|one or more|up to|two|the following))`,
+    String.raw`|(?:^|[.。][ \t\u00a0]+)[ \t\p{Po}\p{Pd}]*` +
+    `(?:(?:${ADVISORY_PHRASE})(?![ \\t:]*(?:one|two|any|\\d|less|up to|the following))` +
+    `|(?:${CONTAINS_WORD})[ \\t]*[:：]?[ \\t]*(?:(?:du|de la|des|de|la|le|les)[ \\t]+|d['’])?(?:${ALLERGEN_WORD})(?!\\p{L}))` +
+    String.raw`(?![^\r\n(]*\))`,
   'imu',
 );
 

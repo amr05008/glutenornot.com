@@ -31,10 +31,14 @@ shows:
 2. **The end:** after every heading, before the next one, one of:
    - a full stop that ends a line or the read (not one inside the surviving
      list like "U.S." or "vit. C", and not the last of a "..." run);
-   - an allergen or advisory statement that opens a line or follows a full
-     stop ("Contains:", "May contain", "Peut contenir", "Kan sporen van…"),
-     but not in-list wording that wraps onto a line: "Contains 2% or less of",
-     "CONTAINS ONE OR MORE OF THE FOLLOWING:", a bracketed "(contiene leche)".
+   - an allergen statement that opens a line or follows a full stop. An
+     advisory phrase counts as it is ("May contain", "Peut contenir", "Kan
+     sporen van…"). A bare "contains" counts only when an allergen word
+     follows it ("CONTAINS: MILK", "Contient du lait", "Enthält Milch").
+   - So in-list wording never ends a list, in any language: "Contiene menos de
+     2%", "CONTAINS ONE OR MORE OF THE FOLLOWING:". Nor does a statement led by
+     a bracket, or one that closes a bracket it didn't open ("enthält Soja),
+     Kakao").
    On a two-product frame, every list must pass.
 
 `list_gate` (`no_heading` | `no_end`) on the OCR `scan` event records when it
@@ -59,6 +63,8 @@ fired.
   - One of the two side crops is caught (pistachios cut to "Pistachios, se").
   - These reads are committed as `web/tests/fixtures/real-label-ocr.json` and
     asserted, so the evidence is re-checked on every change without Vision.
+    The IMG_6212 side-crop leak is pinned there as an expected pass, so a
+    change to it is deliberate.
 - **Every OCR eval label written to be `safe` passes.** A unit test keeps it
   that way, because the live evals never run the gate.
 - **Three adversarial reviews on PR #31:**
@@ -66,8 +72,15 @@ fired.
   - An Opus 5.5 session in Herdr reviewed `974ac2e` and said SHIP.
   - The same Opus session re-grilled the fixes (`3743ac3..7c6af71`) and said
     DON'T SHIP. Its two red findings were a policy line contradicted by a
-    barcode log, and an allergen-marker regression. Both are fixed in the
-    following commit, and every finding is folded in.
+    barcode log, and an allergen-marker regression. Both are fixed in
+    `b80b85a`.
+  - Its re-check of `b80b85a` found two more reds, both fixed in the next
+    commit:
+    - a Data Retention sentence contradicting the disclosed logs;
+    - a mid-line heading swallowing the previous list's full stop, which
+      blocked one-paragraph bilingual labels.
+  - It also proposed the allergen-word rule for a bare "contains", which
+    replaced a word-exclusion list that kept missing other languages.
 - **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
   of the lists Claude called `safe` (95 of 272). This overstates the real
   cost, because that text is flattened to one line: contributors paste
@@ -117,6 +130,11 @@ fired.
   stop.
 - **Single-ingredient packs with no printed list can't pass.** The copy points
   phone users at the barcode.
+- **A few complete lists with no full stop of their own are blocked:**
+  - an allergen statement in brackets ("(CONTAINS: MILK)");
+  - "CONTAINS THE FOLLOWING ALLERGENS: MILK";
+  - a "contains" that names no allergen ("CONTAINS: 100% JUICE");
+  - an allergen word the list doesn't know.
 - **US supplements and OTC drugs can't pass.** "Other ingredients:" and
   "Inactive ingredients:" deliberately don't count as headings, because their
   main ingredients sit in the Facts table above them, where a top cut could
