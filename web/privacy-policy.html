@@ -106,10 +106,10 @@
     <main class="main">
       <div class="privacy-content">
         <h2>Privacy Policy</h2>
-        <p class="effective-date">Effective Date: September 15, 2026</p>
+        <p class="effective-date">Effective Date: September 22, 2026</p>
 
         <div class="highlight-box">
-          <p><strong>The short version:</strong> GlutenOrNot is designed with privacy first. We don't collect personal data, don't require accounts, and don't store your photos. Your scans stay on your device.</p>
+          <p><strong>The short version:</strong> GlutenOrNot is designed with privacy first. We don't collect personal data, don't require accounts, and don't store your photos. Your scan history stays on your device.</p>
         </div>
 
         <h2>Introduction</h2>
@@ -124,12 +124,12 @@
           <li>No device IDs or advertising identifiers</li>
           <li>No precise location — we never access GPS; anonymous analytics include only an approximate region derived from your IP address (see below)</li>
           <li>No advertising or cross-site tracking of any kind</li>
-          <li>No record of what you scanned on our servers — ingredient text and images are discarded after processing</li>
+          <li>No record of what you scanned on our servers — ingredient text and images are discarded after processing. The exception is barcode numbers: one that no product database recognizes is written to our server logs so we can see which products are missing, and any barcode can appear in our hosting provider's logs of the lookups we make</li>
           <li>No images are stored — photos are processed and immediately discarded</li>
         </ul>
 
         <h3>Anonymous Analytics</h3>
-        <p>To understand whether the app is working — how many scans happen, and how often lookups fail — we record one small, anonymous event per scan. Each event contains: the verdict (safe / caution / unsafe), the scan type (photo or barcode), whether the scan succeeded and why it failed if it didn't, the analysis confidence, the app platform (iOS or web), the app version, which AI model produced the analysis, the detected language, technical quality measurements (the photo's file size and a count of how many characters of text were readable — never the text itself), and an approximate region (city level, derived from your IP address — the IP itself is never stored, only a one-way hash used to approximate unique-device counts). These events contain no ingredient text, no product names, no photos, and no personal identifiers, and they are not linked to any account or identity. They are processed by PostHog (see Third-Party Services below).</p>
+        <p>To understand whether the app is working — how many scans happen, and how often lookups fail — we record one small, anonymous event per scan. Each event contains: the verdict (safe / caution / unsafe), the scan type (photo or barcode), whether the result was a label or a menu, whether the scan succeeded and why it failed if it didn't, the analysis confidence, for a barcode scan which product database answered and whether it had ingredient information, the app platform (iOS or web), the app version, which AI model produced the analysis, the detected language, technical quality measurements (the photo's file size, a count of how many characters of text were readable, whether that text or the database record carried a gluten-free claim, whether a safety check held back a “safe” verdict because the ingredient list looked cut off, and how long each step took — never the text itself), and an approximate region (city level, derived from your IP address — the IP itself is never stored, only a one-way hash used to approximate unique-device counts). These events contain no ingredient text, no product names, no photos, and no personal identifiers, and they are not linked to any account or identity. They are processed by PostHog (see Third-Party Services below).</p>
         <p>When a barcode lookup comes up empty — the product isn't in our databases, or the database record has no ingredient information — the iOS app offers to photograph the ingredient label instead. To learn whether that offer helps, we record a few additional small, anonymous events for that one attempt: which step you reached (the offer was shown, a photo was started, a result was shown, or you left), why the lookup came up empty, whether a photo came from the camera or your photo library, and, if a result was shown, whether it was a label or a menu and its verdict and confidence. These steps are tied together by a temporary random identifier that exists only for that one attempt: it is created on your device, is not derived from the barcode or your device, is not stored with your recent scans, and is never reused. As with every other event, they contain no barcode, no product name, no ingredient text, and no photo.</p>
         <p>When the app hands iOS a request to show the App Store rating sheet, or you tap the link to write a review, we record a small anonymous event saying which of those two things happened, carrying the same platform, app-version and approximate-region fields as every other event and nothing more. The rating or review itself goes to Apple's App Store, not to us; our analytics never contain it, and this event is not linked to any rating or review you leave there.</p>
 
@@ -150,6 +150,14 @@
           <li>You receive a verdict (safe, caution, or unsafe)</li>
           <li>The image and text are not stored — they are discarded after processing</li>
         </ul>
+        <p>When you scan a barcode in the iOS app:</p>
+        <ul>
+          <li>The barcode number is sent to our server over an encrypted connection (HTTPS)</li>
+          <li>We look it up in the product databases listed below</li>
+          <li>The product's name and ingredient information from the database are sent to Anthropic's Claude API for analysis</li>
+          <li>You receive a verdict (safe, caution, or unsafe)</li>
+          <li>Nothing is kept, apart from the server logs described above</li>
+        </ul>
 
         <h2>Third-Party Services</h2>
         <p>We use the following third-party services to provide the app's functionality:</p>
@@ -157,8 +165,11 @@
         <h3>Google Cloud Vision API</h3>
         <p>We use Google Cloud Vision to perform optical character recognition (OCR) on your photos. Google processes the image to extract text. We do not send any personal identifiers to Google. For more information, see <a href="https://cloud.google.com/vision/docs/data-usage" target="_blank" rel="noopener">Google Cloud Vision's data usage policy</a>.</p>
 
+        <h3>Product Databases (Barcode Scans)</h3>
+        <p>When you scan a barcode, we look the barcode number up in <a href="https://world.openfoodfacts.org/privacy">Open Food Facts</a>, and if it isn't there, in other product databases such as <a href="https://fdc.nal.usda.gov/">USDA FoodData Central</a> and <a href="https://www.upcitemdb.com/">UPCitemdb</a>. These services receive the barcode number from our server, never any personal information.</p>
+
         <h3>Anthropic Claude API</h3>
-        <p>We use Anthropic's Claude to analyze extracted ingredient text. Only the text from your label is sent to Anthropic — not the original image or any personal information. For more information, see <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</p>
+        <p>We use Anthropic's Claude to analyze extracted ingredient text. Only ingredient text is sent to Anthropic — the text read from your photo, or, for a barcode scan, the product's name and ingredient information from the database — never the original image or any personal information. For more information, see <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's privacy policy</a>.</p>
 
         <h3>PostHog (Analytics)</h3>
         <p>We use PostHog to process the anonymous analytics events described above — the per-scan event (verdict, scan type, outcome, confidence, platform, detected language, technical quality measurements, approximate region), the few per-attempt events recorded when a barcode lookup comes up empty (step reached, reason, temporary random identifier), and the event recorded when the app hands iOS a rating-sheet request or you tap the write-a-review link (which of the two happened, nothing more) — none of which contain ingredient text, product names, photos, or personal identifiers. For more information, see <a href="https://posthog.com/privacy" target="_blank" rel="noopener">PostHog's privacy policy</a>.</p>
@@ -169,12 +180,12 @@
         <h3>Expo (Mobile App Only)</h3>
         <p>Our iOS app is built with Expo, which provides standard app update functionality. Expo may collect basic crash reports and app update information. For more information, see <a href="https://expo.dev/privacy" target="_blank" rel="noopener">Expo's privacy policy</a>.</p>
 
-        <h3>Vercel (Web App Only)</h3>
-        <p>Our web app is hosted on Vercel. Vercel may collect basic server logs including IP addresses for security and performance purposes. For more information, see <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Vercel's privacy policy</a>.</p>
+        <h3>Vercel</h3>
+        <p>Our web app, and the server both apps use to analyze scans, are hosted on Vercel. Vercel may collect basic server logs including IP addresses for security and performance purposes. For more information, see <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Vercel's privacy policy</a>.</p>
 
         <h2>Data Retention</h2>
-        <p>We do not retain your data. Images are processed in real-time and immediately discarded. We have no database of user scans or personal information.</p>
-        <p>The only data that persists is your local scan counter and your recent scan results, both stored on your device and never transmitted to us.</p>
+        <p>We do not retain your data, apart from the server logs and crash reports described above. Images are processed in real-time and immediately discarded. We have no database of user scans or personal information.</p>
+        <p>On your device, the only data that persists is what's listed under Information Stored Locally on Your Device above, and none of it is ever transmitted to us. On our side, the only records are the anonymous analytics events, the server logs, and the crash reports described above.</p>
 
         <h2>Data Security</h2>
         <p>All data transmitted between your device and our servers is encrypted using HTTPS. We do not store sensitive data, which minimizes security risks.</p>

@@ -31,7 +31,7 @@ const REVIEW_PROMPT_EVENT = 'review_prompt';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, ocrMs, claudeMs, totalMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, ocrMs, claudeMs, totalMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -64,6 +64,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // unlabeled products so the claim rule's effect is measurable. A boolean
   // from a server-side regex — never the claim text, never the product.
   if (gfClaimPresent != null) props.gf_claim_present = gfClaimPresent;
+  // OCR path only: why the ingredient-list gate withheld Claude's "safe"
+  // ('no_heading' = start of the list out of frame, 'no_end' = cut before it
+  // ends; applyIngredientListGate). Present only when the gate fired, so its
+  // count over OCR label scans is the gate's cost. A reason, never the text.
+  if (listGate != null) props.list_gate = listGate;
   // OCR path only (plans/weak-signal-upload-2026-08-28.md): where the server
   // leg's time went. Before this, "Vision + Opus ≈ 7–13 s" was an estimate and
   // decision 002 accepted Opus latency pending scan-duration data. Milliseconds
@@ -227,6 +232,7 @@ function anonId(ip) {
  * @param {number} [input.imageKb]          OCR path only: decoded upload size in KB
  * @param {number} [input.ocrChars]         OCR path only: chars of text Vision extracted
  * @param {boolean} [input.gfClaimPresent]  OCR path only: the text carried a gluten-free claim phrase
+ * @param {'no_heading'|'no_end'} [input.listGate] OCR path only: why a "safe" was withheld as a cut-off list
  * @param {boolean} [input.gfLabelPresent]  Barcode path only: the record carried a gluten-free label tag
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
  * @param {number} [input.claudeMs]         OCR path only: Claude round-trip in ms (incl. retries)

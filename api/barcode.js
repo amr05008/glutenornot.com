@@ -362,7 +362,9 @@ async function lookupOpenFoodFacts(barcode) {
         continue;
       }
 
-      console.log(`Open Food Facts hit with barcode variant: ${variant}`);
+      // Which padding form matched, never the number: the privacy policy
+      // allows only an unrecognized barcode into the logs.
+      console.log('Open Food Facts hit', variant === barcode ? 'as scanned' : 'after zero-padding');
       return {
         source: 'openfoodfacts',
         product_name: data.product.product_name,

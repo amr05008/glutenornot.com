@@ -251,6 +251,13 @@ unlabeled-processed-food share actually is. If `claim = true` cautions stay high
 sample of explanations' *reasons* (not content) and revisit T1/T3. Then close this plan
 with a CLOSED header in the style of `plans/ocr-capture-assist-2026-07-18.md`.
 
+**Confounder from 2026-09-22 (decision 005, PR #31):** the ingredient-list gate turns
+some of Claude's `safe` verdicts into `caution` when the photographed list looks cut off,
+and the event records the *delivered* verdict. Any window that includes the deploy date
+must add `properties.list_gate AS gate` to the SELECT and GROUP BY (or count
+`list_gate IS NOT NULL` as Claude-`safe`), or the claim rule's effect reads smaller than
+it is.
+
 ## Definition of done
 
 - Eval in repo, env-gated, with a recorded before/after; zero false-safe on adversarial

@@ -92,7 +92,7 @@ The engineering version, with the lookup waterfall, the prompt rules and the saf
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
 4. Claude analyzes ingredients or menu items and returns verdict. An explicit gluten-free claim on the label ("gluten-free", "sin gluten", "glutenvrij", a GFCO mark…) is treated as the regulated claim it is (<20 ppm) and clears ambiguous ingredients like natural flavors or maltodextrin; oats (unless certified), a listed gluten source, and "may contain" advisories still win
-5. Verdicts are floored to "caution" when OCR extracted almost no text — "safe" requires enough text to justify it
+5. Verdicts are floored to "caution" when OCR extracted almost no text, or when a label's ingredient list looks cut off (no "Ingredients:" heading, or nothing marking its end) — "safe" requires a whole list to justify it
 6. UI displays result: Safe / Caution / Unsafe
 
 **Barcode scanning (mobile):**
@@ -136,7 +136,7 @@ npm run test:coverage # Run with coverage report
 
 Tests cover:
 - Claude response parsing and fallback behavior
-- Safety floor on low-text OCR reads
+- Safety floor on low-text OCR reads, and the cut-off ingredient-list gate
 - The gluten-free label-claim rule (prompt text + claim detection), plus a live eval against the real prompt and model — `web/tests/api/evals/`, opt-in with `RUN_LIVE_EVALS=1` and an `ANTHROPIC_API_KEY`, ~86 calls per run
 - Analytics event properties (app version, model, capture metrics, label-claim presence)
 - The barcode missing-context marker and the recovery funnel endpoint (allowlist, size cap, rate cap, no product content)
