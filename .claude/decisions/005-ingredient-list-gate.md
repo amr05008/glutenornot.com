@@ -29,8 +29,8 @@ shows:
    - A bilingual heading counts ("INGREDIENTS / INGRÉDIENTS :").
    - Roughly 35 languages.
 2. **The end:** after every heading and before the next one, a full stop that
-   ends a line or the read. It must not be one inside the surviving list, like
-   "U.S." or "vit. C", and not the last of a "..." run. On a two-product frame,
+   ends a line or the read. A mid-line full stop like "U.S. grown" or "vit. C"
+   doesn't count, and neither does the last of a "..." run. On a two-product frame,
    every list must pass. **An allergen statement ("Contains: milk") does not
    count as the end.** See T1.
 
@@ -81,11 +81,16 @@ fired.
     bracket attempt blocking complete photos.
   - Its fourth check (`147e573`) found one red: the colon form let wrapped
     in-list "CONTAINS:" through in all seven languages, reversing its own
-    advice. That was the fourth round in which the allergen-statement end
-    marker opened a new false-safe shape. The real reads settled it: all 8
+    advice. Four rounds had now found leaks in the allergen-statement end
+    marker. The real reads settled it: all 8
     complete reads end in a line-ending full stop, and the only real read the
     marker ever passed was a side crop. So the marker was removed (T1), which
     also removed about 60 lines of regex.
+  - Its fifth check (`3abfa58`) said SHIP with no red. It also measured the
+    end rule on real layouts by cutting each complete real read after every
+    line of its list: 34 cuts, of which 31 are caught. That sweep is now a
+    test that names the 3 that pass: two in-list full stops in IMG_6207 (OCR
+    read the commas as full stops) and one from IMG_6209's reading order.
 - **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
   of the lists Claude called `safe` (95 of 272). This overstates the real
   cost, because that text is flattened to one line: contributors paste
@@ -110,8 +115,8 @@ fired.
   dish is not gated. The prompt's partial-menu rule covers menus.
 - **T3: the barcode path is exempt.** Its text is database text, not a photo,
   and 21% of those lists have no full stop.
-- **T4: the barcode hint.** The `no_heading` copy suggests the barcode on
-  every client but web, which has no scanner.
+- **T4: the barcode hint.** Both retake messages suggest the barcode on every
+  client but web, which has no scanner. The barcode path isn't gated.
 
 ## Known leaks
 
@@ -121,6 +126,9 @@ fired.
   - text beside the list that ends in one ("…Inc.\n", a Nutrition Facts
     footnote).
   A side crop that keeps such a line passes the same way.
+- **Vision's reading order.** It can emit the list's closing line above its
+  last line: IMG_6209 puts "…Baking Soda." above "Grain Oats, …". A cut right
+  after it then passes.
 - **A top cut that leaves a sub-heading starting its own line** still passes.
   Examples: "CHEESE SAUCE MIX\nINGREDIENTS:", or a meal kit's seasoning section
   after the tortilla section is cut. The same-line spellings are caught.
@@ -140,8 +148,9 @@ fired.
   phone users at the barcode.
 - **A complete list with no line-ending full stop anywhere after it is held at
   caution.** An example is a tight crop that ends on "CONTAINS: MILK". The
-  retake copy asks for the line below, which almost always carries one (an
-  address, "Store in a cool, dry place.").
+  retake copy asks for the line below. That line often has no full stop
+  either: only 2 of the 5 real photos have one directly below. So phone users
+  also get a barcode route ("Still seeing this? Try scanning the barcode.").
 - **US supplements and OTC drugs can't pass.** "Other ingredients:" and
   "Inactive ingredients:" deliberately don't count as headings, because their
   main ingredients sit in the Facts table above them, where a top cut could

@@ -418,8 +418,9 @@ describe('checkIngredientList', () => {
     },
   );
 
-  // PR #31 Opus re-grill (red 2): in-list "contains" wording that wraps onto a
-  // new line must not read as the allergen statement that ends the list.
+  // In-list "contains" wording that wraps onto a line start never ends a list.
+  // Trivially true since decision 005 T1 (no allergen-statement end marker);
+  // kept as the guard if T1 is ever turned back on.
   it.each([
     'INGREDIENTS: Potato chips, vegetable oil\n(CONTAINS ONE OR MORE OF THE FOLLOWING: CORN, SOYBEAN',
     'INGREDIENTS: Rice, sugar\nCONTAINS ONE OR MORE OF: salt, cocoa',
@@ -469,8 +470,8 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList('INGREDIENTS: rice, sugar, salt. INGRÉDIENTS : riz, sucre, s')).toBe('no_end');
   });
 
-  // Re-grill 2 (yellow D): a bare "contains" only ends the list when an
-  // allergen follows it; in-list "contains" wording in any language doesn't.
+  // In-list "contains" wording in any language never ends a list — the T1
+  // guard for other languages.
   it.each([
     'Ingredientes: arroz, aceite\nContiene menos de 2% de sal, cacao',
     'Ingrédients : riz, huile\nContient moins de 2 % de sel, cacao',
@@ -500,6 +501,37 @@ describe('checkIngredientList', () => {
     'Ingredientes: arroz, aceite\nContiene: menos del 2% de sal, cacao',
   ])('does not take this for the end either: %s', (text) => {
     expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  // Bottom-cut sweep on real layouts (PR #31 re-grill 5): cut each complete
+  // real read after every line of its ingredient list (line ranges read off
+  // the fixture text) and run the gate. The cuts that pass are the known
+  // leaks, named, so a change to the end rule shows what it opens or closes on
+  // real OCR rather than on synthetic strings.
+  const REAL_LIST_LINES = {
+    IMG_6207: [[7, 12]],
+    IMG_6208: [[59, 65], [80, 82]],
+    IMG_6209: [[38, 44]],
+    IMG_6210: [[63, 68]],
+    IMG_6212: [[42, 52]],
+  };
+  it('catches bottom cuts of real lists except the known full-stop leaks', () => {
+    const passed = [];
+    let cuts = 0;
+    for (const [id, lists] of Object.entries(REAL_LIST_LINES)) {
+      const lines = realLabelOcr.cases.find((c) => c.id === id).text.split('\n');
+      for (const [first, last] of lists) {
+        for (let k = first; k < last; k += 1) {
+          cuts += 1;
+          if (checkIngredientList(lines.slice(0, k + 1).join('\n')) === null) passed.push(`${id}@${k}`);
+        }
+      }
+    }
+    expect(cuts).toBe(34);
+    // IMG_6207@10/@11: the lines end "(E102)." / "(E129)." mid-list (OCR read
+    // the commas as full stops). IMG_6209@43: Vision emitted the list's
+    // closing "…Baking Soda." line above its "Grain Oats, …" line.
+    expect(passed).toEqual(['IMG_6207@10', 'IMG_6207@11', 'IMG_6209@43']);
   });
 
   it('treats a missing or non-string read as having no heading', () => {
@@ -592,6 +624,18 @@ describe('applyIngredientListGate', () => {
     const analysis = safeLabel();
     applyIngredientListGate(analysis, END_CUT);
     expect(analysis.explanation).toContain('line below');
+  });
+
+  // Re-grill 5: the line below a complete list often carries no full stop, so
+  // a retake can fail every time; the barcode path isn't gated.
+  it('offers a phone user the barcode when the end is missing too, but not a web user', () => {
+    const phone = safeLabel();
+    applyIngredientListGate(phone, END_CUT, { platform: 'ios' });
+    expect(phone.explanation).toContain('barcode');
+
+    const web = safeLabel();
+    applyIngredientListGate(web, END_CUT, { platform: 'web' });
+    expect(web.explanation).not.toContain('barcode');
   });
 
   // Single-ingredient foods need not print an ingredient list, so no photo of

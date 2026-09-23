@@ -352,6 +352,9 @@ const NO_HEADING_EXPLANATION =
 const NO_HEADING_BARCODE_HINT = ' No ingredient list on the pack? Try scanning the barcode.';
 const NO_END_EXPLANATION =
   "The ingredient list looks cut off before it ends, so I can't call this safe. Retake with the whole list and the line below it in frame.";
+// The line below a complete list often has no full stop either (3 of the 5
+// real photos), so a retake can fail every time; the barcode isn't gated.
+const NO_END_BARCODE_HINT = ' Still seeing this? Try scanning the barcode.';
 
 /**
  * Does the OCR text show a whole ingredient list? Returns why not
@@ -408,9 +411,9 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
   if (analysis.verdict === 'safe') {
     analysis.verdict = 'caution';
     // Claude's reassurance ("Good news! ...") is exactly what must not survive.
-    analysis.explanation = reason === 'no_end'
-      ? NO_END_EXPLANATION
-      : NO_HEADING_EXPLANATION + (platform === 'web' ? '' : NO_HEADING_BARCODE_HINT);
+    const barcodeHint = reason === 'no_end' ? NO_END_BARCODE_HINT : NO_HEADING_BARCODE_HINT;
+    analysis.explanation = (reason === 'no_end' ? NO_END_EXPLANATION : NO_HEADING_EXPLANATION) +
+      (platform === 'web' ? '' : barcodeHint);
   }
   if (items) {
     analysis.menu_items = items.map((item) => (item?.verdict === 'safe' ? { ...item, verdict: 'caution' } : item));
