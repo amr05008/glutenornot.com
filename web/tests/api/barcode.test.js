@@ -274,6 +274,28 @@ describe('CLAUDE_PROMPT gluten-free label claims (barcode path)', () => {
   });
 });
 
+describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
+  it('asks for one caution_reason from the fixed list', () => {
+    expect(CLAUDE_PROMPT).toContain('"caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"');
+  });
+
+  it('carries the same not-a-reason list as the photo prompt', () => {
+    const [, block = ''] = CLAUDE_PROMPT.split('### Not a reason for caution on its own');
+    for (const term of ['natural flavors', 'spices', 'maltodextrin', 'dextrin', 'modified (food) starch', 'glucose syrup', 'caramel color']) {
+      expect(block.split('###')[0]).toContain(term);
+    }
+  });
+
+  it('files an uncorroborated gluten tag or self-contradicting record under conflict, missing data under incomplete', () => {
+    expect(CLAUDE_PROMPT).toMatch(/`conflict`[^\n]*uncorroborated/);
+    expect(CLAUDE_PROMPT).toMatch(/`incomplete`[^\n]*missing/);
+  });
+
+  it('no longer cautions whenever uncertain', () => {
+    expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
+  });
+});
+
 describe('assessGlutenSignal', () => {
   // Regression: KIND Healthy Grains Peanut Butter (barcode 602652171826).
   // OFF tags `en:gluten` as an allergen (auto-derived from oats) AND `en:no-gluten`

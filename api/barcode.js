@@ -68,8 +68,10 @@ Respond with JSON only, no additional text.
   "flagged_ingredients": ["ingredient1"],
   "allergen_warnings": ["May contain wheat"],
   "explanation": "Brief explanation in plain language",
-  "confidence": "high" | "medium" | "low"
+  "confidence": "high" | "medium" | "low",
+  "caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"
 }
+Include \`caution_reason\` only when the verdict is "caution" — exactly one, from "Verdict Criteria".
 
 ### Data Source Reliability (READ FIRST)
 This data comes from crowd-sourced or third-party databases. Allergen and trace tags are
@@ -93,15 +95,14 @@ frequently auto-derived from ingredients or contributed by users — they are NO
   package's whole-product gluten-free claim, transcribed into the database. Treat it as the strongest
   evidence in the record. In the US and EU that claim is regulated (under 20 ppm gluten, manufacturer
   liable) and covers every ingredient, including flavors, starches, hydrolyzed proteins, and oats.
-- With such a label present, the ambiguous ingredients listed under "caution" do NOT lower the
+- With such a label present, \`undeclared_source\` ingredients (see "Verdict Criteria") do NOT lower the
   verdict. Return "safe", and say in the explanation that the gluten-free label is what covers them.
 - The label also covers oats: the same regulation holds a labeled product's oats to the 20 ppm limit.
   Return "safe", name the label, and end the explanation with this exact sentence: "Heads-up: a small
   share of people with celiac disease react to oats themselves."
 - A claim written on one ingredient — "gluten free oats" inside the ingredient list, with no
-  Certifications line — is NOT a whole-product claim. It clears the oats only; every other ambiguous
-  ingredient (natural flavors, maltodextrin, spices, …) still returns "caution" exactly as it would
-  for a record with no label at all.
+  Certifications line — is NOT a whole-product claim. It clears the oats only; every other caution
+  reason still applies exactly as it would for a record with no label at all.
 - The label does NOT override:
   - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any
     language) — return "caution" and say that the label and the ingredient list disagree.
@@ -119,17 +120,22 @@ frequently auto-derived from ingredients or contributed by users — they are NO
 
 ### Verdict Criteria
 - **unsafe:** The **ingredients** contain wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum). A bare allergen tag with no matching ingredient is NOT sufficient for unsafe.
-- **caution:**
-  - Contains ambiguous ingredients (oats without a gluten-free label or certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable protein of unstated source, soy sauce without GF label)
-  - Has cross-contamination traces for gluten sources
-  - A gluten allergen tag is present but uncorroborated by the ingredients, and no gluten-free label plus oats explains it
-  - Ingredient data is incomplete or missing
-- **safe:** No gluten-containing ingredients, no ambiguous ingredients (or a gluten-free label that covers them — see above), no concerning allergen warnings
+- **caution** — only for a specific, nameable reason to worry. Give exactly one \`caution_reason\`:
+  - \`oats\` — oats without a gluten-free label or certification (a whole-product label covers them; see above)
+  - \`may_contain\` — cross-contamination traces for a gluten source, or a may-contain / shared-facility statement
+  - \`conflict\` — a gluten allergen tag uncorroborated by the ingredients that no gluten-free label plus oats explains; a label and list that disagree; a record that contradicts itself; a "Package states:" line saying gluten is present with no gluten grain listed
+  - \`undeclared_source\` — flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product (sausage, hot dogs, deli meat, jerky, meatballs, marinated meat); soy sauce, teriyaki, or tamari with no wheat declaration and no gluten-free label; yeast extract of unstated source
+  - \`incomplete\` — ingredient data is missing, sparse, or a placeholder
+  - \`other\` — a real, specific concern none of the above covers; name it in the explanation
+- **safe:** no gluten source in the ingredients, and no caution reason above
+
+### Not a reason for caution on its own
+Unnamed "natural flavors" / flavouring / aroma, "spices" / seasoning, maltodextrin, dextrin, modified (food) starch, glucose syrup, caramel color, and hydrolyzed vegetable/plant protein of unstated source — outside a meat or poultry product. Food-labeling law in the US, EU, UK, Canada, and Australia requires wheat to be named wherever it is used, including inside these ingredients, and EU/UK/Canadian/Australian law requires barley and rye too. If one of these is the only thing you might have worried about, the verdict is "safe". You may add one short sentence saying why it is not a concern — never frame it as a risk.
 
 ### Guidelines
-- Be conservative—when uncertain, use "caution"
+- Caution needs a named reason from "Verdict Criteria". When one applies, use caution — never "safe" on a guess. Never return caution only because an ingredient's source is unstated (see "Not a reason for caution on its own")
 - Flag oats as "caution" unless the record carries a gluten-free label or the ingredient list itself calls the oats gluten-free
-- If ingredient data is missing or sparse, use "caution" with low confidence
+- If ingredient data is missing or sparse, use "caution" (caution_reason "incomplete") with low confidence
 - Do not describe an allergen TAG as the product being "labeled as containing gluten" unless the ingredients actually show a gluten grain — say the data is ambiguous instead. A "Package states:" line is different: it IS the package's own statement, and you may say so
 - Keep explanations to 1-2 sentences
 - Use a warm, supportive tone`;
