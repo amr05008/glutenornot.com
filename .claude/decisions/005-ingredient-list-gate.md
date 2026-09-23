@@ -25,11 +25,16 @@ shows:
 
 1. **The start:** an ingredients heading that starts its line, optionally after
    a two-letter language code, followed by a colon (or OCR's semicolon), or
-   alone on its line above a comma-separated list. Roughly 25 languages.
-2. **The end:** after that heading, a full stop that ends a sentence (not a
-   decimal, not "No. 5", not "...", not inside a word), or an allergen/advisory
-   statement opening a later line ("Contains:", "May contain", "Peut contenir",
-   "Kan sporen van…"), but not the in-list "Contains 2% or less of".
+   alone on its line above a comma-separated list.
+   - A bilingual heading counts ("INGREDIENTS / INGRÉDIENTS :").
+   - Roughly 35 languages.
+2. **The end:** after every heading, before the next one, one of:
+   - a full stop that ends a line or the read (not one inside the surviving
+     list like "U.S." or "vit. C", and not the last of a "..." run);
+   - an allergen or advisory statement that opens a line or follows a full
+     stop ("Contains:", "May contain", "Peut contenir", "Kan sporen van…"),
+     but not the in-list "Contains 2% or less of".
+   On a two-product frame, every list must pass.
 
 `list_gate` (`no_heading` | `no_end`) on the OCR `scan` event records when it
 fired.
@@ -50,15 +55,26 @@ fired.
   - All 8 complete label reads pass (6 iPhone photos, 2 grocery screenshots).
   - Of the top-cropped reads, 4 of 4 with any text are caught.
   - Of the bottom-cropped reads that actually cut the list, 2 of 2 are caught.
-- All 10 OCR eval labels written to be `safe` pass.
+  - One of the two side crops is caught (pistachios cut to "Pistachios, se").
+- **Every OCR eval label written to be `safe` passes.** A unit test keeps it
+  that way, because the live evals never run the gate.
+- **Two adversarial reviews on PR #31:** one in-session agent and one Opus 5.5
+  session in Herdr. Both said SHIP. Their findings are folded in.
+- **Cost proxy:** a list-only "photo" built from Open Food Facts text blocks 35%
+  of the lists Claude called `safe` (95 of 272). This overstates the real
+  cost, because that text is flattened to one line: contributors paste
+  whole-panel OCR that runs into the nutrition table and ends in noise. A real
+  Vision read keeps its line breaks.
 
 ## Toggles (still flippable)
 
-- **T1: the end rule.** The full stop OR allergen-line rule is the current
-  setting.
-  - Dropping the allergen line catches more side cuts but blocks complete lists
-    that have no full stop of their own (about 23% of typed Open Food Facts
-    lists).
+- **T1: the end rule.** A line-ending full stop OR an allergen line is the
+  current setting.
+  - Counting any sentence-ending full stop would pass more complete lists, but
+    it also let abbreviations in a cut list ("U.S.", "vit. C") and a nearby
+    address line through.
+  - Dropping the allergen line would catch more side cuts, but it would block
+    complete lists that have no full stop of their own.
   - Dropping the end rule entirely leaves end cuts to the prompt.
 - **T2: menus are exempt.** A response with `mode: "menu"` and at least one
   dish is not gated. The prompt's partial-menu rule covers menus.
@@ -69,10 +85,12 @@ fired.
 
 ## Known leaks
 
-- **A side cut.** It keeps the heading and can keep a full stop or the
-  allergen line: IMG_6211 cut to "Pistachios, se" passes on the address line,
-  and IMG_6212 cut on its right edge passes on "CONTAINS: WHEAT".
-- **An abbreviation inside the surviving list** ("vit. B1") reads as an end.
+- **A side cut that keeps the allergen line or a line-ending full stop.**
+  IMG_6212 cut on its right edge passes on "CONTAINS: WHEAT". Wheat itself
+  would be flagged. The risk is barley, rye or malt at a line's right edge.
+- **An abbreviation that happens to end a line** ("vit.\n") reads as an end.
+- **A model-chosen `mode: "menu"` with dishes skips the gate.** A label
+  misread as a menu is unlikely, but it would get through.
 - **A cut that removes only an advisory below a complete list.** The list is
   whole, so the gate has nothing to catch.
 
@@ -92,6 +110,11 @@ fired.
 
 ## Revisit
 
-The `list_gate` read around 2026-10-06 (ROADMAP). If the gate withholds a
-large share of would-be `safe` verdicts, suspect a heading format the pattern
-misses. Reproduce it with tester photos, never by logging text.
+The `list_gate` read around 2026-10-06 (ROADMAP). Split it three ways:
+- By `detected_language`: a language with many `no_heading` results points to
+  a heading the pattern misses.
+- By `ocr_chars`: a `no_heading` on a read of 600+ characters is more likely a
+  missed heading than a cut.
+- By `no_heading` versus `no_end`.
+
+Reproduce anything suspicious with tester photos, never by logging text.

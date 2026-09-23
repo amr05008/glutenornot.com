@@ -28,6 +28,7 @@ import handler, {
 } from '../../../api/analyze.js';
 import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import fixtures from '../fixtures/claude-responses.json';
+import { GF_CLAIM_CASES } from './evals/gf-claim-cases.js';
 
 describe('parseClaudeResponse', () => {
   it('extracts correctly structured response from valid JSON', () => {
@@ -256,7 +257,7 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList('INGREDIENTS: Rice, sugar, salt, cocoa butter, whole milk powder, emuls')).toBe('no_end');
   });
 
-  it('does not count a decimal or an "E 1.2"-style number as the end of the list', () => {
+  it('does not count a decimal or a numbered colour as the end of the list', () => {
     expect(checkIngredientList('INGREDIENTS: Rice 4.9%, sugar, salt, cocoa')).toBe('no_end');
     expect(checkIngredientList('INGREDIENTS: Rice, sugar, colour (FD&C Yellow No. 5), cocoa')).toBe('no_end');
   });
@@ -353,6 +354,57 @@ describe('checkIngredientList', () => {
   ])('recognises the heading too: %s', (_label, text) => {
     expect(checkIngredientList(text)).toBeNull();
   });
+
+  // PR #31 Opus grill: only a full stop that ends a line counts, so an
+  // abbreviation inside the part of a cut list that survived doesn't.
+  it.each([
+    'INGREDIENTS: U.S. grown rice, sugar, cocoa, whole mi',
+    'INGREDIENTS: citric acid, vit. C, natural flavor, colo',
+    'Zutaten: Fett (Palm, Raps bzw. Sonnenblume), Kakao, Emul',
+    'INGREDIENTS: apple juice conc., sugar, natural flavo',
+    'INGREDIENTS: rice, sugar, cocoa, salt, natu\nDist. by Acme Foods Inc',
+  ])('does not count an abbreviation in a cut list as its end: %s', (text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
+  });
+
+  it('accepts an allergen statement after a full stop on the same line', () => {
+    expect(checkIngredientList('INGREDIENTS: Corn, sunflower oil, salt. CONTAINS: MILK')).toBeNull();
+  });
+
+  // A complete first list must not vouch for a cut second one.
+  it('checks every list on a two-product frame', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, salt.\nINGREDIENTS: Corn, sunflower oil, natu')).toBe('no_end');
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, salt.\nINGREDIENTS: Corn, sunflower oil, sea salt.')).toBeNull();
+  });
+
+  // Canadian packs print both languages on one heading.
+  it('accepts a bilingual heading', () => {
+    expect(checkIngredientList('INGREDIENTS / INGRÉDIENTS : Riz, sucre, sel / rice, sugar, salt.')).toBeNull();
+    expect(checkIngredientList('Ingredients/Ingrédients: rice, sugar, salt.')).toBeNull();
+  });
+
+  it.each([
+    ['OCR reading a middle I as 1', 'INGRED1ENTS: Rice, sugar, salt.'],
+    ['Lithuanian', 'Sudedamosios dalys: ryžiai, cukrus, druska.'],
+    ['Latvian', 'Sastāvdaļas: rīsi, cukurs, sāls.'],
+    ['Estonian', 'Koostisosad: riis, suhkur, sool.'],
+    ['Maltese', 'Ingredjenti: ross, zokkor, melħ.'],
+    ['Vietnamese', 'Thành phần: gạo, đường, muối.'],
+    ['Indonesian', 'Komposisi: beras, gula, garam.'],
+    ['Thai', 'ส่วนประกอบ: ข้าว, น้ำตาล, เกลือ.'],
+    ['Korean long form', '원재료명 및 함량: 쌀, 설탕, 소금.'],
+  ])('recognises the heading as well: %s', (_label, text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
+  // The live evals call analyzeWithClaude directly, so the gate never runs on
+  // them; this keeps every label the evals expect "safe" passing it for free.
+  it.each(GF_CLAIM_CASES.filter((c) => c.expect === 'safe').map((c) => [c.id, c.ocrText]))(
+    'passes eval case %s, which the evals expect to be safe',
+    (_id, ocrText) => {
+      expect(checkIngredientList(ocrText)).toBeNull();
+    },
+  );
 
   it('treats a missing or non-string read as having no heading', () => {
     expect(checkIngredientList(undefined)).toBe('no_heading');

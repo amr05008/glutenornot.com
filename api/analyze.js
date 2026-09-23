@@ -303,37 +303,41 @@ const INGREDIENT_HEADINGS = [
   'összetevők', // hu
   'sastojci', 'sestavine', // hr sr bs, sl
   'ainesosat', 'ainekset', // fi
+  'sudedamosios dalys', 'sudėtis', 'sastāvdaļas', 'sastāvs', 'koostisosad', 'koostis', // lt, lv, et
+  'ingredjenti', // mt
   '[iİı]ç[iİı]ndek[iİı]ler', // tr — the i flag does not fold İ to i
   'συστατικ[άα]', // el — capitals drop the accent
   'состав', 'склад', 'састојци', 'съставки', // ru, uk, sr, bg
   'المكونات', 'רכיבים', // ar, he
-  '原材料名?', '配料表?', '成分', '원재료명?', // ja, zh, zh-TW, ko
+  'thành phần', 'ส่วนประกอบ', 'komposisi', // vi, th, id
+  '原材料名?', '配料表?', '成分', '원재료명?(?:[ \t]*및[ \t]*함량)?', // ja, zh, zh-TW, ko
 ].join('|');
 
 // A heading starts its line — after bullets or a two-letter language code
 // ("DE Zutaten:", "(FR) Ingrédients :") — and takes a colon (or OCR's
 // semicolon), or stands alone on its line above a comma-separated list
-// (grocery sites). Words before it on the line make it something else: after a
-// top cut, "CHEESE SAUCE MIX INGREDIENTS:" or "…OF THE FOLLOWING INGREDIENTS:"
-// must not stand in for the list's own heading, nor "the ingredients from
-// corn" in a bioengineered-food disclosure.
-const HEADING_LINE_START = String.raw`^[ \t\p{P}\p{S}]*(?:\p{L}{2}\)?[ \t]*[:/|-]?[ \t]+)?`;
+// (grocery sites). Bilingual packs print both languages on one heading
+// ("INGREDIENTS / INGRÉDIENTS :"). Words before it on the line make it
+// something else: after a top cut, "CHEESE SAUCE MIX INGREDIENTS:" or "…OF THE
+// FOLLOWING INGREDIENTS:" must not stand in for the list's own heading, nor
+// "the ingredients from corn" in a bioengineered-food disclosure.
+const HEADING_WORDS = `(?:${INGREDIENT_HEADINGS})(?:[ \\t]*[/|,][ \\t]*(?:${INGREDIENT_HEADINGS}))*`;
 const INGREDIENT_HEADING_PATTERN = new RegExp(
-  `${HEADING_LINE_START}(?:${INGREDIENT_HEADINGS})[ \\t]*[:：;]` +
-    `|^[ \\t\\p{P}\\p{S}]*(?:${INGREDIENT_HEADINGS})[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，])`,
-  'imu',
+  String.raw`^[ \t\p{P}\p{S}]*(?:\p{L}{2}\)?[ \t]*[:/|-]?[ \t]+)?` + `${HEADING_WORDS}[ \\t\\u00a0]*[:：;]` +
+    `|^[ \\t\\p{P}\\p{S}]*${HEADING_WORDS}[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，])`,
+  'gimu', // g for matchAll only — never call .test/.exec on it
 );
 
-// The list's end: a full stop that ends a sentence — not a run of dots (a
-// grocery site's "natu..." cut), not a decimal or a numbered colour ("4.9 OZ",
-// "Yellow No. 5"), not inside a word or before a comma ("ext.,", "www.a.com")
-// — or an allergen/advisory statement opening a later line, which by
-// regulation follows the list (many complete lists carry no full stop of their
-// own). Not the in-list "Contains 2% or less of". An abbreviation inside the
-// surviving list ("vit. B1") still reads as an end: a known leak.
+// The list's end: a full stop that ends a line or the read — not one inside
+// the surviving part of a cut list ("U.S. grown", "vit. C", "bzw."), not the
+// last of a run of dots (a grocery site's "natu..." cut) — or an allergen or
+// advisory statement that opens a line or follows a full stop, which by
+// regulation comes after the list (many complete lists carry no full stop of
+// their own). Not the in-list "Contains 2% or less of". An abbreviation that
+// happens to end a line still reads as an end: a known leak.
 const LIST_END_PATTERN = new RegExp(
-  String.raw`(?<![.。])\.(?![.。])(?![ \t]*\d)(?=\s|$)|。` +
-    String.raw`|^[ \t\p{P}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t]*(?:\d|less|under))`,
+  String.raw`(?<![.。])[.。][ \t\u00a0]*(?:\r?\n|$)` +
+    String.raw`|(?:^|[.。][ \t\u00a0]+)[ \t\p{P}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t]*(?:\d|less|under))`,
   'imu',
 );
 
@@ -350,16 +354,21 @@ const NO_END_EXPLANATION =
  * ('no_heading' | 'no_end'), or null when both ends are visible.
  *
  * Start: an ingredients heading anywhere in the read (Vision sometimes emits a
- * fragment of the list above it). End: a full stop or an allergen statement
- * after the heading. Neither proves the whole list was captured — a side cut
- * keeps both — but their absence is strong evidence it was not.
+ * fragment of the list above it). End: after every heading, before the next
+ * one, a line-ending full stop or an allergen statement — on a two-product
+ * frame a complete first list must not vouch for a cut second one. Neither
+ * proves the whole list was captured — a side cut keeps both — but their
+ * absence is strong evidence it was not.
  */
 function checkIngredientList(ocrText) {
   if (typeof ocrText !== 'string') return 'no_heading';
-  const heading = INGREDIENT_HEADING_PATTERN.exec(ocrText);
-  if (!heading) return 'no_heading';
-  const afterHeading = ocrText.slice(heading.index + heading[0].length);
-  return LIST_END_PATTERN.test(afterHeading) ? null : 'no_end';
+  const headings = [...ocrText.matchAll(INGREDIENT_HEADING_PATTERN)];
+  if (headings.length === 0) return 'no_heading';
+  for (const [i, heading] of headings.entries()) {
+    const list = ocrText.slice(heading.index + heading[0].length, headings[i + 1]?.index ?? ocrText.length);
+    if (!LIST_END_PATTERN.test(list)) return 'no_end';
+  }
+  return null;
 }
 
 /**
