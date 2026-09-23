@@ -95,6 +95,12 @@ should fall from the ~69% it ran at for the prior 90 days. The plan's step 9
 `properties.gf_claim_present` over 28 days — labeled products' caution share
 should drop sharply, unlabeled roughly unchanged. Mention it in the analyst
 read once the window is in; it does not add a section to this page.
+**Since 2026-09-22** the opposite push exists too: a photographed label whose
+ingredient list looks cut off is delivered `caution` even when Claude said
+`safe` (decision 005), and the event carries `properties.list_gate`
+(`no_heading` / `no_end`). When reading the OCR caution share across that date,
+split by `list_gate` so its downgrades aren't mistaken for the claim rule
+failing — and report the `list_gate` count itself as the gate's footprint.
 
 Privacy: counts only. Never add product names, barcodes, or any scanned
 content — the privacy policy promises "no record of what you scanned."

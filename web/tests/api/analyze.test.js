@@ -295,6 +295,65 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList(text)).toBeNull();
   });
 
+  // PR #31 grill: a grocery site's own truncation marker is not the end of the list.
+  it('does not count an ellipsis as the end of the list', () => {
+    expect(checkIngredientList('Ingredients\nWater, cane sugar, natural flavors, natu...\nShow more')).toBe('no_end');
+    expect(checkIngredientList('Ingredients\nWater, cane sugar, natural flavors, natu…\nShow more')).toBe('no_end');
+  });
+
+  it('does not count a dot inside a word or before a comma as the end', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice, vanilla ext., salt, see www.acmefoods.com')).toBe('no_end');
+  });
+
+  it('counts a full stop at a line end even when the next line starts with a number', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, sea salt.\n12 OZ (340g)')).toBeNull();
+    expect(checkIngredientList('Zutaten: Reis, Zucker, Salz.\n14.10.2026')).toBeNull();
+  });
+
+  // Complete lists often carry no full stop of their own; the allergen
+  // statement that follows them by regulation marks the end just as well.
+  it('accepts an allergen or advisory statement on a later line as the end', () => {
+    expect(checkIngredientList('INGREDIENTS: Almonds, sea salt\nCONTAINS: TREE NUTS (ALMONDS)')).toBeNull();
+    expect(checkIngredientList('Ingrédients : riz, sucre, sel\nPeut contenir des traces de lait')).toBeNull();
+    expect(checkIngredientList('INGREDIËNTEN: rijst, suiker, zout\nKan sporen van melk bevatten')).toBeNull();
+  });
+
+  it('does not treat a mid-list "contains 2% or less of" line as the end', () => {
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar\nCONTAINS 2% OR LESS OF: salt, cocoa')).toBe('no_end');
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar\nContains less than 2% of salt, cocoa')).toBe('no_end');
+  });
+
+  // PR #31 grill: after a top cut, a component or in-list heading must not
+  // stand in for the real one.
+  it('does not accept a heading with other words before it on its line', () => {
+    expect(checkIngredientList('whey, milkfat, salt\nCHEESE SAUCE MIX INGREDIENTS: whey, salt.')).toBe('no_heading');
+    expect(checkIngredientList('sugar, cocoa\nCONTAINS 2% OR LESS OF THE FOLLOWING INGREDIENTS: salt.')).toBe('no_heading');
+    expect(checkIngredientList('Key ingredient: quinoa.')).toBe('no_heading');
+  });
+
+  it('accepts a heading after a two-letter language code', () => {
+    expect(checkIngredientList('DE Zutaten: Reis, Zucker, Salz.')).toBeNull();
+    expect(checkIngredientList('NL: Ingrediënten: rijst, suiker, zout.')).toBeNull();
+    expect(checkIngredientList('(FR) Ingrédients : riz, sucre, sel.')).toBeNull();
+  });
+
+  it('does not treat front-of-pack wording split onto its own line as a heading', () => {
+    expect(checkIngredientList('SIMPLE\nINGREDIENTS\nGLUTEN FREE\nNET WT 5 OZ. Made in U.S.A.')).toBe('no_heading');
+  });
+
+  it.each([
+    ['OCR reading a middle I as l', 'INGREDlENTS: Rice, sugar, salt.'],
+    ['OCR reading the colon as a semicolon', 'INGREDIENTS; Rice, sugar, salt.'],
+    ['Polish "Skład"', 'Skład: ryż, cukier, sól.'],
+    ['Turkish dotted capital İ', 'İÇİNDEKİLER: pirinç, şeker, tuz.'],
+    ['Greek capitals without the accent', 'ΣΥΣΤΑΤΙΚΑ: ρύζι, ζάχαρη, αλάτι.'],
+    ['Finnish "Ainekset"', 'Ainekset: riisi, sokeri, suola.'],
+    ['Bulgarian', 'Съставки: ориз, захар, сол.'],
+    ['Serbian Cyrillic', 'Састојци: пиринач, шећер, со.'],
+  ])('recognises the heading too: %s', (_label, text) => {
+    expect(checkIngredientList(text)).toBeNull();
+  });
+
   it('treats a missing or non-string read as having no heading', () => {
     expect(checkIngredientList(undefined)).toBe('no_heading');
     expect(checkIngredientList('')).toBe('no_heading');
@@ -351,10 +410,48 @@ describe('applyIngredientListGate', () => {
   });
 
   // Menus have no ingredients heading; their partial-capture rule lives in the prompt.
-  it('does not apply to menus', () => {
-    const menu = { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'medium' };
+  it('does not apply to a menu that lists dishes', () => {
+    const menu = { mode: 'menu', verdict: 'safe', menu_items: [{ name: 'Ensalada verde', verdict: 'safe', notes: 'No gluten ingredients listed' }], explanation: 'All items look safe.', confidence: 'medium' };
     expect(applyIngredientListGate(menu, 'Ensalada verde 9.50\nPollo asado 14.00')).toBeNull();
     expect(menu.verdict).toBe('safe');
+  });
+
+  // PR #31 grill: the app renders any response with menu_items as a menu, so a
+  // per-item "safe" badge on a gated label is acted on like the verdict.
+  it('downgrades "safe" item badges on a label response when it fires', () => {
+    const analysis = { ...safeLabel(), menu_items: [{ name: 'x', verdict: 'safe' }, null, { name: 'y', verdict: 'unsafe' }] };
+    expect(applyIngredientListGate(analysis, START_CUT)).toBe('no_heading');
+    expect(analysis.menu_items[0].verdict).toBe('caution');
+    expect(analysis.menu_items[1]).toBeNull();
+    expect(analysis.menu_items[2].verdict).toBe('unsafe');
+  });
+
+  it('gates a "menu" response that carries no items', () => {
+    const menu = { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'medium' };
+    expect(applyIngredientListGate(menu, START_CUT)).toBe('no_heading');
+    expect(menu.verdict).toBe('caution');
+  });
+
+  it('asks for the line below the list when the end is missing', () => {
+    const analysis = safeLabel();
+    applyIngredientListGate(analysis, END_CUT);
+    expect(analysis.explanation).toContain('line below');
+  });
+
+  // Single-ingredient foods need not print an ingredient list, so no photo of
+  // them can pass; the barcode is the way through, on the clients that have one.
+  it('points a phone user at the barcode when there is no heading, but not a web user', () => {
+    const phone = safeLabel();
+    applyIngredientListGate(phone, START_CUT, { platform: 'ios' });
+    expect(phone.explanation).toContain('barcode');
+
+    const unknown = safeLabel();
+    applyIngredientListGate(unknown, START_CUT, { platform: 'unknown' });
+    expect(unknown.explanation).toContain('barcode');
+
+    const web = safeLabel();
+    applyIngredientListGate(web, START_CUT, { platform: 'web' });
+    expect(web.explanation).not.toContain('barcode');
   });
 });
 
@@ -862,6 +959,14 @@ describe('analyze handler analytics', () => {
       expect(trackScan).toHaveBeenCalledWith(
         expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading' })
       );
+    });
+
+    it('leaves the barcode hint out for the web client, which has no barcode scanner', async () => {
+      stubScan(claudeSafe, ocr('sugar, cocoa butter, whole milk powder, soy lecithin, natural vanilla flavor, salt, palm oil, cocoa.'));
+      const res = mockRes();
+      await handler({ method: 'POST', body: { image: 'base64data' }, headers: { 'x-client': 'web' } }, res);
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.explanation).not.toContain('barcode');
     });
 
     it('passes a null listGate (omitted from the event) when the gate did not fire', async () => {

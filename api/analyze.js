@@ -296,45 +296,63 @@ function applySafeVerdictFloor(analysis, ocrChars) {
  * capital I as l, 1 or | often enough that the Latin forms accept all four.
  */
 const INGREDIENT_HEADINGS = [
-  '[il1|]ngr[eé]di(?:ents?|entes|enti|ente|[eë]nten|enser)', // en ca fr es pt it ro nl sv da no
+  '[il1|]ngr[eé]d[il1|](?:ents?|entes|enti|ente|[eë]nten|enser)', // en ca fr es pt it ro nl sv da no
   'zutaten', // de
-  'składniki', // pl
+  'skład(?:niki)?', // pl
   'složení', 'zloženie', // cs sk
   'összetevők', // hu
   'sastojci', 'sestavine', // hr sr bs, sl
-  'ainesosat', // fi
-  'içindekiler', // tr
-  'συστατικά', // el
-  'состав', 'склад', // ru, uk
+  'ainesosat', 'ainekset', // fi
+  '[iİı]ç[iİı]ndek[iİı]ler', // tr — the i flag does not fold İ to i
+  'συστατικ[άα]', // el — capitals drop the accent
+  'состав', 'склад', 'састојци', 'съставки', // ru, uk, sr, bg
   'المكونات', 'רכיבים', // ar, he
-  '原材料名?', '配料表?', '원재료명?', // ja zh ko
+  '原材料名?', '配料表?', '成分', '원재료명?', // ja, zh, zh-TW, ko
 ].join('|');
 
-// A heading is the word followed by a colon, or alone on its line (grocery
-// sites, some packs). The word inside running prose — a bioengineered-food
-// disclosure's "the ingredients from corn" — is not a heading.
+// A heading starts its line — after bullets or a two-letter language code
+// ("DE Zutaten:", "(FR) Ingrédients :") — and takes a colon (or OCR's
+// semicolon), or stands alone on its line above a comma-separated list
+// (grocery sites). Words before it on the line make it something else: after a
+// top cut, "CHEESE SAUCE MIX INGREDIENTS:" or "…OF THE FOLLOWING INGREDIENTS:"
+// must not stand in for the list's own heading, nor "the ingredients from
+// corn" in a bioengineered-food disclosure.
+const HEADING_LINE_START = String.raw`^[ \t\p{P}\p{S}]*(?:\p{L}{2}\)?[ \t]*[:/|-]?[ \t]+)?`;
 const INGREDIENT_HEADING_PATTERN = new RegExp(
-  `(?<!\\p{L})(?:${INGREDIENT_HEADINGS})\\s*[:：]|^[ \\t]*(?:${INGREDIENT_HEADINGS})[ \\t]*$`,
+  `${HEADING_LINE_START}(?:${INGREDIENT_HEADINGS})[ \\t]*[:：;]` +
+    `|^[ \\t\\p{P}\\p{S}]*(?:${INGREDIENT_HEADINGS})[ \\t]*\\r?\\n(?=[^\\r\\n]*[,、，])`,
   'imu',
 );
 
-// A full stop that ends a sentence, not a decimal ("4.9 OZ") or a numbered
-// colour ("Yellow No. 5").
-const LIST_END_PATTERN = /[.。](?!\s*\d)/;
+// The list's end: a full stop that ends a sentence — not a run of dots (a
+// grocery site's "natu..." cut), not a decimal or a numbered colour ("4.9 OZ",
+// "Yellow No. 5"), not inside a word or before a comma ("ext.,", "www.a.com")
+// — or an allergen/advisory statement opening a later line, which by
+// regulation follows the list (many complete lists carry no full stop of their
+// own). Not the in-list "Contains 2% or less of". An abbreviation inside the
+// surviving list ("vit. B1") still reads as an end: a known leak.
+const LIST_END_PATTERN = new RegExp(
+  String.raw`(?<![.。])\.(?![.。])(?![ \t]*\d)(?=\s|$)|。` +
+    String.raw`|^[ \t\p{P}]*(?:contains|may contain|allergens?|allergy advice|contiene|puede contener|contient|peut contenir|bevat|kan sporen|enthält|kann spuren|conté|pot contenir|può contenere)(?!\p{L})(?![ \t]*(?:\d|less|under))`,
+  'imu',
+);
 
 const NO_HEADING_EXPLANATION =
   'I can\'t see where the ingredient list starts, so I can\'t call this safe — flour is often the first ingredient. Retake with the word "Ingredients" and the whole list in frame.';
+// Single-ingredient foods need not print a list, so no photo of them passes;
+// the barcode is the way through on the clients that have a scanner.
+const NO_HEADING_BARCODE_HINT = ' No ingredient list on the pack? Try scanning the barcode.';
 const NO_END_EXPLANATION =
-  "The ingredient list looks cut off before it ends, so I can't call this safe. Retake with the whole list in frame.";
+  "The ingredient list looks cut off before it ends, so I can't call this safe. Retake with the whole list and the line below it in frame.";
 
 /**
  * Does the OCR text show a whole ingredient list? Returns why not
  * ('no_heading' | 'no_end'), or null when both ends are visible.
  *
  * Start: an ingredients heading anywhere in the read (Vision sometimes emits a
- * fragment of the list above it). End: a full stop somewhere after the heading.
- * Neither proves the whole list was captured — a side cut keeps both — but
- * their absence is strong evidence it was not.
+ * fragment of the list above it). End: a full stop or an allergen statement
+ * after the heading. Neither proves the whole list was captured — a side cut
+ * keeps both — but their absence is strong evidence it was not.
  */
 function checkIngredientList(ocrText) {
   if (typeof ocrText !== 'string') return 'no_heading';
@@ -354,24 +372,37 @@ function checkIngredientList(ocrText) {
  * because the cut took the gluten word with it, and Claude's reply mentioned
  * the cut in under a third of cases. The prompt's "incomplete → caution" rule
  * cannot catch what the model does not notice, so the check lives in code.
- * Replaying those 39: none carried a heading (the database text has none; a
- * real photo cut at the top loses it), and all 13 end cuts lacked a full stop.
- * All 8 real label photos in test-cases/ pass both checks.
+ * With a heading added to those texts, all 13 end cuts fail the end check; a
+ * real photo cut at the top loses the heading (4/4 cropped real photos). All 8
+ * complete real label reads in test-cases/ pass. Decision 005.
  *
- * Labels only — menus have no heading and keep the prompt's partial-menu rule.
- * The barcode path never comes here: 21% of Open Food Facts lists carry no
- * full stop at all. Only ever downgrades. Mutates the analysis and returns the
- * reason it withheld "safe" (for the `list_gate` scan property), or null.
+ * Everything but a real menu (mode "menu" with dishes) is gated — the app
+ * renders any response carrying menu_items as a menu, so a per-item "safe"
+ * badge on a label is downgraded too. The barcode path never comes here: 21%
+ * of Open Food Facts lists carry no full stop at all. Only ever downgrades.
+ * Mutates the analysis and returns the reason it withheld "safe" (for the
+ * `list_gate` scan property), or null.
  */
-function applyIngredientListGate(analysis, ocrText) {
-  if (analysis.mode !== 'label' || analysis.verdict !== 'safe') return null;
+function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
+  const items = Array.isArray(analysis.menu_items) ? analysis.menu_items : null;
+  if (analysis.mode === 'menu' && items?.length) return null;
+  const showsSafe = analysis.verdict === 'safe' || Boolean(items?.some((item) => item?.verdict === 'safe'));
+  if (!showsSafe) return null;
+
   const reason = checkIngredientList(ocrText);
   if (!reason) return null;
 
-  analysis.verdict = 'caution';
+  if (analysis.verdict === 'safe') {
+    analysis.verdict = 'caution';
+    // Claude's reassurance ("Good news! ...") is exactly what must not survive.
+    analysis.explanation = reason === 'no_end'
+      ? NO_END_EXPLANATION
+      : NO_HEADING_EXPLANATION + (platform === 'web' ? '' : NO_HEADING_BARCODE_HINT);
+  }
+  if (items) {
+    analysis.menu_items = items.map((item) => (item?.verdict === 'safe' ? { ...item, verdict: 'caution' } : item));
+  }
   analysis.confidence = 'low';
-  // Claude's reassurance ("Good news! ...") is exactly what must not survive.
-  analysis.explanation = reason === 'no_heading' ? NO_HEADING_EXPLANATION : NO_END_EXPLANATION;
   return reason;
 }
 
@@ -483,7 +514,7 @@ export default async function handler(req, res) {
     applySafeVerdictFloor(analysis, ocrChars);
     // Step 4: nor can a label whose ingredient list runs out of frame. After
     // the floor, whose copy is the more accurate one for a near-empty read.
-    const listGate = applyIngredientListGate(analysis, ocrText);
+    const listGate = applyIngredientListGate(analysis, ocrText, { platform });
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
