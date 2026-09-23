@@ -153,6 +153,21 @@ describe('parseClaudeResponse', () => {
     expect(result).toEqual(fixtures.english_label_no_language.expected);
     expect(result.detected_language).toBeUndefined();
   });
+
+  it('keeps a valid caution_reason on a label caution', () => {
+    const r = parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'caution', caution_reason: 'oats', explanation: 'Contains oats.' }));
+    expect(r.caution_reason).toBe('oats');
+  });
+
+  it('never passes an unknown caution_reason through, and drops one on a safe verdict', () => {
+    expect(parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'caution', caution_reason: 'vibes' })).caution_reason).toBe('other');
+    expect(parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'safe', caution_reason: 'oats' }))).not.toHaveProperty('caution_reason');
+  });
+
+  it('gives menus no caution_reason', () => {
+    const r = parseClaudeResponse(JSON.stringify({ mode: 'menu', verdict: 'caution', caution_reason: 'oats', menu_items: [{ name: 'Pan', verdict: 'unsafe' }] }));
+    expect(r).not.toHaveProperty('caution_reason');
+  });
 });
 
 // Safety floor (2026-08-13 analytics review): on 2026-07-19 a 3-character OCR
@@ -174,6 +189,10 @@ describe('applySafeVerdictFloor', () => {
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
     expect(result.explanation).not.toContain('Good news');
+  });
+
+  it('marks a floored label as incomplete', () => {
+    expect(applySafeVerdictFloor(safeLabel(), 3).caution_reason).toBe('incomplete');
   });
 
   it('leaves a "safe" verdict alone at the threshold', () => {
@@ -572,6 +591,12 @@ describe('applyIngredientListGate', () => {
     expect(analysis.explanation).toContain('cut off');
   });
 
+  it('marks a gated label as incomplete', () => {
+    const analysis = safeLabel();
+    applyIngredientListGate(analysis, START_CUT);
+    expect(analysis.caution_reason).toBe('incomplete');
+  });
+
   it('leaves a "safe" verdict on a complete list untouched', () => {
     const analysis = safeLabel();
     expect(applyIngredientListGate(analysis, COMPLETE)).toBeNull();
@@ -618,6 +643,8 @@ describe('applyIngredientListGate', () => {
     const menu = { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'medium' };
     expect(applyIngredientListGate(menu, START_CUT)).toBe('no_heading');
     expect(menu.verdict).toBe('caution');
+    // Not a real menu, so it is gated as a label and names its reason like one.
+    expect(menu.caution_reason).toBe('incomplete');
   });
 
   it('asks for the line below the list when the end is missing', () => {

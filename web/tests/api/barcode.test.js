@@ -75,12 +75,20 @@ describe('parseClaudeResponse (barcode)', () => {
     const result = parseClaudeResponse('');
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
+    expect(result.caution_reason).toBe('other');
   });
 
   it('falls back to caution for malformed JSON', () => {
     const result = parseClaudeResponse('not json at all');
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
+    expect(result.caution_reason).toBe('other');
+  });
+
+  it('normalizes caution_reason on the barcode path too', () => {
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'caution', caution_reason: 'may_contain' })).caution_reason).toBe('may_contain');
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'caution' })).caution_reason).toBe('other');
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'unsafe', caution_reason: 'oats' }))).not.toHaveProperty('caution_reason');
   });
 
   it('extracts JSON surrounded by text', () => {
@@ -1020,6 +1028,7 @@ describe('barcode handler analytics', () => {
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.verdict).toBe('caution');
+    expect(res.body.caution_reason).toBe('incomplete');
     expect(trackScan).toHaveBeenCalledWith(
       expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true })
     );

@@ -17,6 +17,7 @@ import {
   incrementRateLimit,
   formatTimeRemaining,
   normalizeVerdict,
+  normalizeCautionReason,
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
@@ -271,6 +272,7 @@ function applySafeVerdictFloor(analysis, ocrChars) {
     analysis.verdict = 'caution';
     // Claude's reassurance ("Good news! ...") is exactly what must not survive.
     analysis.explanation = TOO_LITTLE_TEXT_EXPLANATION;
+    if (analysis.mode !== 'menu') analysis.caution_reason = 'incomplete';
     floored = true;
   }
 
@@ -414,6 +416,7 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
     const barcodeHint = reason === 'no_end' ? NO_END_BARCODE_HINT : NO_HEADING_BARCODE_HINT;
     analysis.explanation = (reason === 'no_end' ? NO_END_EXPLANATION : NO_HEADING_EXPLANATION) +
       (platform === 'web' ? '' : barcodeHint);
+    analysis.caution_reason = 'incomplete';
   }
   if (items) {
     analysis.menu_items = items.map((item) => (item?.verdict === 'safe' ? { ...item, verdict: 'caution' } : item));
@@ -670,7 +673,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the ingredients. Please review manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 
@@ -714,6 +718,11 @@ function parseClaudeResponse(content) {
       result.menu_items = [];
     }
 
+    // Decision 006: every label caution names one reason; menus carry none.
+    const cautionReason = result.mode === 'label' ? normalizeCautionReason(result.verdict, result.caution_reason) : undefined;
+    if (cautionReason) result.caution_reason = cautionReason;
+    else delete result.caution_reason;
+
     return result;
 
   } catch (parseError) {
@@ -723,7 +732,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the ingredients. Please review manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 }

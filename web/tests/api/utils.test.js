@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { getClientGeo } from '../../../api/_utils.js';
+import { getClientGeo, CAUTION_REASONS, normalizeCautionReason } from '../../../api/_utils.js';
+
+describe('normalizeCautionReason (decision 006)', () => {
+  it('keeps a known reason, case- and whitespace-insensitively', () => {
+    expect(normalizeCautionReason('caution', 'may_contain')).toBe('may_contain');
+    expect(normalizeCautionReason('caution', ' OATS ')).toBe('oats');
+  });
+
+  it('maps a missing or unknown reason on a caution to "other"', () => {
+    expect(normalizeCautionReason('caution', undefined)).toBe('other');
+    expect(normalizeCautionReason('caution', 'natural flavors')).toBe('other');
+    expect(normalizeCautionReason('caution', 42)).toBe('other');
+  });
+
+  it('drops any reason on a verdict that is not caution', () => {
+    expect(normalizeCautionReason('safe', 'oats')).toBeUndefined();
+    expect(normalizeCautionReason('unsafe', 'conflict')).toBeUndefined();
+  });
+
+  it('lists exactly the decision-006 reasons', () => {
+    expect(CAUTION_REASONS).toEqual(['oats', 'may_contain', 'conflict', 'undeclared_source', 'incomplete', 'other']);
+  });
+});
 
 describe('getClientGeo', () => {
   it('reads country, region, and city from Vercel edge headers', () => {

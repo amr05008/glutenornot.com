@@ -16,6 +16,7 @@ import {
   incrementRateLimit,
   formatTimeRemaining,
   normalizeVerdict,
+  normalizeCautionReason,
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
@@ -226,6 +227,7 @@ export default async function handler(req, res) {
         allergen_warnings: [],
         explanation: `Found "${displayName || 'Unknown product'}" but no ingredient data is available. Try scanning the ingredient label instead.`,
         confidence: 'low',
+        caution_reason: 'incomplete',
         product_name: displayName || null,
         barcode: cleanBarcode,
         data_source: product.source,
@@ -824,7 +826,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the product. Please review the ingredients manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 
@@ -847,6 +850,10 @@ function parseClaudeResponse(content) {
     result.allergen_warnings = result.allergen_warnings || [];
     result.explanation = result.explanation || '';
     result.confidence = result.confidence || 'medium';
+    // Decision 006: every caution names one reason from the fixed list.
+    const cautionReason = normalizeCautionReason(result.verdict, result.caution_reason);
+    if (cautionReason) result.caution_reason = cautionReason;
+    else delete result.caution_reason;
 
     return result;
   } catch {
@@ -856,7 +863,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the product. Please review the ingredients manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 }
