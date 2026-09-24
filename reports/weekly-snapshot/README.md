@@ -81,10 +81,11 @@ listed below; never touch styles, fonts, or layout.
 | "Verdicts delivered" band + rows | safe / caution / unsafe counts (`flex` = count) |
 | "Why scans miss" rows | `scan_failed` reasons desc by count; bar widths relative to the max; keep the zero row for backend errors. `cancelled` (client beacon, iOS ≥ 1.4.3) = the user tapped Cancel, almost always weak signal — read it with `elapsed_ms` (how long they waited) and `image_kb`, not as an app failure. `interrupted` (same build) = the app went to the background mid-scan (user switched apps, took a call); no `elapsed_ms`, and not "gave up" |
 | `.fnote` | one honest sentence about the misses |
+| "Barcode fast path" card (decision 007) | row 1: barcode `scan`s with `engine = 'jev'`, count · % of barcode scans with an `engine`; row 2: `engine_audit` events with `agree = true` "of N audits" (N excludes `claude_verdict = 'error'`; show `–` when N = 0); row 3: `total_ms` p50 on barcode scans by `engine`, in seconds (`0.2 s / 3.1 s`; `–` for an engine with no scans). Its `.fnote` names the week's `JEV_MODE` (read it off `/api/health` → `services.fast_path.mode`, or from the dominant `engine_audit.mode`) and, from Stage 2 on, the F5 tripwire count — any `engine_audit` with `served = jev`, `jev_verdict = safe`, `claude_verdict` caution/unsafe — which must be 0; if it isn't, say so first. Mode `off` all week: all three rows as in this file and the "Fast path off" note. Queries in `api/ANALYTICS.md` (`engine_audit`) |
 | Sentry card | `0 events` + `quiet` chip + "verified silence" note when clean. If events exist: use the count (drop the `quiet` class on `.num`), a `warn` chip, and replace `.sentry-note` with an issue box (CSS already present): `<div class="sentry-issue"><span class="iid">GLUTENORNOT-MOBILE-N</span><div class="ititle">Error title</div><div class="imeta">N users · date · one-line interpretation</div></div>`. Client timeouts report at `level:warning` — count warnings, not just errors. |
 
 Sanity checks before publishing: tile 1 = Σ `DAYS[].ok` = band totals on both
-split cards; tile 2 denominator = Σ ok + Σ fail; failure rows sum to Σ fail.
+split cards; fast-path row 1 ≤ the barcode band; tile 2 denominator = Σ ok + Σ fail; failure rows sum to Σ fail.
 
 Verdicts render caution-heavy by design (all oats → caution, uncertain →
 caution) — a caution-majority week is normal, not a data error. **But since

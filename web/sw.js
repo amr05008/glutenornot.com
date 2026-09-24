@@ -18,7 +18,9 @@
 //      line, Vercel serving both apps, and the gf-claim / cut-off-list event fields.
 // v11: privacy policy discloses caution_reason (which kind of reason a caution gave);
 //      the verdict legend in index.html describes decision 006.
-const CACHE_NAME = 'glutenornot-v11';
+// v12: privacy policy discloses TypeSafe's Jev (barcode fast first check, ingredient
+//      text only), the engine/fast-path scan fields and the engine_audit event (decision 007).
+const CACHE_NAME = 'glutenornot-v12';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

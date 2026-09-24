@@ -54,17 +54,46 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
   (contributors sometimes paste the whole panel, ending "... Gluten free."),
   which the flag does not see — so `gf_label_present = false` slightly
   undercounts labeled products on this path.
-- `ocr_ms`, `claude_ms`, `total_ms` (OCR only — the **server leg**: Vision
+- `ocr_ms`, `claude_ms`, `total_ms` (OCR — the **server leg**: Vision
   round-trip, Claude round-trip incl. retries, and body-received → verdict.
   The upload leg is *not* in `total_ms` — the server clock starts once the body
   has arrived. On weak signal the upload dominates; its only view is
   `elapsed_ms` on client-beaconed failures. Added 2026-08-28,
   `plans/weak-signal-upload-2026-08-28.md`, so decision 002's "revisit Opus
   latency on scan-duration complaints" has data instead of an estimate.)
-- `model` — the Claude model that produced the verdict. Omitted when no Claude
-  call happened (barcode hit with no ingredient data). Makes a model swap
-  attributable at the time it happens: `claude-opus-4-8` went out the same day
-  as iOS 1.4.0 and confounded that release's evaluation.
+- `lookup_ms`, `claude_ms`, `total_ms` (barcode, since decision 007) — the
+  database waterfall, the Claude round-trip incl. retries, and request →
+  verdict (the server clock starts after the barcode is validated). A
+  Jev-served scan has **no `claude_ms`**: Claude is still running as its
+  audit when the event is sent. The no-ingredient-data caution carries
+  `lookup_ms` and `total_ms` only. Compare engines on `total_ms`, never on
+  `claude_ms`.
+- `model` — the model that produced the **served** verdict: the Claude model,
+  or `jev-1.13.0` when `engine = jev`. Omitted when no model ran (barcode hit
+  with no ingredient data). Makes a model swap attributable at the time it
+  happens: `claude-opus-4-8` went out the same day as iOS 1.4.0 and confounded
+  that release's evaluation.
+- `engine` (barcode only, decision 007) — whose verdict the user saw:
+  `claude`, or `jev` when the fast path served it. Omitted on the
+  no-ingredient-data caution (no engine ran) and on OCR scans.
+- `jev_outcome`, `jev_via`, `jev_ms` (barcode only, present whenever
+  `JEV_MODE` is not `off`) — what the fast path did on this scan:
+  - `jev_outcome`: `settled_safe` | `settled_unsafe` (Jev and the rule settled
+    it — served or only audited, depending on the mode; read `engine`) |
+    `fell_through` (Jev answered, the rule didn't settle) | `timeout` (over
+    800 ms) | `error` (HTTP error, bad answer, wrong model, or a fast-path
+    bug) | `skipped` (Jev never asked).
+  - `jev_via`: the rule branch or gate that decided — a fixed enum from
+    `decideFastPath` / `runFastPath` (`api/barcode.js`), never content.
+    Settled: `safe`, `unsafe`. Fell through: `gluten_tag` (a gluten, grain or
+    oats allergen/trace tag blocked safe), `pattern_match` (a grain word in the
+    list blocked safe), `list_quality` (not a complete ingredient list),
+    `not_clear` (a question scored ≥ 0.2), `wheat_sugar` (toggle T3). Skipped:
+    `source` (not Open Food Facts), `no_text`, `gf_label`, `label_text`,
+    `signal_note` (the code gates), `no_key`. Absent on `timeout` / `error`.
+  - `jev_ms`: Jev's round-trip. Absent when Jev wasn't asked.
+  Coverage = settled ÷ all barcode scans with ingredient data; the bake-off
+  predicts ~half for Open Food Facts records.
 - `app_version` — client build, from the `X-Client-Version` header.
 
 **`app_version` (both events).** Analytics is server-side, so `$lib_version` is
@@ -81,6 +110,67 @@ version to send — a stale web build is already visible as `platform: unknown`)
 - Client-beacon-only: `timeout` | `network` | `cancelled` | `interrupted` — these never reach the server as a request, so the iOS client reports them via `POST /api/track` (web doesn't beacon). The first two die on the wire. `cancelled` is the user tapping Cancel on a slow attempt — before 2026-08-28 that left no trace anywhere (user-cancel is an `AbortError` the client dropped before Sentry or the beacon fired). `interrupted` is the app going to the background mid-scan (`mobile/app/index.tsx` drops the in-flight request on the transition to `background` — deterministic, and before iOS suspends the process and kills the socket) — kept separate so switching apps during a long wait can't masquerade as giving up. The beacon allowlist rejects every other reason so server-side reasons can't be spoofed.
 - `elapsed_ms` (`timeout` / `network` / `cancelled` only) — how long the user waited before the attempt died or they cancelled. Untrusted input: whitelisted to a finite number and clamped to `[0, 120000]`, dropped otherwise. This is the only measurement of the upload leg. `interrupted` deliberately carries none — it fires on the transition to the background, and would otherwise include time asleep. For `cancelled` the clock starts with the spinner (before the photo resize and the connectivity probe), so it matches what the user experienced; for `timeout` / `network` it starts after the probe, ~1–2 s later.
 - `ocr_ms` (server-side OCR-path failures, when known) — Vision round-trip before the failure.
+
+**`engine_audit`** — the Jev fast path's audit (decision 007,
+`plans/jev-fast-path-2026-09-24.md`). One per barcode scan where Jev settled a
+verdict, sent after the response once Claude's verdict on the same record is
+in (`runAfterResponse` → `waitUntil`). Its own event so it can never inflate
+`scan`. Properties, all enums:
+
+- `mode` — `JEV_MODE` at the time: `shadow` | `unsafe` | `full`.
+- `jev_verdict` — `safe` | `unsafe` (Jev never settles caution).
+- `claude_verdict` — `safe` | `caution` | `unsafe`, or `error` when the Claude
+  call failed (possible only when Jev was served; otherwise the scan was a
+  `claude_error` and no audit is sent).
+- `claude_caution_reason` — Claude's `caution_reason` on a caution.
+- `served` — `jev` | `claude`: whose verdict the user saw.
+- `agree` — `jev_verdict = claude_verdict`. Absent when `claude_verdict = error`.
+- `platform`, `app_version`, `$geoip_*` — same normalization as the other events.
+
+**The Stage 1 → 2 gate (F4)**: ≥ 50 shadowed Jev-`safe` audits over ≥ 3 weeks
+with **zero** where Claude isn't `safe`. Every disagreement blocks the gate until
+its `claude_caution_reason` explains it — the product is never logged, so that
+reason is all there is to read:
+
+```sql
+SELECT count() AS shadowed_safe,
+       countIf(properties.claude_verdict IN ('caution', 'unsafe')) AS disagreements,
+       countIf(properties.claude_verdict = 'error') AS claude_errors,
+       min(timestamp) AS first, max(timestamp) AS last
+FROM events
+WHERE event = 'engine_audit' AND properties.jev_verdict = 'safe' AND properties.served = 'claude'
+  AND coalesce(properties.app_version, '') NOT LIKE '%-rc%'
+```
+
+List the disagreements with `properties.claude_caution_reason`.
+
+**The Stage 2 tripwire (F5)**: any `engine_audit` with `served = jev`,
+`jev_verdict = safe` and `claude_verdict IN ('caution', 'unsafe')` — the user
+already saw a `safe` Claude disputes. Set it up as a PostHog alert on a trends
+insight counting exactly that (threshold: any), checked hourly. On a hit: set
+`JEV_MODE=unsafe` and redeploy, then read the audit's `claude_caution_reason`.
+`claude_verdict = error` is not a trip (Claude failed, it didn't disagree).
+
+**The shadow-day read** (rollout step 2): `jev_ms` p95 under 800 ms from Vercel,
+and a `jev_outcome` mix like the bake-off's (about half of the asked records
+settle):
+
+```sql
+SELECT properties.jev_outcome AS outcome, count() AS scans,
+       quantile(0.5)(toFloat(properties.jev_ms)) AS p50_ms,
+       quantile(0.95)(toFloat(properties.jev_ms)) AS p95_ms
+FROM events
+WHERE event = 'scan' AND properties.method = 'barcode' AND properties.jev_outcome IS NOT NULL
+GROUP BY outcome ORDER BY scans DESC
+```
+
+**Verdict-share reads across a stage change.** Once Jev serves (`unsafe` /
+`full`), a barcode `scan`'s `verdict` is Jev's on `engine = jev` scans, and those
+carry no `caution_reason` (Jev never cautions). Decision 006's day-28 read, and
+any other read of Claude's barcode verdicts, takes `verdict` / `caution_reason`
+from `scan` where `engine = 'claude'` plus `claude_verdict` /
+`claude_caution_reason` from `engine_audit` where `served = 'jev'` — Claude read
+every one of those records too.
 
 **`barcode_recovery`** — the barcode-to-photo recovery funnel
 (`plans/barcode-recovery-2026-09-05.md` §7). When a barcode lookup comes up
@@ -187,7 +277,7 @@ placement — not Apple's presentation logic.
 
 ## Privacy invariant
 
-**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
+**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. The fast-path fields follow the same rule: `jev_via` names a code branch, and the templated explanation (which names the grain) never goes into an event. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
 
 ## Excluding non-user traffic
 

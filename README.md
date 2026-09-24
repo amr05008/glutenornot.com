@@ -99,7 +99,7 @@ The engineering version, with the lookup waterfall, the prompt rules and the saf
 1. Camera auto-detects barcodes (EAN-13, EAN-8, UPC-A, UPC-E)
 2. Barcode is sent to `/api/barcode`
 3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix (paid key only) → UPCitemdb (keyless)
-4. Claude analyzes the retrieved ingredients and returns verdict
+4. Claude analyzes the retrieved ingredients and returns verdict. With the fast path on (`JEV_MODE`, decision 007), TypeSafe's Jev reads an Open Food Facts ingredient list in parallel: when Jev and a code rule agree on a clear "unsafe" (and, in the final stage, a clear "safe"), that answer comes back in about 0.2 s and Claude's verdict is recorded as its audit
 5. If the product isn't found, or is found without ingredient/allergen data (the response is marked `result_reason: "missing_context"`), the iOS app shows a neutral "we can't tell" state instead of a verdict and offers a photo-only capture of the ingredient label, which then goes through the photo path above
 
 ## Deployment

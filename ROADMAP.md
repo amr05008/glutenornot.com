@@ -86,6 +86,7 @@ A prioritized todo list for improving the GlutenOrNot monorepo (web PWA + React 
 - [x] Waterfall product lookup: Open Food Facts → USDA → Nutritionix → UPCitemdb (added 2026-07-18 after Nutritionix killed its free tier; keyless trial, 100/day, extracts retail-listing ingredient statements with a reliability caveat, ≥12-digit codes only + returned-code match guard)
 - [x] Claude analysis of retrieved ingredients
 - [x] Shared rate limiting across analyze + barcode endpoints (`api/_utils.js`)
+- [ ] **Jev fast path** (decision 007, `plans/jev-fast-path-2026-09-24.md`) — built 2026-09-24 and merges with `JEV_MODE=off`. TypeSafe's Jev answers first on Open Food Facts barcodes it's sure of (~0.2 s against Opus's ~3 s); Claude runs on every scan and audits each settled verdict (`engine_audit`). Rollout: a shadow day, then Stage 1 (`unsafe` served), then Stage 2 (`full`) once ≥ 50 shadowed Jev-`safe` audits over ≥ 3 weeks show zero Claude disagreements, with the PostHog tripwire armed. Follow-up PR: fix the shared `isGlutenFamilyTag` (case-sensitive, English-only; misses `en:Glutine` and ~12 other forms), which changes Claude's inputs and needs its own eval run
 
 ### Error Monitoring & Observability
 - [x] Investigate why GLUTENORNOT-MOBILE-2 fires despite not_found filter — filter added post-1.1.0, not yet shipped
