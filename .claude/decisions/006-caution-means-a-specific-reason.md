@@ -71,4 +71,8 @@ T2–T9 are in `plans/verdict-calibration-2026-09-23.md`.
     (T9). That was 5 of about 410 barcode scans with ingredient data in the
     60 days to 2026-09-23.
   Wheat-based modified starch or flavoring is uncommon in US products, but
-  this is the same kind of residual risk as barley malt (T2).
+  this is the same kind of residual risk as barley malt (T2). The grill
+  proposed a decision-005-style gate that withholds `safe` when nothing after
+  the list made it into the photo. Aaron declined it (2026-09-24): *"if an
+  image is missing the gluten containing ingredients we cant guess they are
+  there. garbage photo in, garbage result."*

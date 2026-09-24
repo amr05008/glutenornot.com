@@ -415,6 +415,15 @@ describe('assessGlutenSignal', () => {
     });
     expect(note).toMatch(/With no oats listed, the record contradicts itself/);
     expect(note).toMatch(/Never return "safe" on this record/);
+
+    // Round 3: the same branch with oats listed is B15, decision 004's labeled-oats
+    // payoff shape — it must not be told "never safe".
+    const b15 = assessGlutenSignal({
+      ingredients_text: 'gluten-free rolled oats, honey, brown sugar, sunflower oil, natural flavor, sea salt.',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-oats'],
+    });
+    expect(b15).not.toMatch(/Never return "safe"/);
   });
 
   it('recognizes oats in the local language for the label-wins note', () => {

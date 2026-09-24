@@ -732,8 +732,15 @@ function assessGlutenSignal(product) {
       ' This product also carries a gluten-free label AND unrecognized gluten-related label text (see ' +
       '"Other gluten-related labels"). If that text says gluten is present or the product is unsuitable for ' +
       'coeliacs, it wins — never "safe". Only if it does not, and oats are listed, is the gluten tag the ' +
-      'auto-derived-from-oats pattern that the label covers. With no oats listed, the record contradicts itself. ' +
-      'Never return "safe" on this record: return "caution" (caution_reason "conflict").';
+      'auto-derived-from-oats pattern that the label covers.';
+    // PR #32 grill: B7's shape plus unrecognized text. With oats listed this is
+    // B15, decision 004's labeled-oats payoff case, so only the no-oats record
+    // gets the never-safe line.
+    if (!OATS_PATTERN.test(ingredients)) {
+      note +=
+        ' With no oats listed, the record contradicts itself. Never return "safe" on this record: return ' +
+        '"caution" (caution_reason "conflict").';
+    }
   } else if (hasGlutenFreeLabel) {
     note +=
       ' This product also carries a gluten-free label, and the ingredient list shows neither a gluten grain ' +
