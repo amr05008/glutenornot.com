@@ -89,7 +89,7 @@ frequently auto-derived from ingredients or contributed by users — they are NO
   gluten grain, is that auto-derived-from-oats pattern: the label is the manufacturer's regulated
   claim and wins. Do not lower the verdict for the tag. With neither a gluten grain nor oats in the
   list — or with a grain-specific tag such as "wheat", "barley" or "rye", which oats cannot explain — the record
-  contradicts itself: lean caution with low confidence, not "unsafe". If the ingredients DO list a
+  contradicts itself: return "caution" (caution_reason "conflict") with low confidence — never "safe", and not "unsafe". If the ingredients DO list a
   gluten grain, the label and the list disagree — return "caution" and say so.
 - A "DATA RELIABILITY:" note in the product data flags exactly these situations — follow it.
 
@@ -725,7 +725,8 @@ function assessGlutenSignal(product) {
     note +=
       ' This product also carries a gluten-free label, but the allergen tag names a specific grain (wheat, ' +
       'barley or rye), which oats cannot explain — the record contradicts itself; treat the conflict as a ' +
-      'reason to lean caution with low confidence rather than unsafe.';
+      'reason to lean caution with low confidence rather than unsafe. Never return "safe" on this record: ' +
+      'return "caution" (caution_reason "conflict") — the label does not settle a contradiction in its own record.';
   } else if (hasGlutenFreeLabel && hasUnrecognizedLabel) {
     note +=
       ' This product also carries a gluten-free label AND unrecognized gluten-related label text (see ' +
@@ -736,7 +737,8 @@ function assessGlutenSignal(product) {
     note +=
       ' This product also carries a gluten-free label, and the ingredient list shows neither a gluten grain ' +
       'nor oats that would explain the tag — the record contradicts itself; treat the conflict as a reason ' +
-      'to lean caution with low confidence rather than unsafe.';
+      'to lean caution with low confidence rather than unsafe. Never return "safe" on this record: return ' +
+      '"caution" (caution_reason "conflict") — the label does not settle a contradiction in its own record.';
   } else if (!OATS_PATTERN.test(ingredients) || !onlyGenericGlutenTag) {
     // PR #32 grill (decision 006): natural flavors, modified starch etc. no
     // longer caution on their own, so "base the verdict on the ingredients"

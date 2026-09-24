@@ -318,6 +318,10 @@ describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
     expect(CLAUDE_PROMPT).toContain("which is barley (a gluten-free label covers it, like any `undeclared_source`)");
   });
 
+  it('says a self-contradicting record is caution/conflict, never safe', () => {
+    expect(CLAUDE_PROMPT).toContain('contradicts itself: return "caution" (caution_reason "conflict") with low confidence — never "safe", and not "unsafe"');
+  });
+
   it('names malt vinegar as hidden gluten, like the photo prompt', () => {
     expect(CLAUDE_PROMPT).toContain('Common hidden gluten: soy sauce, malt vinegar, malt flavoring, barley malt syrup');
   });
@@ -367,6 +371,11 @@ describe('assessGlutenSignal', () => {
     expect(note).toMatch(/contradicts itself/i);
     expect(note).toMatch(/lean caution with low confidence/i);
     expect(note).not.toMatch(/label is the manufacturer's regulated claim and wins/i);
+    // PR #32 live run: with decision 006 clearing the rest of the list, "lean
+    // caution" alone let the label talk B7 into safe. The label does not settle
+    // a contradiction in its own record.
+    expect(note).toMatch(/Never return "safe" on this record/);
+    expect(note).toMatch(/caution_reason "conflict"/);
   });
 
   // PR #32 grill (decision 006): with natural flavors and modified starch no
@@ -421,6 +430,7 @@ describe('assessGlutenSignal', () => {
     });
     expect(note).toMatch(/specific grain \(wheat/i);
     expect(note).toMatch(/lean caution with low confidence/i);
+    expect(note).toMatch(/Never return "safe" on this record/);
     expect(note).not.toMatch(/regulated claim and wins/i);
 
     const both = assessGlutenSignal({
