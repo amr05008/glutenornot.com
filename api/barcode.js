@@ -133,7 +133,7 @@ frequently auto-derived from ingredients or contributed by users — they are NO
   - \`undeclared_source\` — an ingredient whose gluten source the maker is not required to declare. Any one of these is enough on its own:
     - flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product — any product made with meat or poultry: sausage, hot dogs, deli meat, jerky, meatballs, marinated meat, and soups, broths, bouillon, chili, or frozen meals made with meat or poultry (in the US these are USDA-regulated and outside the wheat-labeling law)
     - soy sauce, teriyaki, or tamari with no wheat declaration and no gluten-free label
-    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley
+    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley (a gluten-free label covers it, like any \`undeclared_source\`)
   - \`incomplete\` — ingredient data is missing, sparse, or a placeholder
   - \`other\` — a real, specific concern none of the above covers; name it in the explanation
 - **safe:** no gluten source in the ingredients, and no caution reason above

@@ -882,6 +882,9 @@ describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
   it('keeps yeast extract an undeclared_source in any product, on its own line (T4)', () => {
     expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
     expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
+    // …and, like every undeclared_source, a whole-product claim still covers it
+    // (the next live run read "brewer's yeast, which is barley" as beating B3's label).
+    expect(CLAUDE_PROMPT).toContain("which is barley (a whole-product gluten-free claim covers it, like any `undeclared_source`)");
   });
 
   // Same run: "near-claims such as …" made the model read "Gluten Friendly" as

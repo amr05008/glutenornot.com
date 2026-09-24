@@ -315,6 +315,7 @@ describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
     expect(CLAUDE_PROMPT).toMatch(/- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
     expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
     expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
+    expect(CLAUDE_PROMPT).toContain("which is barley (a gluten-free label covers it, like any `undeclared_source`)");
   });
 
   it('names malt vinegar as hidden gluten, like the photo prompt', () => {
