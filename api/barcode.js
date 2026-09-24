@@ -937,6 +937,7 @@ export {
   adverseGlutenLabels,
   unrecognizedGlutenLabels,
   isGlutenFamilyTag,
+  GLUTEN_GRAIN_PATTERN, // the barcode bake-off (plans/barcode-bakeoff-2026-09-24.md) names the grain with it
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
