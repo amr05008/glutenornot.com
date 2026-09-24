@@ -19,8 +19,8 @@
  *
  * Direct Anthropic calls only: no PostHog event, no scan-quota consumption.
  * FULL: 27 cases → 11 × 2 + 16 × 5 = 102 Opus 4.8 calls + 1 cache warm-up;
- * with the barcode runner that is 167 calls ≈ $1.60 with the prompt cached
- * (≈ $6 uncached). The
+ * with the barcode and calibration runners (decision 006) that is 284 calls
+ * ≈ $2.75 with the prompt cached (≈ $10 uncached). The
  * runner prints the exact count and estimate before the first call and
  * refuses a second FULL run within an hour unless FORCE=1 (guard.js — nine
  * unguarded runs on 2026-09-16 emptied the org's credits).
