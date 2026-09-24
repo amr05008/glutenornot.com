@@ -50,7 +50,7 @@ tags: [prompt-policy, evals, analytics, privacy-policy, herdr, safety]
   - Relaxing a rule exposed gaps the old cautions had been masking, and each wording fix flipped another case (C25, B3).
   - A single-sample run after every prompt edit is what caught them.
 - **Live commands in a worktree need the main checkout's vitest:** point `node` at `<main checkout>/node_modules/vitest/vitest.mjs`, since a worktree has none of its own. The API answers only on `www.glutenornot.com`; the apex 307-redirects a POST.
-- **Open question for Aaron:** should T3 apply outside the US? EU law already makes wheat be named in EU meat products.
+- **T3 stays global.** Aaron decided on 2026-09-24 after the wrap-up that it covers non-US meat products too, although EU law already makes wheat be named there.
 - **An optional celiac dietitian read of T2–T5** is still recommended.
 - **Left after this session:**
   - the step-9 read (~09-25)

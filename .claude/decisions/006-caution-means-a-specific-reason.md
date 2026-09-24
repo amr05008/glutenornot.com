@@ -50,6 +50,8 @@ source is still judged as wheat (the exemption call is out of scope).
 
 T2–T9 are in `plans/verdict-calibration-2026-09-23.md`.
 
+**T3 is global (Aaron, 2026-09-24).** Flavorings, spices and hydrolyzed protein in any product made with meat or poultry stay `undeclared_source`, whatever country it's from. The rationale is the US USDA gap, and EU law already makes wheat be named in EU meat products. Even so, one rule is simpler, and it errs toward caution.
+
 ## Costs
 
 - **US labels with unnamed natural flavors now return `safe`.** The residual
