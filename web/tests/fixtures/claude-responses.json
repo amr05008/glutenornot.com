@@ -40,7 +40,8 @@
       "allergen_warnings": [],
       "explanation": "",
       "confidence": "medium",
-      "mode": "label"
+      "mode": "label",
+      "caution_reason": "other"
     }
   },
   "invalid_verdict_value": {
@@ -51,7 +52,8 @@
       "allergen_warnings": [],
       "explanation": "Not sure",
       "confidence": "medium",
-      "mode": "label"
+      "mode": "label",
+      "caution_reason": "other"
     }
   },
   "no_json_found": {
@@ -61,7 +63,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "Unable to fully analyze the ingredients. Please review manually.",
-      "confidence": "low"
+      "confidence": "low",
+      "caution_reason": "other"
     }
   },
   "malformed_json": {
@@ -71,7 +74,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "Unable to fully analyze the ingredients. Please review manually.",
-      "confidence": "low"
+      "confidence": "low",
+      "caution_reason": "other"
     }
   },
   "empty_response": {
@@ -81,7 +85,8 @@
       "flagged_ingredients": [],
       "allergen_warnings": [],
       "explanation": "Unable to fully analyze the ingredients. Please review manually.",
-      "confidence": "low"
+      "confidence": "low",
+      "caution_reason": "other"
     }
   },
   "valid_menu_response": {

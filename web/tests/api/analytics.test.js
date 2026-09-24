@@ -176,6 +176,16 @@ describe('buildScanProperties (list_gate)', () => {
   });
 });
 
+describe('buildScanProperties (caution_reason)', () => {
+  it('records the reason a caution gave', () => {
+    expect(buildScanProperties({ method: 'ocr', verdict: 'caution', cautionReason: 'oats' }).caution_reason).toBe('oats');
+  });
+
+  it('omits caution_reason when there is none', () => {
+    expect(buildScanProperties({ method: 'ocr', verdict: 'safe' })).not.toHaveProperty('caution_reason');
+  });
+});
+
 describe('SCAN_FAILED_EVENT', () => {
   it('is the stable event name "scan_failed"', () => {
     expect(SCAN_FAILED_EVENT).toBe('scan_failed');

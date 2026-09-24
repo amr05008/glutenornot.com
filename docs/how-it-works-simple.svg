@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="540" viewBox="0 0 1600 540" role="img" aria-label="A GlutenOrNot scan in four steps. Scan: point the camera at a label, barcode, or menu. Read: a barcode is looked up in product databases, a photo goes through text recognition; if the barcode has no match, take a photo instead. Check: Claude finds gluten ingredients, translates foreign labels, and says caution when unsure. Answer: Safe, Caution, or Unsafe, with the reason in plain English, and it stays on your phone.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="540" viewBox="0 0 1600 540" role="img" aria-label="A GlutenOrNot scan in four steps. Scan: point the camera at a label, barcode, or menu. Read: a barcode is looked up in product databases, a photo goes through text recognition; if the barcode has no match, take a photo instead. Check: Claude finds gluten ingredients, translates foreign labels, and says caution only with a named reason. Answer: Safe, Caution, or Unsafe, with the reason in plain English, and it stays on your phone.">
   <defs><style>
 
 @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400 800;
@@ -94,7 +94,7 @@ svg { color: #0E0E0F; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
   </g>
   <text class="t-body-lg" x="922" y="255">Finds gluten ingredients</text>
   <text class="t-body-lg" x="922" y="305">Translates foreign labels</text>
-  <text class="t-body-lg" x="922" y="355">Unsure? Says caution</text>
+  <text class="t-body-lg" x="922" y="355">Caution names its reason</text>
 
   <!-- check → answer -->
   <path class="flow" d="M1160 285 H1296"/>

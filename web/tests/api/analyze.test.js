@@ -29,6 +29,7 @@ import handler, {
 import { trackScan, trackScanFailure } from '../../../api/_analytics.js';
 import fixtures from '../fixtures/claude-responses.json';
 import { GF_CLAIM_CASES } from './evals/gf-claim-cases.js';
+import { CALIBRATION_CASES } from './evals/calibration-cases.js';
 import realLabelOcr from '../fixtures/real-label-ocr.json';
 
 describe('parseClaudeResponse', () => {
@@ -153,6 +154,21 @@ describe('parseClaudeResponse', () => {
     expect(result).toEqual(fixtures.english_label_no_language.expected);
     expect(result.detected_language).toBeUndefined();
   });
+
+  it('keeps a valid caution_reason on a label caution', () => {
+    const r = parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'caution', caution_reason: 'oats', explanation: 'Contains oats.' }));
+    expect(r.caution_reason).toBe('oats');
+  });
+
+  it('never passes an unknown caution_reason through, and drops one on a safe verdict', () => {
+    expect(parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'caution', caution_reason: 'vibes' })).caution_reason).toBe('other');
+    expect(parseClaudeResponse(JSON.stringify({ mode: 'label', verdict: 'safe', caution_reason: 'oats' }))).not.toHaveProperty('caution_reason');
+  });
+
+  it('gives menus no caution_reason', () => {
+    const r = parseClaudeResponse(JSON.stringify({ mode: 'menu', verdict: 'caution', caution_reason: 'oats', menu_items: [{ name: 'Pan', verdict: 'unsafe' }] }));
+    expect(r).not.toHaveProperty('caution_reason');
+  });
 });
 
 // Safety floor (2026-08-13 analytics review): on 2026-07-19 a 3-character OCR
@@ -174,6 +190,10 @@ describe('applySafeVerdictFloor', () => {
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
     expect(result.explanation).not.toContain('Good news');
+  });
+
+  it('marks a floored label as incomplete', () => {
+    expect(applySafeVerdictFloor(safeLabel(), 3).caution_reason).toBe('incomplete');
   });
 
   it('leaves a "safe" verdict alone at the threshold', () => {
@@ -411,7 +431,7 @@ describe('checkIngredientList', () => {
 
   // The live evals call analyzeWithClaude directly, so the gate never runs on
   // them; this keeps every label the evals expect "safe" passing it for free.
-  it.each(GF_CLAIM_CASES.filter((c) => c.expect === 'safe').map((c) => [c.id, c.ocrText]))(
+  it.each([...GF_CLAIM_CASES, ...CALIBRATION_CASES].filter((c) => c.expect === 'safe').map((c) => [c.id, c.ocrText]))(
     'passes eval case %s, which the evals expect to be safe',
     (_id, ocrText) => {
       expect(checkIngredientList(ocrText)).toBeNull();
@@ -572,6 +592,12 @@ describe('applyIngredientListGate', () => {
     expect(analysis.explanation).toContain('cut off');
   });
 
+  it('marks a gated label as incomplete', () => {
+    const analysis = safeLabel();
+    applyIngredientListGate(analysis, START_CUT);
+    expect(analysis.caution_reason).toBe('incomplete');
+  });
+
   it('leaves a "safe" verdict on a complete list untouched', () => {
     const analysis = safeLabel();
     expect(applyIngredientListGate(analysis, COMPLETE)).toBeNull();
@@ -618,6 +644,8 @@ describe('applyIngredientListGate', () => {
     const menu = { mode: 'menu', verdict: 'safe', menu_items: [], explanation: 'All items look safe.', confidence: 'medium' };
     expect(applyIngredientListGate(menu, START_CUT)).toBe('no_heading');
     expect(menu.verdict).toBe('caution');
+    // Not a real menu, so it is gated as a label and names its reason like one.
+    expect(menu.caution_reason).toBe('incomplete');
   });
 
   it('asks for the line below the list when the end is missing', () => {
@@ -793,8 +821,77 @@ describe('CLAUDE_PROMPT gluten-free label claims', () => {
     expect(CLAUDE_PROMPT).toContain("Labeled gluten-free — that's a regulated claim");
   });
 
-  it('still keeps the general be-conservative rule (guard — everything the block does not name)', () => {
-    expect(CLAUDE_PROMPT).toContain('Be conservative—when uncertain, use "caution"');
+  // Decision 006 replaced "Be conservative—when uncertain, use caution" with a
+  // named-reason rule; this guard keeps the conservative half of it.
+  it('still never returns safe on a guess (guard — everything the block does not name)', () => {
+    expect(CLAUDE_PROMPT).toContain('When one applies, use caution — never "safe" on a guess.');
+  });
+});
+
+describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
+  it('asks for one caution_reason from the fixed list on a label caution', () => {
+    expect(CLAUDE_PROMPT).toContain('"caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"');
+  });
+
+  it('says ingredients whose source labeling law covers are not a reason on their own', () => {
+    const [, block = ''] = CLAUDE_PROMPT.split('#### Not a reason for caution on its own');
+    for (const term of ['natural flavors', 'spices', 'maltodextrin', 'dextrin', 'modified (food) starch', 'glucose syrup', 'caramel color', 'hydrolyzed vegetable/plant protein of unstated source']) {
+      expect(block.split('####')[0]).toContain(term);
+    }
+  });
+
+  it('keeps meat products, soy sauce and yeast extract as undeclared_source (T3–T5)', () => {
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*\n\s+- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product/);
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[\s\S]*soy sauce[\s\S]*yeast extract/);
+  });
+
+  it('no longer tells the model to caution whenever it is uncertain', () => {
+    expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
+    expect(CLAUDE_PROMPT).not.toContain("The 'natural flavors' could contain gluten");
+  });
+
+  // 2026-09-23 live eval: "gluten-free rolled oats … whole grain oats" came back
+  // safe on the barcode path — "covers the oats only" let one labeled oat
+  // ingredient clear every oat in the list. Same wording on both paths.
+  it('scopes an ingredient-level oats claim to the oats it names', () => {
+    expect(CLAUDE_PROMPT).toContain('Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.');
+    expect(CLAUDE_PROMPT).not.toContain('covers the oats only');
+  });
+
+  // PR #32 grill: FALCPA lets a US label name wheat only in its "Contains:"
+  // line; the rule holds only while that line is part of what was read.
+  it('says wheat may be declared in a "Contains:" statement, which blocks safe when it names gluten', () => {
+    expect(CLAUDE_PROMPT).toContain('in the ingredient list, or in a "Contains:" statement right after it');
+    expect(CLAUDE_PROMPT).toContain('no "Contains"/allergen statement names wheat, barley, rye, or gluten');
+  });
+
+  // Plan: wheat glucose syrup under the EU exemption is out of scope, so a
+  // named wheat source stays judged as wheat on both paths.
+  it('clears only unnamed maltodextrin and glucose syrup; one labeled with its wheat source names wheat', () => {
+    expect(CLAUDE_PROMPT).toContain('One labeled with its wheat source ("glucose syrup (wheat)", "wheat maltodextrin") names wheat');
+    expect(CLAUDE_PROMPT).not.toContain('wheat-based maltodextrin and glucose syrup are processed to remove gluten');
+  });
+
+  it('treats any product made with meat or poultry as a meat product (T3)', () => {
+    expect(CLAUDE_PROMPT).toMatch(/- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+  });
+
+  // PR #32 grill round-1 live run: with the meat clause widened, a vegetable
+  // broth's yeast extract came back safe — the T4 item sat at the tail of a
+  // long meat-product line. Each undeclared_source now stands on its own line.
+  it('keeps yeast extract an undeclared_source in any product, on its own line (T4)', () => {
+    expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
+    expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
+    // …and, like every undeclared_source, a whole-product claim still covers it
+    // (the next live run read "brewer's yeast, which is barley" as beating B3's label).
+    expect(CLAUDE_PROMPT).toContain("which is barley (a whole-product gluten-free claim covers it, like any `undeclared_source`)");
+  });
+
+  // Same run: "near-claims such as …" made the model read "Gluten Friendly" as
+  // a statement that gluten is present (conflict). Name the statements instead.
+  it('files only a statement that gluten is present under conflict, not every near-claim', () => {
+    expect(CLAUDE_PROMPT).not.toContain('(near-claims such as "very low gluten" / "gluten-reduced")');
+    expect(CLAUDE_PROMPT).toContain('the label itself says gluten is present ("low gluten", "very low gluten", "gluten-reduced", "crafted to remove gluten")');
   });
 });
 
@@ -1157,7 +1254,7 @@ describe('analyze handler analytics', () => {
       expect(res.body.explanation).not.toContain('Good news');
       // The delivered verdict is recorded, with the reason the gate withheld safe.
       expect(trackScan).toHaveBeenCalledWith(
-        expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading' })
+        expect.objectContaining({ verdict: 'caution', confidence: 'low', listGate: 'no_heading', cautionReason: 'incomplete' })
       );
     });
 

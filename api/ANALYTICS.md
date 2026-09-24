@@ -28,6 +28,17 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
   `api/analyze.js`, added 2026-09-22 after the jev-sandbox truncation test. Its
   count over OCR label scans is the gate's cost in withheld `safe` verdicts; the
   `verdict` on the event is the delivered one. A reason, never the text.
+- `caution_reason` (both paths, label cautions only) — which specific reason a
+  caution named (decision 006): `oats`, `may_contain`, `conflict`,
+  `undeclared_source`, `incomplete` (unreadable, cut off, no list, no database
+  data — code-side cautions set it), or `other` (a named concern outside the
+  list; the model's unknown or missing values normalize here). An enum, never
+  content. Its share of `other` is toggle T7's trigger — but the parsers'
+  fallback (the model's reply didn't parse) also records `other`, so a spike in
+  `other` with `confidence: low` can be parse failures, not a missing reason.
+  Split barcode reads by `data_source`: USDA / Nutritionix / UPCitemdb records
+  carry no allergen data, so an unstated-source ingredient there is held at
+  `incomplete` (decision 006 T9).
   "Cost" is loose: the count mixes right calls (a real cut) with false blocks
   (a complete list the pattern didn't recognize), and analytics can't split
   them. OCR verdict-share reads spanning 2026-09-22 should group by it

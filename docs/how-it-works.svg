@@ -129,10 +129,10 @@ svg { color: #0E0E0F; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
   <text class="t-body" x="940" y="376">Detects the language and</text>
   <text class="t-body" x="940" y="392">translates what it flags</text>
   <text class="t-body" x="940" y="418">Oats → caution unless labeled GF</text>
-  <text class="t-body" x="940" y="444">A “gluten-free” claim covers</text>
-  <text class="t-body" x="940" y="460">ambiguous ingredients</text>
+  <text class="t-body" x="940" y="444">Caution needs a named reason:</text>
+  <text class="t-body" x="940" y="460">oats · may contain · conflict · …</text>
   <text class="t-body" x="940" y="486">“May contain” → caution</text>
-  <text class="t-body" x="940" y="512">Unsure? Caution, never safe</text>
+  <text class="t-body" x="940" y="512">Natural flavors etc. aren’t one</text>
   <line x1="920" y1="592" x2="1140" y2="592" stroke="rgba(0,0,0,0.18)" stroke-width="1"/>
   <text class="t-mono" x="920" y="618">returns: verdict · flagged items</text>
   <text class="t-mono" x="920" y="636">explanation · confidence</text>

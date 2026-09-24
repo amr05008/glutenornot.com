@@ -19,8 +19,8 @@
  *
  * Direct Anthropic calls only: no PostHog event, no scan-quota consumption.
  * FULL: 27 cases → 11 × 2 + 16 × 5 = 102 Opus 4.8 calls + 1 cache warm-up;
- * with the barcode runner that is 167 calls ≈ $1.60 with the prompt cached
- * (≈ $6 uncached). The
+ * with the barcode and calibration runners (decision 006) that is 346 calls
+ * ≈ $3.30 with the prompt cached (≈ $12.50 uncached). The
  * runner prints the exact count and estimate before the first call and
  * refuses a second FULL run within an hour unless FORCE=1 (guard.js — nine
  * unguarded runs on 2026-09-16 emptied the org's credits).
@@ -88,6 +88,12 @@ describe.skipIf(!LIVE).concurrent('gf-claim live eval (real prompt, live Claude)
         expect(r.explanation).not.toMatch(FALLBACK_EXPLANATION);
       }
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
+      // Decision 006: a caution must carry the case's caution_reason on every sample.
+      if (c.reason) {
+        for (const r of runs) {
+          if (r.verdict === 'caution') expect(r.caution_reason, `caution_reason: ${r.explanation}`).toBe(c.reason);
+        }
+      }
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
       }

@@ -17,6 +17,7 @@ import {
   incrementRateLimit,
   formatTimeRemaining,
   normalizeVerdict,
+  normalizeCautionReason,
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
@@ -117,7 +118,8 @@ Respond with JSON only, no additional text.
   "flagged_ingredients": ["harina de trigo (wheat flour)"],
   "allergen_warnings": ["Contiene gluten (Contains gluten)"],
   "explanation": "Brief explanation in plain language, always in English",
-  "confidence": "high" | "medium" | "low"
+  "confidence": "high" | "medium" | "low",
+  "caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"
 }
 
 **For restaurant menus:**
@@ -134,36 +136,45 @@ Respond with JSON only, no additional text.
 }
 
 Note: Omit \`detected_language\` only when the text is in English.
+Include \`caution_reason\` only for an ingredient label whose verdict is "caution" — exactly one, from the list under "Verdict Criteria". Omit it for "safe", "unsafe", and every menu.
 
 ### For Ingredient Labels
 
 #### Verdict Criteria
 - **unsafe:** Contains wheat, barley, rye, or derivatives (malt, malt extract, malt syrup, malt flavoring, brewer's yeast, wheat starch, seitan, triticale, farina, semolina, spelt, kamut, einkorn, emmer, durum) — or their equivalents in any language (e.g., Spanish: harina de trigo, cebada, centeno, malta, sémola, espelta; Dutch: tarwe, gerst, rogge, mout, griesmeel, spelt, tarwegluten, tarwezetmeel; Catalan: blat, ordi, sègol, malt, sèmola, espelta, midó de blat; French: blé, farine de blé, orge, seigle, malt, semoule, épeautre, amidon de blé)
-- **caution:**
-  - Contains ambiguous ingredients (oats without a gluten-free claim or certification, "natural flavors," maltodextrin, modified food starch, dextrin, "spices," hydrolyzed vegetable/plant protein of unstated source (a named non-gluten source such as "hydrolyzed soy protein" or "hydrolyzed corn protein" is not ambiguous), soy sauce without GF label)
-  - Has "may contain" warnings for gluten sources (in any language, e.g., "puede contener trazas de trigo")
-  - Has "processed in facility" warnings for wheat/gluten
-  - OCR text is unclear/incomplete
-- **safe:** No gluten-containing ingredients, no ambiguous ingredients (or a gluten-free claim that covers them — see below), no concerning allergen warnings
+- **caution** — only for a specific, nameable reason to worry. Give exactly one \`caution_reason\`:
+  - \`oats\` — oats without a gluten-free claim or certification (a whole-product claim or certification mark covers them; see "Gluten-free label claims")
+  - \`may_contain\` — a "may contain" / traces / shared-equipment / shared-facility warning for wheat, barley, rye, oats, or gluten (in any language, e.g., "puede contener trazas de trigo")
+  - \`conflict\` — a gluten-free claim and the ingredient list disagree, or the label itself says gluten is present ("low gluten", "very low gluten", "gluten-reduced", "crafted to remove gluten") while no gluten grain is listed
+  - \`undeclared_source\` — an ingredient whose gluten source the maker is not required to declare. Any one of these is enough on its own:
+    - flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product — any product made with meat or poultry: sausage, hot dogs, deli meat, jerky, meatballs, marinated meat, and soups, broths, bouillon, chili, or frozen meals made with meat or poultry (in the US these are USDA-regulated and outside the wheat-labeling law)
+    - soy sauce, teriyaki, or tamari with no wheat declaration and no gluten-free claim
+    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley (a whole-product gluten-free claim covers it, like any \`undeclared_source\`)
+  - \`incomplete\` — the text is garbled or cut off, or there is no visible ingredient list
+  - \`other\` — a real, specific concern none of the above covers; name it in the explanation
+- **safe:** no gluten source, and no caution reason above
+
+#### Not a reason for caution on its own
+Unnamed "natural flavors" / flavouring / aroma, "spices" / seasoning, maltodextrin, dextrin, modified (food) starch, glucose syrup, caramel color, and hydrolyzed vegetable/plant protein of unstated source (a named source such as "hydrolyzed soy protein" is not ambiguous either) — outside a meat or poultry product. Yeast extract is not on this list: it is an \`undeclared_source\` in any product. Food-labeling law in the US, EU, UK, Canada, and Australia requires wheat to be named on the label wherever it is used, including inside these ingredients — in the ingredient list, or in a "Contains:" statement right after it — and EU/UK/Canadian/Australian law requires barley and rye too. Unnamed maltodextrin and glucose syrup are covered even where they may be wheat-based: they are processed to remove gluten, which is why EU law exempts them. One labeled with its wheat source ("glucose syrup (wheat)", "wheat maltodextrin") names wheat: judge it under "unsafe". If one of these is the only thing you might have worried about, and no "Contains"/allergen statement names wheat, barley, rye, or gluten, the verdict is "safe". You may add one short sentence saying why it is not a concern — never frame it as a risk.
 
 #### Gluten-free label claims
 - If the text contains an explicit, affirmative gluten-free claim about this product — "gluten-free" / "gluten free", "sin gluten" / "libre de gluten", "glutenvrij", "sense gluten", "sans gluten", "senza glutine", "glutenfrei", "sem glúten", or a certification mark such as GFCO, CSA, or "Certified Gluten-Free" — treat it as the strongest evidence on the label. In the US and EU that claim is regulated (under 20 ppm gluten, manufacturer liable) and covers every ingredient, including flavors, starches, and hydrolyzed proteins.
-- With such a claim present, the ambiguous ingredients listed under "caution" (natural flavors, maltodextrin, modified food starch, dextrin, spices, hydrolyzed protein of unstated source) do NOT lower the verdict. Return "safe", and say in the explanation that the gluten-free label is what covers those ingredients.
+- With such a claim present, an \`undeclared_source\` ingredient (see "Verdict Criteria") does NOT lower the verdict. Return "safe", and say in the explanation that the gluten-free label is what covers it.
 - The claim also covers oats. The same regulation holds a labeled product's oats to the 20 ppm limit — the claim is the manufacturer's assurance that the oats meet it. With a whole-product claim or a certification mark (GFCO, CSA, "Certified Gluten-Free") present, oats do NOT lower the verdict: return "safe", name the label, and end the explanation with this exact sentence: "Heads-up: a small share of people with celiac disease react to oats themselves." (A claim written on the oats themselves — "gluten-free oats" inside the list — is not a whole-product claim; see below.)
 - The claim does NOT override:
-  - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any language) — return "caution" and say that the label and the ingredient list disagree.
-  - An explicit "may contain wheat/gluten" or shared-equipment/facility advisory — return "caution".
-- Only honor an affirmative claim about this whole product. These are NOT claims: "gluten-free options available", a "gluten-free facility" or "equipment" statement on its own, a claim that refers to a different product, or a claim attached to a single ingredient ("gluten-free soy sauce", "gluten-free oats" inside the list) — that clears only that one ingredient, not the product. It does NOT lift the verdict: every other ambiguous ingredient (natural flavors, maltodextrin, spices, …) still returns "caution" exactly as it would on a label with no claim at all.
+  - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any language) — return "caution" and say that the label and the ingredient list disagree (caution_reason "conflict").
+  - An explicit "may contain wheat/gluten" or shared-equipment/facility advisory — return "caution" (caution_reason "may_contain").
+- Only honor an affirmative claim about this whole product. These are NOT claims: "gluten-free options available", a "gluten-free facility" or "equipment" statement on its own, a claim that refers to a different product, or a claim attached to a single ingredient ("gluten-free soy sauce", "gluten-free oats" inside the list) — that clears only that one ingredient, not the product. It does NOT lift the verdict: every other caution reason (plain oats elsewhere, a may-contain warning, an \`undeclared_source\` ingredient) still applies exactly as it would on a label with no claim at all.
 - A negated phrase — "not gluten-free", "contains gluten" — is not a claim: it is a statement that the product contains gluten. Return "unsafe".
 - Near-claims are not gluten-free claims: "wheat-free", "gluten-friendly", "low gluten" / "very low gluten", "gluten-reduced" / "crafted to remove gluten". Judge the product as if it carried no claim — and "very low gluten" or "gluten-reduced" means gluten is present, so never "safe".
-- A claim with no visible ingredient list is an incomplete read — return "caution" and ask for the ingredient panel to be in frame.
+- A claim with no visible ingredient list is an incomplete read — return "caution" and ask for the ingredient panel to be in frame (caution_reason "incomplete").
 
 #### Guidelines
 - Always check for allergen statements AND "may contain" warnings—these are often separate from ingredients
-- Be conservative—when uncertain, use "caution"
-- Flag oats as "caution" when the text in frame carries no gluten-free claim and no certification mark — plain oats are a cross-contamination risk. A whole-product gluten-free claim or a certification mark covers them (see "Gluten-free label claims"); "gluten-free oats" inside the ingredient list covers the oats only, and the rest of the list is judged as usual
-- Common hidden gluten: soy sauce, malt vinegar, some seasonings
-- If OCR is garbled, return "caution" explaining image quality issue
+- Caution needs a named reason from "Verdict Criteria". When one applies, use caution — never "safe" on a guess. Never return caution only because an ingredient's source is unstated (see "Not a reason for caution on its own")
+- Flag oats as "caution" when the text in frame carries no gluten-free claim and no certification mark — plain oats are a cross-contamination risk. A whole-product gluten-free claim or a certification mark covers them (see "Gluten-free label claims"); "gluten-free oats" inside the ingredient list covers only those oats, and the rest of the list is judged as usual. Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.
+- Common hidden gluten: soy sauce, malt vinegar, malt flavoring, barley malt syrup
+- If OCR is garbled, return "caution" (caution_reason "incomplete") explaining the image quality issue
 - Keep explanations to 1-2 sentences
 
 ### For Restaurant Menus
@@ -215,13 +226,14 @@ Write explanations in a warm, supportive tone. Remember: you're helping someone 
 Start with reassurance. Examples:
 - "Good news! This product contains no gluten ingredients..."
 - "You're good to go. The ingredients are all gluten-free..."
-- "Labeled gluten-free — that's a regulated claim, so the natural flavors are covered. You're good to go."
-- "Labeled gluten-free, which covers the oats and the natural flavor. Heads-up: a small share of people with celiac disease react to oats themselves."
+- "You're good to go. The natural flavor isn't a concern — wheat would have to be named on the label."
+- "Labeled gluten-free — that's a regulated claim, so the yeast extract is covered. You're good to go."
+- "Labeled gluten-free, which covers the oats. Heads-up: a small share of people with celiac disease react to oats themselves."
 
 **For caution products:**
 Be helpful and specific about next steps. Examples:
 - "This contains oats and the label in frame carries no gluten-free claim, so cross-contamination is a risk. If the package says gluten-free elsewhere, try the barcode or a shot that includes that claim with the ingredients."
-- "The 'natural flavors' could contain gluten. If you're very sensitive, consider a certified GF alternative."
+- "This says it may contain wheat, so cross-contact is a real risk. If you want to be sure, look for a certified gluten-free version."
 
 **For unsafe products:**
 Be clear but compassionate. Examples:
@@ -271,6 +283,7 @@ function applySafeVerdictFloor(analysis, ocrChars) {
     analysis.verdict = 'caution';
     // Claude's reassurance ("Good news! ...") is exactly what must not survive.
     analysis.explanation = TOO_LITTLE_TEXT_EXPLANATION;
+    if (analysis.mode !== 'menu') analysis.caution_reason = 'incomplete';
     floored = true;
   }
 
@@ -414,6 +427,7 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
     const barcodeHint = reason === 'no_end' ? NO_END_BARCODE_HINT : NO_HEADING_BARCODE_HINT;
     analysis.explanation = (reason === 'no_end' ? NO_END_EXPLANATION : NO_HEADING_EXPLANATION) +
       (platform === 'web' ? '' : barcodeHint);
+    analysis.caution_reason = 'incomplete';
   }
   if (items) {
     analysis.menu_items = items.map((item) => (item?.verdict === 'safe' ? { ...item, verdict: 'caution' } : item));
@@ -553,6 +567,8 @@ export default async function handler(req, res) {
       gfClaimPresent: detectGlutenFreeClaim(ocrText),
       // Why a Claude "safe" was withheld as a cut-off list (a reason, never the text).
       listGate,
+      // Which specific reason a caution named (decision 006; an enum, never content).
+      cautionReason: analysis.caution_reason,
       ocrMs,
       claudeMs,
       totalMs: Date.now() - startedAt,
@@ -670,7 +686,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the ingredients. Please review manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 
@@ -714,6 +731,11 @@ function parseClaudeResponse(content) {
       result.menu_items = [];
     }
 
+    // Decision 006: every label caution names one reason; menus carry none.
+    const cautionReason = result.mode === 'label' ? normalizeCautionReason(result.verdict, result.caution_reason) : undefined;
+    if (cautionReason) result.caution_reason = cautionReason;
+    else delete result.caution_reason;
+
     return result;
 
   } catch (parseError) {
@@ -723,7 +745,8 @@ function parseClaudeResponse(content) {
       flagged_ingredients: [],
       allergen_warnings: [],
       explanation: 'Unable to fully analyze the ingredients. Please review manually.',
-      confidence: 'low'
+      confidence: 'low',
+      caution_reason: 'other',
     };
   }
 }

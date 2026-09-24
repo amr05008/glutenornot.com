@@ -91,7 +91,7 @@ The engineering version, with the lookup waterfall, the prompt rules and the saf
 1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
-4. Claude analyzes ingredients or menu items and returns verdict. An explicit gluten-free claim on the label ("gluten-free", "sin gluten", "glutenvrij", a GFCO mark…) is treated as the regulated claim it is (<20 ppm) and clears ambiguous ingredients like natural flavors or maltodextrin; oats (unless certified), a listed gluten source, and "may contain" advisories still win
+4. Claude analyzes ingredients or menu items and returns verdict. Every "caution" names one specific reason (oats, a may-contain warning, a label conflict, an ingredient whose source the maker needn't declare, or an unreadable label); natural flavors, maltodextrin, spices and other ingredients labeling law already covers are not a reason on their own. An explicit gluten-free claim on the label ("gluten-free", "sin gluten", "glutenvrij", a GFCO mark…) is treated as the regulated claim it is (<20 ppm) and covers oats and those undeclared-source ingredients; a listed gluten source and "may contain" advisories still win
 5. Verdicts are floored to "caution" when OCR extracted almost no text, or when a label's ingredient list looks cut off (no "Ingredients:" heading, or nothing marking its end) — "safe" requires a whole list to justify it
 6. UI displays result: Safe / Caution / Unsafe
 
@@ -151,7 +151,7 @@ Tests cover:
 
 See [`ROADMAP.md`](./ROADMAP.md) for the prioritized improvement plan.
 
-Guidelines: Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
+Guidelines: Keep it simple, test on mobile, be conservative with verdicts (every "caution" names a specific reason, and nothing is "safe" on a guess — decision 006).
 
 ## License
 

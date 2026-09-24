@@ -9,8 +9,8 @@
  *
  *   FULL=1 RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals
  *
- * FULL: 15 cases → 4 × 2 + 11 × 5 = 63 Opus 4.8 calls + 1 cache warm-up
- * (see gf-claim.live.test.js for the cost). Default single sample: 15 + 1. Direct Anthropic calls only: no PostHog event, no scan-quota
+ * FULL: 16 cases → 4 × 2 + 12 × 5 = 68 Opus 4.8 calls + 1 cache warm-up
+ * (see gf-claim.live.test.js for the cost). Default single sample: 16 + 1. Direct Anthropic calls only: no PostHog event, no scan-quota
  * consumption, no database lookup.
  */
 import { describe, it, beforeAll, afterAll } from 'vitest';
@@ -67,6 +67,12 @@ describe.skipIf(!LIVE).concurrent('barcode gf-claim live eval (real prompt, live
         expect(r.explanation).not.toMatch(FALLBACK_EXPLANATION);
       }
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
+      // Decision 006: a caution must carry the case's caution_reason on every sample.
+      if (c.reason) {
+        for (const r of runs) {
+          if (r.verdict === 'caution') expect(r.caution_reason, `caution_reason: ${r.explanation}`).toBe(c.reason);
+        }
+      }
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
       }

@@ -322,6 +322,21 @@ function normalizeVerdict(verdict) {
   return 'caution';
 }
 
+/**
+ * Decision 006: a caution must name one specific reason. The prompts ask for
+ * `caution_reason`; this keeps whatever the model returns inside the enum —
+ * unknown or missing on a caution becomes "other" (measured, T7), and a
+ * reason on any other verdict is dropped.
+ */
+const CAUTION_REASONS = ['oats', 'may_contain', 'conflict', 'undeclared_source', 'incomplete', 'other'];
+
+function normalizeCautionReason(verdict, reason) {
+  if (verdict !== 'caution') return undefined;
+  if (typeof reason !== 'string') return 'other';
+  const r = reason.toLowerCase().trim();
+  return CAUTION_REASONS.includes(r) ? r : 'other';
+}
+
 export {
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
@@ -337,6 +352,8 @@ export {
   incrementRateLimit,
   formatTimeRemaining,
   normalizeVerdict,
+  CAUTION_REASONS,
+  normalizeCautionReason,
   _setRateLimitMap,
   _getRateLimitMap,
 };

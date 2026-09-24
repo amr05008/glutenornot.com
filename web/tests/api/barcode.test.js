@@ -75,12 +75,20 @@ describe('parseClaudeResponse (barcode)', () => {
     const result = parseClaudeResponse('');
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
+    expect(result.caution_reason).toBe('other');
   });
 
   it('falls back to caution for malformed JSON', () => {
     const result = parseClaudeResponse('not json at all');
     expect(result.verdict).toBe('caution');
     expect(result.confidence).toBe('low');
+    expect(result.caution_reason).toBe('other');
+  });
+
+  it('normalizes caution_reason on the barcode path too', () => {
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'caution', caution_reason: 'may_contain' })).caution_reason).toBe('may_contain');
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'caution' })).caution_reason).toBe('other');
+    expect(parseClaudeResponse(JSON.stringify({ verdict: 'unsafe', caution_reason: 'oats' }))).not.toHaveProperty('caution_reason');
   });
 
   it('extracts JSON surrounded by text', () => {
@@ -266,6 +274,59 @@ describe('CLAUDE_PROMPT gluten-free label claims (barcode path)', () => {
   });
 });
 
+describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
+  it('asks for one caution_reason from the fixed list', () => {
+    expect(CLAUDE_PROMPT).toContain('"caution_reason": "oats" | "may_contain" | "conflict" | "undeclared_source" | "incomplete" | "other"');
+  });
+
+  it('carries the same not-a-reason list as the photo prompt', () => {
+    const [, block = ''] = CLAUDE_PROMPT.split('### Not a reason for caution on its own');
+    for (const term of ['natural flavors', 'spices', 'maltodextrin', 'dextrin', 'modified (food) starch', 'glucose syrup', 'caramel color']) {
+      expect(block.split('###')[0]).toContain(term);
+    }
+  });
+
+  it('files an uncorroborated gluten tag or self-contradicting record under conflict, missing data under incomplete', () => {
+    expect(CLAUDE_PROMPT).toMatch(/`conflict`[^\n]*uncorroborated/);
+    expect(CLAUDE_PROMPT).toMatch(/`incomplete`[^\n]*missing/);
+  });
+
+  it('no longer cautions whenever uncertain', () => {
+    expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
+  });
+
+  // 2026-09-23 live eval (case B9): "gluten-free rolled oats, …, whole grain
+  // oats" came back safe — "the list itself calls the oats gluten-free" /
+  // "clears the oats only" let one labeled oat ingredient clear every oat.
+  it('scopes an ingredient-level claim to the ingredient it is written on (oats, soy sauce)', () => {
+    expect(CLAUDE_PROMPT).toContain('Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.');
+    expect(CLAUDE_PROMPT).toMatch(/It clears only the ingredient it is\s+written on/);
+    expect(CLAUDE_PROMPT).toMatch(/a plain "soy sauce" elsewhere stays "caution"/);
+    expect(CLAUDE_PROMPT).not.toContain('It clears the oats only');
+    expect(CLAUDE_PROMPT).not.toContain('calls the oats gluten-free');
+  });
+
+  // PR #32 grill: the same law wording, EU-exemption scope and meat-product
+  // reach as the photo prompt (same rule on both paths).
+  it('carries the photo prompt\'s "Contains:" statement, named-wheat-source and meat-product wording', () => {
+    expect(CLAUDE_PROMPT).toContain('in the ingredient list, or in a "Contains:" statement right after it');
+    expect(CLAUDE_PROMPT).toContain('no "Contains"/allergen statement names wheat, barley, rye, or gluten');
+    expect(CLAUDE_PROMPT).toContain('One labeled with its wheat source ("glucose syrup (wheat)", "wheat maltodextrin") names wheat');
+    expect(CLAUDE_PROMPT).toMatch(/- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+    expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
+    expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
+    expect(CLAUDE_PROMPT).toContain("which is barley (a gluten-free label covers it, like any `undeclared_source`)");
+  });
+
+  it('says a self-contradicting record is caution/conflict, never safe', () => {
+    expect(CLAUDE_PROMPT).toContain('contradicts itself: return "caution" (caution_reason "conflict") with low confidence — never "safe", and not "unsafe"');
+  });
+
+  it('names malt vinegar as hidden gluten, like the photo prompt', () => {
+    expect(CLAUDE_PROMPT).toContain('Common hidden gluten: soy sauce, malt vinegar, malt flavoring, barley malt syrup');
+  });
+});
+
 describe('assessGlutenSignal', () => {
   // Regression: KIND Healthy Grains Peanut Butter (barcode 602652171826).
   // OFF tags `en:gluten` as an allergen (auto-derived from oats) AND `en:no-gluten`
@@ -310,6 +371,59 @@ describe('assessGlutenSignal', () => {
     expect(note).toMatch(/contradicts itself/i);
     expect(note).toMatch(/lean caution with low confidence/i);
     expect(note).not.toMatch(/label is the manufacturer's regulated claim and wins/i);
+    // PR #32 live run: with decision 006 clearing the rest of the list, "lean
+    // caution" alone let the label talk B7 into safe. The label does not settle
+    // a contradiction in its own record.
+    expect(note).toMatch(/Never return "safe" on this record/);
+    expect(note).toMatch(/caution_reason "conflict"/);
+  });
+
+  // PR #32 grill (decision 006): with natural flavors and modified starch no
+  // longer a reason, "base the verdict on the actual ingredients" talked an
+  // unexplained gluten tag into safe. On an unlabeled record with nothing in
+  // the list to explain it, the tag may be the package's "Contains: wheat"
+  // (FALCPA's alternative to naming wheat inside the starch or flavor).
+  it('never lets an unexplained gluten tag on an unlabeled record read as safe', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'corn syrup, sugar, modified food starch, salt, natural and artificial flavor',
+      allergens_tags: ['en:gluten'],
+      labels_tags: [],
+    });
+    expect(note).toMatch(/"Contains: wheat"/);
+    expect(note).toMatch(/Never return "safe"/);
+    expect(note).toMatch(/caution_reason "conflict"/);
+    // PR #32 grill round 2: the grain check covers English + common European
+    // languages only; a Polish "mąka pszenna" list must stay unsafe, not drop to caution.
+    expect(note).toMatch(/If the list names a gluten grain in any language, return "unsafe"/);
+
+    // Oats cannot explain a wheat-specific tag either.
+    const wheatTag = assessGlutenSignal({ ingredients_text: 'whole grain oats, honey', allergens_tags: ['en:wheat'], labels_tags: [] });
+    expect(wheatTag).toMatch(/Never return "safe"/);
+
+    // A generic tag beside oats is the auto-derived pattern; the oats rule handles it.
+    const oats = assessGlutenSignal({ ingredients_text: 'whole grain oats, honey', allergens_tags: ['en:gluten'], labels_tags: [] });
+    expect(oats).not.toMatch(/Never return "safe"/);
+  });
+
+  // PR #32 grill round 2: B7's shape plus unrecognized label text had no
+  // never-safe line (the B7 fix covered only the plain-label branch).
+  it('keeps a labeled record with unrecognized gluten text and no oats at caution/conflict', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'sugar, glucose syrup, natural flavouring, citric acid, salt',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-certified'],
+    });
+    expect(note).toMatch(/With no oats listed, the record contradicts itself/);
+    expect(note).toMatch(/Never return "safe" on this record/);
+
+    // Round 3: the same branch with oats listed is B15, decision 004's labeled-oats
+    // payoff shape — it must not be told "never safe".
+    const b15 = assessGlutenSignal({
+      ingredients_text: 'gluten-free rolled oats, honey, brown sugar, sunflower oil, natural flavor, sea salt.',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-oats'],
+    });
+    expect(b15).not.toMatch(/Never return "safe"/);
   });
 
   it('recognizes oats in the local language for the label-wins note', () => {
@@ -340,6 +454,7 @@ describe('assessGlutenSignal', () => {
     });
     expect(note).toMatch(/specific grain \(wheat/i);
     expect(note).toMatch(/lean caution with low confidence/i);
+    expect(note).toMatch(/Never return "safe" on this record/);
     expect(note).not.toMatch(/regulated claim and wins/i);
 
     const both = assessGlutenSignal({
@@ -512,6 +627,33 @@ describe('buildIngredientContext data reliability (UPCitemdb)', () => {
       ingredients_text: 'rice, salt',
     });
     expect(context).not.toMatch(/retail product listing/i);
+  });
+
+  // PR #32 grill (decision 006): a US label may declare wheat only in its
+  // "Contains:" line, and these sources carry no allergen data and often drop
+  // that line — so an unstated-source ingredient can't be cleared from them.
+  it.each(['usda', 'nutritionix', 'upcitemdb'])('holds %s records with an unstated-source ingredient at caution/incomplete', (source) => {
+    const context = buildIngredientContext({
+      source,
+      product_name: 'Ranch Dip Mix',
+      ingredients_text: 'buttermilk powder, modified food starch, salt, natural flavor.',
+      allergens_tags: null,
+    });
+    expect(context).toMatch(/"Contains:" statement/);
+    expect(context).toMatch(/caution_reason "incomplete"/);
+    // PR #32 grill round 2: "CONTAINS 2% OR LESS OF" is not an allergen statement.
+    expect(context).toMatch(/not "contains 2% or less of"/);
+    expect(context).not.toMatch(/lean caution on anything ambiguous/);
+  });
+
+  it('does not add the no-allergen-data note for Open Food Facts data', () => {
+    const context = buildIngredientContext({
+      source: 'openfoodfacts',
+      product_name: 'Ranch Dip Mix',
+      ingredients_text: 'buttermilk powder, modified food starch, salt, natural flavor.',
+      allergens_tags: ['en:milk'],
+    });
+    expect(context).not.toMatch(/caution_reason "incomplete"/);
   });
 });
 
@@ -1020,8 +1162,9 @@ describe('barcode handler analytics', () => {
     await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
     expect(res.statusCode).toBe(200);
     expect(res.body.verdict).toBe('caution');
+    expect(res.body.caution_reason).toBe('incomplete');
     expect(trackScan).toHaveBeenCalledWith(
-      expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true })
+      expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true, cautionReason: 'incomplete' })
     );
   });
 
@@ -1174,6 +1317,25 @@ describe('barcode handler analytics', () => {
       expect.objectContaining({ confidence: 'high', hadIngredientData: true })
     );
     expect(trackScanFailure).not.toHaveBeenCalled();
+  });
+
+  it('tracks the caution_reason Claude gave on an analyzed record (decision 006)', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const analysis = { verdict: 'caution', caution_reason: 'may_contain', explanation: 'Traces of wheat.', confidence: 'medium' };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+      if (String(url).includes('anthropic')) {
+        return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({ status: 1, product: { product_name: 'Rice Cakes', ingredients_text: 'rice, salt', traces_tags: ['en:gluten'] } }),
+      };
+    }));
+    const res = mockRes();
+    await handler({ method: 'POST', body: { barcode: '12345678' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.caution_reason).toBe('may_contain');
+    expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'caution', cautionReason: 'may_contain' }));
   });
 });
 
