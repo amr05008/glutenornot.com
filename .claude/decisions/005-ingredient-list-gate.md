@@ -1,7 +1,7 @@
 # 005 — A photographed label needs a visible start and end of its ingredient list before `safe`
 
 **Date**: 2026-09-22
-**Status**: Proposed (PR #31; Aaron's merge word pending)
+**Status**: Accepted (PR #31, merged 2026-09-23 as `efe4f5e`)
 **Related**: `plans/jev-findings-handoff-2026-09-18.md` finding 5; the char floor (`applySafeVerdictFloor`, 2026-08-13)
 
 ## Context
