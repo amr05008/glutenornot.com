@@ -140,7 +140,7 @@ export function guardLiveRun({ key, cases, stateDir, engine = 'opus', env = proc
   const sampled = countCalls(cases, runs);
   const mode = full ? 'FULL (2× safe / 5× adversarial)' : 'single sample (FULL=1 for the merge gate)';
   if (engine === 'jev') {
-    log(`[${key} live eval] ${cases.length} cases, ${mode}: ${sampled} Jev calls ≈ $${(sampled * JEV_USD_PER_CALL).toFixed(4)} (TypeSafe; no Anthropic spend)`);
+    log(`[${key} live eval] ${cases.length} cases, ${mode}: up to ${sampled} Jev calls ≈ $${(sampled * JEV_USD_PER_CALL).toFixed(4)} (TypeSafe; gated cases make none; no Anthropic spend)`);
     return recordIfFull({ key, stateDir, env, full, runs });
   }
   const calls = sampled + WARMUP_CALLS;

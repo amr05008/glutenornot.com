@@ -721,6 +721,24 @@ describe('trackEngineAudit and runAfterResponse (off the response path)', () => 
     await expect(waitUntil.mock.calls[0][0]).resolves.toBe('done');
   });
 
+  it('runAfterResponse warns when it runs on Vercel without a request context (the work may be cut off)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const savedVercel = process.env.VERCEL;
+    try {
+      process.env.VERCEL = '1';
+      runAfterResponse(Promise.resolve());
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/no request context/));
+      warn.mockClear();
+      delete process.env.VERCEL;
+      runAfterResponse(Promise.resolve());
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      if (savedVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = savedVercel;
+      warn.mockRestore();
+    }
+  });
+
   it('runAfterResponse swallows a failure (logged), with or without a context', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const waitUntil = vi.fn();

@@ -105,7 +105,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('JEV_MODE=off (the default): today\'s path, exactly', () => {
+describe('JEV_MODE=off (the default): today\'s verdict path, plus the engine and timing fields', () => {
   it('never calls Jev, serves Claude, and records the timings', async () => {
     const fetchSpy = stubFetch({ product: CLEAN_PRODUCT, jev: CLEAR, claude: CLAUDE_SAFE });
     const res = await scan();
@@ -266,6 +266,26 @@ describe('JEV_MODE=unsafe (Stage 1): serve a settled unsafe, shadow a settled sa
       served: 'jev',
       agree: true,
     });
+  });
+
+  it('hands the audit to the request context\'s waitUntil before the response goes out', async () => {
+    const CTX = Symbol.for('@vercel/request-context');
+    const waitUntil = vi.fn();
+    globalThis[CTX] = { get: () => ({ waitUntil }) };
+    try {
+      stubFetch({ product: WHEAT_PRODUCT, jev: { ...CLEAR, wheat: 0.99 }, claude: CLAUDE_UNSAFE });
+      const res = mockRes();
+      let registeredAtResponse = null;
+      const json = res.json.bind(res);
+      res.json = (body) => { registeredAtResponse = waitUntil.mock.calls.length; return json(body); };
+      await handler({ method: 'POST', body: { barcode: BARCODE }, headers: { 'x-forwarded-for': '203.0.113.9' } }, res);
+      expect(res.body.engine).toBe('jev');
+      expect(registeredAtResponse).toBe(1);
+      await waitUntil.mock.calls[0][0];
+      expect(trackEngineAudit).toHaveBeenCalledWith(expect.objectContaining({ served: 'jev', claudeVerdict: 'unsafe' }));
+    } finally {
+      delete globalThis[CTX];
+    }
   });
 
   it('counts one scan against the rate limit', async () => {

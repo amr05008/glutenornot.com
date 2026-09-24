@@ -34,7 +34,8 @@ On the barcode path, for Open Food Facts records only:
 2. **Code gates run before Jev is asked.** No Jev call when:
    - the source isn't Open Food Facts, or there's no text;
    - there's a gluten-free label tag;
-   - any other gluten or celiac label tag is present, in any language;
+   - any other gluten or celiac label tag is present, in any language, or a
+     label naming a grain;
    - the barcode path's gluten-signal note fires.
 3. **The rule** (`decideFastPath`, `api/barcode.js`) is the bake-off's v2:
    - `unsafe` needs Jev (a source question ≥ 0.5) **and** the grain pattern,
@@ -42,8 +43,14 @@ On the barcode path, for Open Food Facts records only:
    - `safe` needs every danger question < 0.2, both list-quality questions
      ≥ 0.8, no grain-pattern match and no blocking tag.
    - Changes from v2:
-     - **its own tag check blocks `safe`**: case-insensitive, any language,
-       gluten words, grains or oats;
+     - **The tag check fails closed.** A `safe` may carry only allowlisted
+       allergen or trace tags (`FAST_PATH_SAFE_TAGS`): Open Food Facts'
+       canonical ids for the EU's other 13 allergens, `en:none`, and four
+       canonical non-allergens. Any other tag sends the record to Claude.
+     - **Word belts on the text.** Oats, a gluten word, a compound grain stem
+       (Hartweizengrieß, Dinkelmehl, Malzextrakt, malted), a cereal word,
+       teriyaki, or blé or épeautre typed without the accent all block
+       `safe`, whatever Jev scores.
      - **T3**: a wheat-derived glucose syrup or dextrose falls through.
 4. **Templates**, in the prompt's "original (english)" style:
    - unsafe: "This product lists blé (wheat), which contains gluten.", high
@@ -81,9 +88,19 @@ On the barcode path, for Open Food Facts records only:
   shapes what Claude sees. Changing it needs its own live-eval run, so it's a
   separate PR. It's a known production gap (plans/barcode-bakeoff "Production
   finding").
-- **The oats tag goes beyond the plan's list.** Plain oats are a caution reason
-  in this app, so an oats allergen or trace tag blocks `safe`. None of the 996
-  bake-off records has one without oats in its list, so it costs no coverage.
+- **Tags fail closed because Jev never sees them.**
+  - The first cut used a multilingual gluten denylist: gluten words, grains,
+    oats. The grill (2026-09-24) found tags it let through: `fr:Cereali`,
+    `nl:Granen`, `pl:pszenica`, `ja:小麦`, `de:Dinkelmehl`.
+  - Claude reads those as a may-contain. A tag is the code's call alone, with
+    no second layer, so the plan's denylist became an allowlist.
+  - It costs 6 of 173 replayed safes, all crowd-typed junk ("fr:non",
+    "es:grasas", dosage text).
+- **The word belts are the same idea for the text.**
+  - Jev reads the text, so the belts are a second layer, not the only one.
+  - Each covers a form `GLUTEN_GRAIN_PATTERN` misses (it matches whole words
+    only) or one the frozen questions don't ask about (teriyaki).
+  - They cost none of the replayed safes.
 - **The multilingual label gate goes beyond the plan too.** "senza glutine" or
   "sin glúten" labels pass the English-only helpers. The fast path now defers
   them to Claude.
@@ -96,21 +113,28 @@ On the barcode path, for Open Food Facts records only:
     tofu).
   - Jev alone: p50 0.14 s, p95 0.19 s, 0 errors, 0 of 795 calls over 800 ms.
 - **Replaying the recorded v2 answers through this PR's rule** (no new calls):
-  - All 996 records: 51.8% settled (173 safe, 342 unsafe), and **100%
+  - All 996 records: 51.2% settled (167 safe, 342 unsafe), and **100%
     agreement with Opus** on every settled record: 0 safe and 0 unsafe where
     Opus disagreed.
-  - It differs from frozen v2 on exactly three records:
-    - the tofu now falls through, on the tag;
-    - the duck mousse's "dextrose de blé" falls through (T3);
-    - one record with a contributor's `en:Gluten` in its labels falls through
-      on the label gate instead of the tag.
-  - The 30 D1 cases: 0 false-safe, 10 of 60 samples settled, identical to the
-    bake-off.
+  - Items 201–996 alone: 50.5% settled.
+  - Against frozen v2, 8 records change their settled status:
+    - 7 safes now fall through on the tag allowlist: the tofu (`en:Glutine`)
+      and 6 junk-tag records;
+    - the duck mousse's "dextrose de blé" falls through (T3).
+  - The 30 D1 cases: 0 false-safe, 10 of 60 samples settled; the settled
+    outcomes are identical to the bake-off.
   - This isn't a fresh grade: the tag fix and T3 answer misses seen on the
     test items. Unit tests pin those misses, using the real records and the
     scores Jev actually returned (`web/tests/fixtures/jev-bakeoff-records.js`).
 - **Live eval**: `web/tests/api/evals/jev-fast-path.live.test.js`. The pass
-  mark is zero settled false-safe on the 30 cases. Results are in the PR.
+  mark is zero settled false-safe.
+  - It runs the 30 frozen cases plus 10 fast-path cases: may-contain lines,
+    soy sauce, non-English and compound grain words, a free-text trace tag,
+    and two controls.
+  - Single sample on the 30 cases (2026-09-24, before the grill fixes):
+    **0 settled false-safe**. 13 cases reached Jev and 5 settled. p50 was
+    300 ms from a Mac.
+  - The FULL run is in the PR.
 
 ## Costs and risks
 
@@ -127,8 +151,14 @@ On the barcode path, for Open Food Facts records only:
   checked against this rule. A rule that changes what `safe` means must also
   pass the fast-path live eval. For example, decision 006 made natural flavors
   not a reason, and the rule agrees because it never lists them.
+- **The F4 gate is thin on its own.** 50 of 50 agreeing only bounds the
+  disagreement rate at about 6% (rule of three). The bake-off replay carries
+  more weight, and T4's numbers are Aaron's to raise.
 - **TypeSafe receives ingredient text** from public product records, from our
   server. It never gets the name, the barcode or anything about the user.
+  - The App Store privacy label doesn't change (checked 2026-09-24). No new
+    data about the user is collected, so it stays "Data Not Linked to You",
+    and there's no iOS release anyway.
   - Their retention period is unanswered (T5: decided to proceed; their
     policy says they don't train on API input).
   - The privacy policy names them.

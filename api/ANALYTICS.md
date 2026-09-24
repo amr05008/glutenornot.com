@@ -85,8 +85,11 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
     bug) | `skipped` (Jev never asked).
   - `jev_via`: the rule branch or gate that decided — a fixed enum from
     `decideFastPath` / `runFastPath` (`api/barcode.js`), never content.
-    Settled: `safe`, `unsafe`. Fell through: `gluten_tag` (a gluten, grain or
-    oats allergen/trace tag blocked safe), `pattern_match` (a grain word in the
+    Settled: `safe`, `unsafe`. Fell through: `gluten_tag` (an allergen/trace
+    tag off the allowlist that names gluten, a grain or oats blocked safe),
+    `unknown_tag` (any other tag off the allowlist blocked safe — the
+    allowlist fails closed, so its count is that choice's cost),
+    `pattern_match` (a grain, gluten, oats, cereal or teriyaki word in the
     list blocked safe), `list_quality` (not a complete ingredient list),
     `not_clear` (a question scored ≥ 0.2), `wheat_sugar` (toggle T3). Skipped:
     `source` (not Open Food Facts), `no_text`, `gf_label`, `label_text`,
@@ -142,7 +145,12 @@ WHERE event = 'engine_audit' AND properties.jev_verdict = 'safe' AND properties.
   AND coalesce(properties.app_version, '') NOT LIKE '%-rc%'
 ```
 
-List the disagreements with `properties.claude_caution_reason`.
+List the disagreements with `properties.claude_caution_reason`. What the gate
+can prove: 50 of 50 agreeing bounds the disagreement rate at about 6% (95%,
+rule of three); the bake-off replay (167 settled safes, 0 disagreements) is
+the stronger evidence, and T4's numbers are Aaron's to raise. Tag-driven
+disagreements can't occur by construction: a Jev `safe` carries only
+allowlisted tags, so a disagreement comes from the text.
 
 **The Stage 2 tripwire (F5)**: any `engine_audit` with `served = jev`,
 `jev_verdict = safe` and `claude_verdict IN ('caution', 'unsafe')` — the user
@@ -150,6 +158,27 @@ already saw a `safe` Claude disputes. Set it up as a PostHog alert on a trends
 insight counting exactly that (threshold: any), checked hourly. On a hit: set
 `JEV_MODE=unsafe` and redeploy, then read the audit's `claude_caution_reason`.
 `claude_verdict = error` is not a trip (Claude failed, it didn't disagree).
+
+**The audit reconciliation read** (shadow day, then weekly): every settled
+fast-path scan should produce one `engine_audit`. They're sent after the
+response via `waitUntil`, so a missing request context would drop them
+silently (the function logs `runAfterResponse: no request context` on Vercel
+if so). Expect `audits = settled`: a shadowed scan whose Claude call failed
+has neither a `scan` nor an audit, and a served one has both:
+
+```sql
+SELECT
+  (SELECT count() FROM events WHERE event = 'scan' AND properties.jev_outcome IN ('settled_safe', 'settled_unsafe') AND timestamp > now() - INTERVAL 7 DAY) AS settled,
+  (SELECT count() FROM events WHERE event = 'engine_audit' AND timestamp > now() - INTERVAL 7 DAY) AS audits
+```
+
+**Jev silently off**: a revoked key or a retired `jev-1.13.0` turns every call
+into `jev_outcome = error`, and nothing breaks — Claude answers. Watch the
+error share with a PostHog alert (any day where `error` is over 20% of
+barcode scans carrying a `jev_outcome`); shallow `/api/health` shows key
+presence only. And in `full`, a Claude outage leaves served Jev verdicts
+unaudited (`claude_verdict = error`, not a tripwire): the Claude deep health
+check and `claude_error` failures are the net for that.
 
 **The shadow-day read** (rollout step 2): `jev_ms` p95 under 800 ms from Vercel,
 and a `jev_outcome` mix like the bake-off's (about half of the asked records

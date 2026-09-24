@@ -90,8 +90,10 @@ function jevMode(raw = process.env.JEV_MODE) {
 }
 
 /**
- * The /v1/systemone request, byte-identical to what @typesafe-ai/sdk 0.6.0's
- * systemOne() sends for these questions (tests/api/jev.test.js pins it).
+ * The /v1/systemone request. The body is byte-identical to what
+ * @typesafe-ai/sdk 0.6.0's systemOne() sends for these questions
+ * (tests/api/jev.test.js pins it); the headers are our own (no SDK
+ * User-Agent or X-TypeSafe-* headers).
  */
 function buildJevRequest(ingredients, apiKey) {
   return {

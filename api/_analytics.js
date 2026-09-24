@@ -389,6 +389,8 @@ function runAfterResponse(promise) {
   const guarded = Promise.resolve(promise).catch((err) => console.error('after-response work failed:', err));
   const waitUntil = getWaitUntil();
   if (waitUntil) waitUntil(guarded);
+  // On Vercel a frozen function drops unregistered work silently; say so.
+  else if (process.env.VERCEL) console.warn('runAfterResponse: no request context, so this work may be cut off');
 }
 
 async function captureEvent(event, ip, properties, { awaitFlush = false } = {}) {

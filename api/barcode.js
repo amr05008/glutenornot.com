@@ -404,7 +404,9 @@ async function runFastPath(product) {
     };
   } catch (err) {
     // A fast-path bug must never cost the user a scan: Claude is already running.
-    console.error('Jev fast path failed:', err?.name || 'error');
+    // Log the error type and the code location, never the message (it can
+    // echo a value from the record).
+    console.error('Jev fast path failed:', err?.name || 'error', String(err?.stack ?? '').split('\n')[1]?.trim() ?? '');
     return { outcome: 'error', ms: jevMs };
   }
 }
@@ -987,11 +989,13 @@ async function analyzeWithClaude(ingredientContext) {
 // Jev's scores (api/_jev.js) plus this rule settle only a clear `unsafe` or a
 // clear `safe`; everything else falls through to Claude. The rule is the
 // bake-off's E2 v2 (jev-sandbox experiments/07-barcode-bakeoff/engines.ts,
-// e2RuleV2) with two changes: its own multilingual tag check replaces
-// isGlutenFamilyTag, and a wheat-derived glucose syrup or dextrose falls
-// through (T3). It lives here, not in _jev.js, because it is built on this
-// file's tag helpers. isGlutenFamilyTag itself is untouched: it shapes what
-// Claude sees, and changing it needs its own eval-gated PR.
+// e2RuleV2) with these changes:
+// - a fail-closed tag allowlist replaces isGlutenFamilyTag;
+// - deterministic word belts on the text side of `safe`;
+// - a wheat-derived glucose syrup or dextrose falls through (T3).
+// It lives here, not in _jev.js, because it is built on this file's tag
+// helpers. isGlutenFamilyTag itself is untouched: it shapes what Claude sees,
+// and changing it needs its own eval-gated PR.
 
 // A gluten word in any of the forms the bake-off found in allergen and trace
 // tags (gluten, glutine, glutén, glúten, glutenhaltig, gluteeni), matched
@@ -1010,17 +1014,53 @@ function stripAccents(text) {
   return text.normalize('NFKD').replace(/\p{M}/gu, '').replace(/œ/g, 'oe');
 }
 
-/**
- * Does this allergen or trace tag stop the fast path from settling `safe`?
- * Case-insensitive, any language: a gluten word, a gluten grain
- * (GLUTEN_GRAIN_PATTERN) or oats (a caution reason in this app). Open Food
- * Facts tags nearly every wheat product `en:gluten`, so a tag never blocks
- * `unsafe` — only `safe`.
- */
+// The only allergen/trace tags a fast-path `safe` may carry: Open Food Facts'
+// canonical ids for the EU's other 13 allergens, `en:none`, and four
+// canonical non-allergens seen on otherwise clean records in the bake-off
+// sample. Jev reads only the ingredient text, so a tag is the code's call
+// alone and it fails closed: any other tag (a crowd-typed "fr:Cereali",
+// "nl:Granen", "pl:pszenica", or a form nobody has seen yet) sends the record
+// to Claude. Grill, 2026-09-24: the first cut's gluten denylist let those
+// through, the same class as the bake-off's one false-safe (`en:Glutine`).
+// Cost on the replay: 6 of 173 settled safes, all crowd-typed junk tags
+// ("fr:non", "es:grasas", dosage text).
+const FAST_PATH_SAFE_TAGS = new Set([
+  'en:milk', 'en:eggs', 'en:nuts', 'en:peanuts', 'en:soybeans', 'en:sesame-seeds', 'en:celery',
+  'en:mustard', 'en:lupin', 'en:fish', 'en:crustaceans', 'en:molluscs', 'en:sulphur-dioxide-and-sulphites',
+  'en:none',
+  'en:apple', 'en:orange', 'en:banana', 'en:gelatin',
+]);
+
+/** Does this allergen or trace tag stop the fast path from settling `safe`? Anything not allowlisted does. */
 function blocksFastPathSafe(tag) {
+  return !FAST_PATH_SAFE_TAGS.has(tag);
+}
+
+/**
+ * Is this tag a recognizable gluten form in any language — a gluten word, a
+ * gluten grain (GLUTEN_GRAIN_PATTERN) or oats? Names the fall-through
+ * (`gluten_tag` vs `unknown_tag`) for analytics; the allowlist decides.
+ */
+function isGlutenRiskTag(tag) {
   if (typeof tag !== 'string') return false;
   const t = normalizeTag(tag);
   return GLUTEN_WORD_PATTERN.test(stripAccents(t)) || GLUTEN_GRAIN_PATTERN.test(t) || OATS_PATTERN.test(t);
+}
+
+// Words that block a fast-path `safe` in the ingredient text even when Jev
+// scores everything clear (grill, 2026-09-24; cost on the replay: 0 of 173
+// safes). GLUTEN_GRAIN_PATTERN only matches whole words, so this adds:
+// - compound stems (Hartweizengrieß, Dinkelmehl, Malzextrakt, moutextract,
+//   malted milk; not Buchweizen or moutarde);
+// - blé, épeautre and sègol typed without their accents;
+// - cereal words ("may contain cereals");
+// - teriyaki, which the Claude prompt names and the frozen soy_sauce question doesn't.
+// A gluten word and oats are checked separately.
+const SAFE_TEXT_BELT_PATTERN =
+  /(?<!buch)weizen|dinkel|gerste|roggen|malz|tarwe|malted|mout(?!ard)|(?<!\p{L})(?:ble|epeautre|segol)(?!\p{L})|cereal|céréal|cereales|cereali|cereais|getreide|granen|teriyaki/iu;
+
+function textBlocksSafe(text) {
+  return OATS_PATTERN.test(text) || GLUTEN_WORD_PATTERN.test(stripAccents(text.toLowerCase())) || SAFE_TEXT_BELT_PATTERN.test(text);
 }
 
 /**
@@ -1034,11 +1074,15 @@ function fastPathGate(product) {
   // Claim scope is subtle and it's ~4% of records: Claude reads the claim.
   if (hasGlutenFreeLabelTag(labels)) return 'gf_label';
   // Any other gluten-related label, in any language ("senza glutine" isn't
-  // caught by the English-only helpers).
+  // caught by the English-only helpers), or one naming a grain ("contains wheat").
   if (
     adverseGlutenLabels(labels).length > 0 ||
     unrecognizedGlutenLabels(labels).length > 0 ||
-    labels.some((tag) => typeof tag === 'string' && GLUTEN_LABEL_WORD_PATTERN.test(stripAccents(normalizeTag(tag))))
+    labels.some(
+      (tag) =>
+        typeof tag === 'string' &&
+        (GLUTEN_LABEL_WORD_PATTERN.test(stripAccents(normalizeTag(tag))) || GLUTEN_GRAIN_PATTERN.test(normalizeTag(tag)))
+    )
   ) {
     return 'label_text';
   }
@@ -1059,13 +1103,11 @@ const GRAIN_SUGAR_PATTERN = /(?:gluc|gluk|glic)os|dextros|destros/iu;
  */
 function grainMatches(text) {
   const matches = [];
-  let offset = 0;
   for (const entry of text.split(/[,;]/)) {
     const sugar = GRAIN_SUGAR_PATTERN.test(entry);
     for (const m of entry.matchAll(new RegExp(GLUTEN_GRAIN_PATTERN.source, 'giu'))) {
-      matches.push({ word: m[0].toLowerCase(), index: offset + m.index, sugar });
+      matches.push({ word: m[0].toLowerCase(), sugar });
     }
-    offset += entry.length + 1;
   }
   return matches;
 }
@@ -1137,14 +1179,21 @@ function decideFastPath(product, scores) {
     return { settled: true, via: 'unsafe', result: fastPathResult('unsafe', grainInEnglish(named.word)) };
   }
 
-  // A gluten-family allergen or trace tag, in any language, blocks safe.
-  const tagged = [...(product.allergens_tags || []), ...(product.traces_tags || [])].some(blocksFastPathSafe);
+  // Any allergen or trace tag off the allowlist blocks safe (fails closed).
+  const tags = [...(product.allergens_tags || []), ...(product.traces_tags || [])];
+  const tagged = tags.some(blocksFastPathSafe);
+  // Any grain match, or a belt word, in the list blocks safe.
+  const worded = matches.length > 0 || textBlocksSafe(text);
   const listOk = scores.is_ingredient_list >= LIST_OK_AT && scores.looks_complete >= LIST_OK_AT;
   const danger = Math.max(...JEV_DANGER.map((k) => scores[k]));
-  if (!tagged && matches.length === 0 && listOk && danger < CLEAR_BELOW) {
+  if (!tagged && !worded && listOk && danger < CLEAR_BELOW) {
     return { settled: true, via: 'safe', result: fastPathResult('safe') };
   }
-  return { settled: false, via: tagged ? 'gluten_tag' : matches.length > 0 ? 'pattern_match' : !listOk ? 'list_quality' : 'not_clear' };
+  let via = 'not_clear';
+  if (tagged) via = tags.some(isGlutenRiskTag) ? 'gluten_tag' : 'unknown_tag';
+  else if (worded) via = 'pattern_match';
+  else if (!listOk) via = 'list_quality';
+  return { settled: false, via };
 }
 
 /**

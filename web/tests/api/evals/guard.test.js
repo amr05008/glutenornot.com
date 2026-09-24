@@ -127,7 +127,7 @@ describe('guardLiveRun (what the runners call at collection)', () => {
     const runs = guardLiveRun({ key: 'jev-fast-path', engine: 'jev', cases: CASES, stateDir: tmpState(), env: {}, log: (l) => lines.push(l) });
     expect(runs).toEqual(sampleRuns({ full: false }));
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/5 Jev calls ≈ \$0\.0003 \(TypeSafe; no Anthropic spend\)/);
+    expect(lines[0]).toMatch(/up to 5 Jev calls ≈ \$0\.0003 \(TypeSafe; gated cases make none; no Anthropic spend\)/);
     expect(lines[0]).not.toMatch(/Opus/);
   });
 

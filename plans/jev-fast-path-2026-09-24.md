@@ -7,28 +7,44 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
 - **Deviations from the build list:**
   - `decideFastPath` lives in `api/barcode.js` next to the tag helpers it
     calls. In `_jev.js`, the two modules would import each other.
-  - The fast path's tag check also blocks `safe` on an **oats** allergen or
-    trace tag. Plain oats are a caution reason here, and none of the 996
-    records has one without oats in the list.
+  - The fast path's tag check is a fail-closed allowlist (grill), not the
+    planned gluten denylist, so an oats tag blocks `safe` as well.
   - The label gate also defers **any gluten or celiac label in any language**
     to Claude ("senza glutine", "sin glúten", "cœliaques", a stray
-    `en:Gluten`).
+    `en:Gluten`, a label naming a grain).
   - `engine_audit.claude_verdict` can be `error`: Claude failed after Jev was
     served. That isn't a tripwire hit.
   - A fast-path exception is caught and logged as `jev_outcome: error`, and
     Claude answers.
+- **Grill (2026-09-24) fixes**, from a fresh-eyes subagent that returned
+  DON'T SHIP:
+  - The safe-branch tag check is now a **fail-closed allowlist**. Jev never
+    sees tags, and a denylist let `fr:Cereali`, `nl:Granen` and
+    `pl:pszenica` through.
+  - **Word belts** on the text side of `safe`: oats, gluten words,
+    compound grain stems, cereal words, teriyaki, and blé or épeautre
+    without the accent.
+  - A label naming a grain now gates.
+  - `runAfterResponse` warns on Vercel with no request context.
+    ANALYTICS.md gains the audit reconciliation read and the Jev
+    error-share alert.
+  - The live eval gains 10 fast-path cases, and each case's samples now run
+    one at a time.
 - **Replay of the recorded v2 answers through the shipped rule** (no new
   calls):
-  - 996 records: 51.8% settled and 100% agreement with Opus, with 0 safe and
-    0 unsafe where Opus disagreed.
-  - It differs from frozen v2 on three records: the tofu, the duck mousse
-    and one stray label.
-  - D1: 0 false-safe, identical to the bake-off.
+  - 996 records: 51.2% settled (167 safe, 342 unsafe) and 100% agreement
+    with Opus, with 0 safe and 0 unsafe where Opus disagreed.
+  - 8 records change their settled status against frozen v2: the tofu, 6
+    junk-tag safes and the duck mousse.
+  - D1: 0 false-safe.
   - Not a fresh grade: the tag fix and T3 answer misses seen on the test
     split.
-- **Left:** the single-sample and FULL live evals (need the
-  `glutenornot-evals` TypeSafe key in `.env`), the grill, and then rollout
-  steps 1–4 below.
+- **Live eval:** single sample on the 30 frozen cases, run before the grill
+  fixes: 0 settled false-safe.
+- **Left:** the one FULL run (40 cases), and then rollout steps 1–4 below.
+- **Note on "about 0.2 s" in the rollout:** that is Jev alone. A Jev-served
+  response is the database lookup (~0.3 s) plus Jev, still well under
+  Claude's ~3 s.
 
 **Status:** proposal (2026-09-24). Replaces the bake-off's proposed v3 re-grade
 (Aaron: "ive read nothing here that gives me pause about jev + opus"). The

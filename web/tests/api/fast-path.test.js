@@ -128,9 +128,12 @@ describe('decideFastPath: thresholds', () => {
 
 describe('decideFastPath: neither signal alone settles anything', () => {
   it('Jev alone never settles unsafe: the grain pattern must name it too', () => {
-    // "Hartweizengrieß" (durum semolina): Jev knows it's wheat, the pattern doesn't match mid-word.
+    // "Hartweizengrieß" (durum semolina): Jev knows it's wheat, the pattern
+    // doesn't match mid-word, so no unsafe. (The safe-side belt names it.)
     const d = decideFastPath(off({ ingredients_text: 'Hartweizengrieß, Wasser.' }), WHEAT);
-    expect(d).toEqual({ settled: false, via: 'not_clear' });
+    expect(d).toEqual({ settled: false, via: 'pattern_match' });
+    // Polish "pszenna" (wheat) is in neither the pattern nor the belt: Jev's score holds it.
+    expect(decideFastPath(off({ ingredients_text: 'mąka pszenna, woda, sól.' }), WHEAT)).toEqual({ settled: false, via: 'not_clear' });
   });
 
   it('the pattern alone never settles unsafe, and any match blocks safe', () => {
@@ -202,17 +205,84 @@ describe('decideFastPath: the multilingual gluten-tag check blocks safe', () => 
     }
   );
 
-  it.each(['en:milk', 'en:nuts', 'en:soybeans', 'en:sesame-seeds', 'en:celery', 'en:mustard', 'en:eggs', 'en:lupin', 'en:buckwheat', 'en:sulphur-dioxide-and-sulphites'])(
-    'does not block on %s',
-    (tag) => {
-      expect(blocksFastPathSafe(tag)).toBe(false);
-      expect(decideFastPath(off({ traces_tags: [tag] }), CLEAR).via).toBe('safe');
-    }
-  );
+  it.each([
+    'en:milk', 'en:eggs', 'en:nuts', 'en:peanuts', 'en:soybeans', 'en:sesame-seeds', 'en:celery', 'en:mustard',
+    'en:lupin', 'en:fish', 'en:crustaceans', 'en:molluscs', 'en:sulphur-dioxide-and-sulphites', 'en:none',
+    'en:apple', 'en:orange', 'en:banana', 'en:gelatin',
+  ])('lets %s through: an allowlisted id that is not a gluten source', (tag) => {
+    expect(blocksFastPathSafe(tag)).toBe(false);
+    expect(decideFastPath(off({ traces_tags: [tag], allergens_tags: [tag] }), CLEAR).via).toBe('safe');
+  });
+});
 
-  it('ignores a non-string tag', () => {
-    expect(blocksFastPathSafe(null)).toBe(false);
-    expect(blocksFastPathSafe(42)).toBe(false);
+describe('decideFastPath: the tag check fails closed (grill, 2026-09-24)', () => {
+  // Jev reads only the ingredient text, so a tag is the code's call alone: any
+  // tag not on the allowlist blocks safe. Each of these settled safe under the
+  // first cut's gluten denylist; fr:Cereali, nl:Granen and "Et produits à base
+  // de ces céréales" are in the bake-off's real sample.
+  it.each([
+    'fr:Cereali', 'nl:Granen', 'de:Getreide', 'en:cereals', 'es:cereales', 'fr:céréales',
+    'fr:Et produits à base de ces céréales', 'pl:pszenica', 'sv:vete', 'da:hvede', 'fi:vehnä',
+    'cs:pšenice', 'ru:пшеница', 'ja:小麦', 'de:Hartweizengrieß', 'de:Dinkelmehl', 'de:Malzextrakt',
+    'fr:ble', 'fr:epeautre', 'en:buckwheat', 'es:Puede contener trazas de frutos secos soja y sésamo.',
+  ])('blocks safe on %s, as a trace or an allergen', (tag) => {
+    expect(blocksFastPathSafe(tag)).toBe(true);
+    expect(decideFastPath(off({ traces_tags: [tag] }), CLEAR).settled).toBe(false);
+    expect(decideFastPath(off({ allergens_tags: [tag] }), CLEAR).settled).toBe(false);
+  });
+
+  it('names a recognized gluten form gluten_tag and anything else unknown_tag', () => {
+    expect(decideFastPath(off({ traces_tags: ['en:Glutine'] }), CLEAR).via).toBe('gluten_tag');
+    expect(decideFastPath(off({ traces_tags: ['fr:Cereali'] }), CLEAR).via).toBe('unknown_tag');
+    expect(decideFastPath(off({ traces_tags: ['fr:Cereali', 'en:gluten'] }), CLEAR).via).toBe('gluten_tag');
+  });
+
+  it('is case-sensitive on the allowlist: a crowd-typed form is unknown', () => {
+    expect(blocksFastPathSafe('en:Milk')).toBe(true);
+    expect(blocksFastPathSafe('fr:lait')).toBe(true);
+  });
+
+  it('blocks on a tag that is not a string', () => {
+    expect(blocksFastPathSafe(null)).toBe(true);
+    expect(blocksFastPathSafe(42)).toBe(true);
+  });
+
+  it('still never blocks unsafe', () => {
+    const d = decideFastPath(off({ ingredients_text: 'wheat flour, salt.', traces_tags: ['fr:Cereali'] }), WHEAT);
+    expect(d.via).toBe('unsafe');
+  });
+});
+
+describe('decideFastPath: word belts on the text side of safe (grill, 2026-09-24)', () => {
+  // Jev alone would decide these; each one gets a deterministic belt too.
+  // None of the 173 safes in the bake-off replay trips one.
+  it.each([
+    ['plain oats', 'whole grain oats, honey, sea salt.'],
+    ['a gluten word', 'Zucker, Kakaobutter. Kann Spuren von Gluten enthalten.'],
+    ['a gluten word, accented', 'azúcar, cacao. Puede contener glúten.'],
+    ['a cereal word', 'sugar, cocoa butter. May contain other cereals.'],
+    ['a cereal word (fr)', 'sucre, beurre de cacao. Traces de céréales.'],
+    ['a compound grain (durum)', 'Hartweizengrieß, Wasser.'],
+    ['a compound grain (spelt)', 'Dinkelmehl, Wasser, Salz.'],
+    ['a compound grain (whole wheat)', 'Vollkornweizenmehl, Wasser, Hefe.'],
+    ['a compound grain (malt)', 'Malzextrakt, Zucker.'],
+    ['malted', 'sugar, malted milk powder, cocoa.'],
+    ['a compound grain (nl malt)', 'moutextract, suiker.'],
+    ['teriyaki', 'tofu, teriyaki sauce, sesame seeds.'],
+    ['blé without its accent', 'farine de ble, sucre, sel.'],
+    ['épeautre without its accent', 'farine d\'epeautre, eau.'],
+  ])('%s blocks safe', (_, text) => {
+    expect(decideFastPath(off({ ingredients_text: text }), CLEAR)).toEqual({ settled: false, via: 'pattern_match' });
+  });
+
+  it.each([
+    'moutarde, vinaigre, sel.',
+    'Buchweizenmehl, Wasser, Salz.',
+    'buckwheat flour, water.',
+    'maltodextrin, rice flour, salt.',
+    'rice, water, sea salt.',
+  ])('%s still settles safe', (text) => {
+    expect(decideFastPath(off({ ingredients_text: text }), CLEAR).via).toBe('safe');
   });
 });
 
@@ -305,5 +375,17 @@ describe('fast-path templates carry nothing from the record but the grain word',
     const a = decideFastPath(off({ ingredients_text: 'rice, water.' }), CLEAR);
     const b = decideFastPath(off({ ingredients_text: 'potatoes, sunflower oil, salt.' }), CLEAR);
     expect(a).toEqual(b);
+  });
+});
+
+describe('fast-path live-eval cases (offline shape check)', () => {
+  it('every extra case is a synthetic Open Food Facts record that reaches Jev (no gate hit)', async () => {
+    const { JEV_FAST_PATH_CASES } = await import('./evals/jev-fast-path-cases.js');
+    expect(JEV_FAST_PATH_CASES.length).toBeGreaterThanOrEqual(10);
+    for (const c of JEV_FAST_PATH_CASES) {
+      expect(['safe', 'caution', 'unsafe', 'not-safe'], c.id).toContain(c.expect);
+      expect(fastPathGate(c.product), c.id).toBeNull();
+    }
+    expect(new Set(JEV_FAST_PATH_CASES.map((c) => c.id)).size).toBe(JEV_FAST_PATH_CASES.length);
   });
 });

@@ -2,7 +2,9 @@
  * LIVE eval for the Jev fast path (decision 007, plans/jev-fast-path-2026-09-24.md
  * build item 9): the production decision — the code gates (fastPathGate), live
  * Jev (askJev, jev-1.13.0) and the rule (decideFastPath) — on the 30 frozen
- * barcode cases (BARCODE_GF_CLAIM_CASES + BARCODE_CALIBRATION_CASES).
+ * barcode cases (BARCODE_GF_CLAIM_CASES + BARCODE_CALIBRATION_CASES) plus 10
+ * fast-path cases (jev-fast-path-cases.js: may-contain lines, soy sauce,
+ * non-English and compound grain words, a free-text trace tag, two controls).
  *
  * Pass mark: zero settled false-safe. No sample of a case that isn't expected
  * safe may settle `safe`. Falling through is always a pass (Claude answers
@@ -18,17 +20,21 @@
  *
  *   RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals/jev-fast-path.live.test.js
  *
- * Default: 30 Jev calls. FULL: 8 safe cases × 2 + 22 × 5 = 126 Jev calls
- * (≈ $0.006 of TypeSafe). No Anthropic call, no PostHog event, no lookup.
+ * Default: up to 40 Jev calls. FULL: up to 10 safe cases × 2 + 30 × 5 = 170
+ * (≈ $0.009 of TypeSafe); gated cases make none. A case's samples run one
+ * after another, so at most vitest's 5 concurrent cases are in flight: a 429
+ * would fail "Jev answered" and spend the hour's one FULL slot. No Anthropic
+ * call, no PostHog event, no lookup.
  */
 import { describe, it, afterAll } from 'vitest';
 import { fastPathGate, decideFastPath } from '../../../../api/barcode.js';
 import { askJev } from '../../../../api/_jev.js';
 import { BARCODE_GF_CLAIM_CASES } from './barcode-gf-claim-cases.js';
 import { BARCODE_CALIBRATION_CASES } from './calibration-cases.js';
+import { JEV_FAST_PATH_CASES } from './jev-fast-path-cases.js';
 import { guardLiveRun, sampleRuns, LIVE_EVAL_STATE_DIR } from './guard.js';
 
-const CASES = [...BARCODE_GF_CLAIM_CASES, ...BARCODE_CALIBRATION_CASES];
+const CASES = [...BARCODE_GF_CLAIM_CASES, ...BARCODE_CALIBRATION_CASES, ...JEV_FAST_PATH_CASES];
 const LIVE = process.env.RUN_LIVE_EVALS === '1';
 if (LIVE && !process.env.TYPESAFE_API_KEY?.trim()) {
   throw new Error('jev-fast-path live eval: TYPESAFE_API_KEY is not set — add the glutenornot-evals key to .env');
@@ -52,9 +58,10 @@ describe.skipIf(!LIVE).concurrent('Jev fast path live eval (gates + live Jev + r
         results.push({ id: c.id, expect: c.expect, outcomes: [`gate: ${gate}`], ms: [] });
         return;
       }
-      const samples = await Promise.all(
-        Array.from({ length: RUNS[c.expect] }, () => askJev(c.product.ingredients_text, { timeoutMs: EVAL_TIMEOUT_MS }))
-      );
+      const samples = [];
+      for (let i = 0; i < RUNS[c.expect]; i++) {
+        samples.push(await askJev(c.product.ingredients_text, { timeoutMs: EVAL_TIMEOUT_MS }));
+      }
       for (const s of samples) expect(s.outcome, 'Jev answered').toBe('ok');
       const outcomes = samples.map((s) => {
         const d = decideFastPath(c.product, s.scores);
@@ -66,7 +73,7 @@ describe.skipIf(!LIVE).concurrent('Jev fast path live eval (gates + live Jev + r
   }
 
   afterAll(() => {
-    results.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+    results.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
     const rows = results.map((r) => {
       const flags = [
         r.outcomes.some((o) => isFalseSafe(r.expect, o)) ? 'FALSE-SAFE' : '',
