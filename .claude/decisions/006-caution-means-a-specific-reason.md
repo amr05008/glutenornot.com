@@ -36,14 +36,19 @@ Every caution names exactly one reason:
 
 **Not a reason on its own:** unnamed natural flavors or aroma, spices or
 seasoning, maltodextrin, dextrin, modified starch, glucose syrup, caramel
-color, and hydrolyzed vegetable protein of unstated source, outside a meat or
-poultry product. US, EU, UK, Canadian and Australian law requires wheat to be
-named wherever it's used, including inside those ingredients. EU, UK, Canadian
-and Australian law also covers barley and rye.
+color, and hydrolyzed vegetable protein of unstated source, outside a product
+made with meat or poultry (sausage, deli meat, and soups, broths, chili or
+frozen meals made with meat — T3). US, EU, UK, Canadian and Australian law
+requires wheat to be named on the label wherever it's used, including inside
+those ingredients: in the list, or (US) in a "Contains:" statement right after
+it. EU, UK, Canadian and Australian law also covers barley and rye. EU law
+exempts wheat-based glucose syrup and maltodextrin, which are processed to
+remove gluten, so unnamed ones are covered too; one labeled with its wheat
+source is still judged as wheat (the exemption call is out of scope).
 
 ## Toggles
 
-T2–T8 are in `plans/verdict-calibration-2026-09-23.md`.
+T2–T9 are in `plans/verdict-calibration-2026-09-23.md`.
 
 ## Costs
 
@@ -53,3 +58,17 @@ T2–T8 are in `plans/verdict-calibration-2026-09-23.md`.
 - **A gluten-free claim now matters mainly for oats and `undeclared_source`
   ingredients.** Decision 003's lift of ambiguous ingredients is now the
   default without a claim.
+- **The rule relies on the "Contains:" statement being part of what was
+  read** (PR #32 grill). A US label may name wheat only there (FALCPA), not
+  inside "modified food starch" or "natural flavor". Two ways it can be missing:
+  - A photo cropped between the end of the list and the "Contains:" line
+    passes the cut-off gate, and the starch or flavor now reads `safe`.
+  - A database record whose text leaves the line out and carries no allergen
+    tag. When the line is captured as an Open Food Facts `en:gluten` tag, the
+    barcode path now holds the record at `caution` / `conflict`. USDA,
+    Nutritionix and UPCitemdb records carry no allergen data at all, so an
+    unstated-source ingredient there is held at `caution` / `incomplete`
+    (T9). That was 5 of about 410 barcode scans with ingredient data in the
+    60 days to 2026-09-23.
+  Wheat-based modified starch or flavoring is uncommon in US products, but
+  this is the same kind of residual risk as barley malt (T2).

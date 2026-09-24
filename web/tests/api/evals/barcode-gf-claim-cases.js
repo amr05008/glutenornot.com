@@ -50,11 +50,12 @@ export const BARCODE_GF_CLAIM_CASES = [
   {
     id: 'B3',
     expect: 'safe',
-    why: 'claim block ported — "No gluten" label + natural flavors + maltodextrin, no oats',
+    namesClaim: true,
+    why: 'claim block ported — "No gluten" label + yeast extract (an undeclared_source the label covers) + natural flavors + maltodextrin, no oats',
     product: {
       product_name: 'Ranch Seasoned Veggie Chips',
       ingredients_text:
-        'potato flakes, sunflower oil, maltodextrin, modified food starch, salt, buttermilk powder, spices, onion powder, natural flavors, citric acid.',
+        'potato flakes, sunflower oil, maltodextrin, modified food starch, salt, buttermilk powder, yeast extract, spices, onion powder, natural flavors, citric acid.',
       allergens_tags: ['en:milk'],
       traces_tags: [],
       labels_tags: ['en:no-gluten'],

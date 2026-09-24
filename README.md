@@ -151,7 +151,7 @@ Tests cover:
 
 See [`ROADMAP.md`](./ROADMAP.md) for the prioritized improvement plan.
 
-Guidelines: Keep it simple, test on mobile, be conservative with verdicts (when uncertain, use "caution").
+Guidelines: Keep it simple, test on mobile, be conservative with verdicts (every "caution" names a specific reason, and nothing is "safe" on a guess — decision 006).
 
 ## License
 

@@ -46,6 +46,7 @@
 | T5 | Soy sauce / teriyaki / tamari with no wheat declaration and no gluten-free claim | `caution` / `undeclared_source` | none planned |
 | T6 | The optional one-line reassurance on a safe verdict that lists a no-longer-a-reason ingredient | allowed, one sentence, never framed as a risk | forbidden (a bare "You're good to go") |
 | T7 | `other` as an escape hatch | allowed and measured | removed if it exceeds 10% of cautions at the day-28 read |
+| T9 | Database records with no allergen data (USDA, Nutritionix, UPCitemdb): their text may drop the "Contains:" line, where a US label may declare wheat | `caution` / `incomplete` for an unstated-source ingredient (PR #32 grill) | treat them like Open Food Facts records |
 | T8 | Success target at day 28 | caution ≤ 40% of readable label scans (from 68% photo / 65% barcode), `other` ≤ 10% of cautions, zero false-safe reports | revise after the read |
 
 ## Not yet known
@@ -1069,6 +1070,7 @@ SQL="SELECT properties.method, properties.verdict, properties.caution_reason, co
 - **Caution share of readable label scans ≤ 40%?**
 - **`other` ≤ 10% of cautions?** If not, look for a missing reason. Sample the reasons, never the content, by reading what users report.
 - **`incomplete` share, and how much of it is `list_gate`:** this sizes Part B (the retake screen).
+- **Split the barcode read by `data_source`** (T9 holds no-allergen-data sources at `incomplete`). **`other` with `confidence: low` may be parse failures** (the parsers' fallback records `other`).
 - **Any false-safe report from a user:** that one outweighs the numbers.
 
 - [ ] **Step 3: Write Part B's plan** (`plans/retake-state-<date>.md`)

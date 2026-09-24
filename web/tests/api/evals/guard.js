@@ -22,8 +22,8 @@
  *   - vitest watch mode is refused outright.
  *
  * Decision 006 (2026-09-23) added a third runner (calibration.live.test.js,
- * both paths): a FULL run of all three is now 284 calls ≈ $2.75 with the
- * prompt cached (≈ $10 uncached); the single-sample default is 78 calls.
+ * both paths): a FULL run of all three is now 331 calls ≈ $3.20 with the
+ * prompt cached (≈ $12 uncached); the single-sample default is 88 calls.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';

@@ -857,6 +857,24 @@ describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
     expect(CLAUDE_PROMPT).toContain('Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.');
     expect(CLAUDE_PROMPT).not.toContain('covers the oats only');
   });
+
+  // PR #32 grill: FALCPA lets a US label name wheat only in its "Contains:"
+  // line; the rule holds only while that line is part of what was read.
+  it('says wheat may be declared in a "Contains:" statement, which blocks safe when it names gluten', () => {
+    expect(CLAUDE_PROMPT).toContain('in the ingredient list, or in a "Contains:" statement right after it');
+    expect(CLAUDE_PROMPT).toContain('no "Contains"/allergen statement names wheat, barley, rye, or gluten');
+  });
+
+  // Plan: wheat glucose syrup under the EU exemption is out of scope, so a
+  // named wheat source stays judged as wheat on both paths.
+  it('clears only unnamed maltodextrin and glucose syrup; one labeled with its wheat source names wheat', () => {
+    expect(CLAUDE_PROMPT).toContain('One labeled with its wheat source ("glucose syrup (wheat)", "wheat maltodextrin") names wheat');
+    expect(CLAUDE_PROMPT).not.toContain('wheat-based maltodextrin and glucose syrup are processed to remove gluten');
+  });
+
+  it('treats any product made with meat or poultry as a meat product (T3)', () => {
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+  });
 });
 
 // Presence signal for the gf_claim_present analytics property — a boolean for

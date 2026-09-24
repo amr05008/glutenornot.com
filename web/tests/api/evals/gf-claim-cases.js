@@ -191,10 +191,13 @@ NET WT 3.5 OZ (99g)`,
   {
     id: 15,
     expect: 'safe',
-    why: 'labeled GF + hydrolyzed vegetable protein (source unstated) — the claim covers it',
+    namesClaim: true,
+    // PR #32 grill: yeast extract (an undeclared_source) makes the claim matter
+    // again — HVP of unstated source is no reason on its own since decision 006.
+    why: 'labeled GF + yeast extract + hydrolyzed vegetable protein (source unstated) — the claim covers the yeast extract',
     ocrText: `SAVORY BROTH CUBES
 Gluten Free
-INGREDIENTS: Salt, hydrolyzed vegetable protein, sugar, palm oil, onion powder, natural flavor, turmeric, celery seed.
+INGREDIENTS: Salt, hydrolyzed vegetable protein, yeast extract, sugar, palm oil, onion powder, natural flavor, turmeric, celery seed.
 CONTAINS: CELERY.
 NET WT 2.3 OZ (66g)`,
   },
