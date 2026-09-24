@@ -406,7 +406,8 @@ async function runFastPath(product) {
     // A fast-path bug must never cost the user a scan: Claude is already running.
     // Log the error type and the code location, never the message (it can
     // echo a value from the record).
-    console.error('Jev fast path failed:', err?.name || 'error', String(err?.stack ?? '').split('\n')[1]?.trim() ?? '');
+    const where = String(err?.stack ?? '').split('\n').map((l) => l.trim()).find((l) => l.startsWith('at ')) ?? '';
+    console.error('Jev fast path failed:', err?.name || 'error', where);
     return { outcome: 'error', ms: jevMs };
   }
 }
@@ -1048,19 +1049,41 @@ function isGlutenRiskTag(tag) {
 }
 
 // Words that block a fast-path `safe` in the ingredient text even when Jev
-// scores everything clear (grill, 2026-09-24; cost on the replay: 0 of 173
-// safes). GLUTEN_GRAIN_PATTERN only matches whole words, so this adds:
-// - compound stems (Hartweizengrieß, Dinkelmehl, Malzextrakt, moutextract,
-//   malted milk; not Buchweizen or moutarde);
+// scores everything clear (grill + re-grill, 2026-09-24; cost on the replay:
+// 0 safes). GLUTEN_GRAIN_PATTERN only matches whole words, so this adds:
+// - compounds: Hartweizengrieß, Dinkelmehl, Malzextrakt, moutextract,
+//   wholewheat, wheatgerm, maltextract, barleymalt, oatmilk, Grünkern (not
+//   Buchweizen, buckwheat, moutarde, maltodextrin or maltitol);
+// - wheat, spelt and oats in Nordic and Polish (vete, hvede, vehnä, pszenna,
+//   orkisz, kaura, havre);
+// - composite foods made from wheat (noodles, breadcrumbs, panko,
+//   Paniermehl, chapelure, freekeh);
 // - blé, épeautre and sègol typed without their accents;
 // - cereal words ("may contain cereals");
 // - teriyaki, which the Claude prompt names and the frozen soy_sauce question doesn't.
+// "pasta" and "grano" stay out: "pasta de cacao" and "grano saraceno"
+// (buckwheat) are safe. Checked on the text and on its accent-stripped form.
 // A gluten word and oats are checked separately.
-const SAFE_TEXT_BELT_PATTERN =
-  /(?<!buch)weizen|dinkel|gerste|roggen|malz|tarwe|malted|mout(?!ard)|(?<!\p{L})(?:ble|epeautre|segol)(?!\p{L})|cereal|céréal|cereales|cereali|cereais|getreide|granen|teriyaki/iu;
+const SAFE_TEXT_BELT_PATTERN = new RegExp(
+  [
+    '(?<!buch)weizen', 'dinkel', 'gerste', 'roggen', 'malz', 'tarwe', 'malted', 'mout(?!ard)',
+    '(?<!buck)wheat', 'malt(?![oi])', 'barley', '(?<!\\p{L})oat(?=\\p{L})', 'gr(?:ü|ue|u)nkern',
+    '(?<!\\p{L})(?:vete|havre)(?!\\p{L})', 'hvede', 'vehn', 'pszen', 'orkisz', 'kaura',
+    'noodle', 'breadcrumb', 'panko', 'paniermehl', 'chapelure', 'freekeh',
+    '(?<!\\p{L})(?:ble|epeautre|segol)(?!\\p{L})',
+    'cereal', 'céréal', 'cereais', 'getreide', 'granen', 'teriyaki',
+  ].join('|'),
+  'iu'
+);
 
 function textBlocksSafe(text) {
-  return OATS_PATTERN.test(text) || GLUTEN_WORD_PATTERN.test(stripAccents(text.toLowerCase())) || SAFE_TEXT_BELT_PATTERN.test(text);
+  const plain = stripAccents(text.toLowerCase());
+  return (
+    OATS_PATTERN.test(text) ||
+    GLUTEN_WORD_PATTERN.test(plain) ||
+    SAFE_TEXT_BELT_PATTERN.test(text) ||
+    SAFE_TEXT_BELT_PATTERN.test(plain)
+  );
 }
 
 /**
@@ -1163,7 +1186,8 @@ function decideFastPath(product, scores) {
   if (gate) return { settled: false, via: gate };
   if (!scores) return { settled: false, via: 'no_scores' };
 
-  const text = String(product.ingredients_text).trim();
+  // NFC, so a decomposed "ble\u0301" matches the pattern's "blé".
+  const text = String(product.ingredients_text).trim().normalize('NFC');
   const matches = grainMatches(text);
   const grains = matches.filter((m) => !m.sugar);
   const source = Math.max(...JEV_SOURCES.map((k) => scores[k]));

@@ -132,8 +132,8 @@ describe('decideFastPath: neither signal alone settles anything', () => {
     // doesn't match mid-word, so no unsafe. (The safe-side belt names it.)
     const d = decideFastPath(off({ ingredients_text: 'Hartweizengrieß, Wasser.' }), WHEAT);
     expect(d).toEqual({ settled: false, via: 'pattern_match' });
-    // Polish "pszenna" (wheat) is in neither the pattern nor the belt: Jev's score holds it.
-    expect(decideFastPath(off({ ingredients_text: 'mąka pszenna, woda, sól.' }), WHEAT)).toEqual({ settled: false, via: 'not_clear' });
+    // Polish "pszenna" (wheat) isn't in the pattern either: no unsafe (the belt names it).
+    expect(decideFastPath(off({ ingredients_text: 'mąka pszenna, woda, sól.' }), WHEAT)).toEqual({ settled: false, via: 'pattern_match' });
   });
 
   it('the pattern alone never settles unsafe, and any match blocks safe', () => {
@@ -271,6 +271,27 @@ describe('decideFastPath: word belts on the text side of safe (grill, 2026-09-24
     ['teriyaki', 'tofu, teriyaki sauce, sesame seeds.'],
     ['blé without its accent', 'farine de ble, sucre, sel.'],
     ['épeautre without its accent', 'farine d\'epeautre, eau.'],
+    ['épeautre, decomposed Unicode', 'farine d\'e\u0301peautre, eau.'],
+    ['blé, decomposed Unicode', 'farine de ble\u0301, sucre.'],
+    ['wholewheat', 'wholewheat flour, water, yeast.'],
+    ['wheatgerm', 'oil, wheatgerm, salt.'],
+    ['maltextract', 'sugar, maltextract, cocoa.'],
+    ['barleymalt', 'water, barleymalt syrup.'],
+    ['oatmilk', 'oatmilk, cocoa, sugar.'],
+    ['Finnish oats (kaura)', 'kaurahiutale, vesi, suola.'],
+    ['Nordic oats (havre)', 'havre, vatten, salt.'],
+    ['Polish wheat (pszenna)', 'mąka pszenna, woda, sól.'],
+    ['Polish spelt (orkisz)', 'mąka orkiszowa, woda.'],
+    ['Swedish wheat (vete)', 'vete, vatten, salt.'],
+    ['Danish wheat (hvede)', 'hvedemel, vand, salt.'],
+    ['Finnish wheat (vehnä)', 'vehnäjauho, vesi.'],
+    ['noodles', 'vegetables, noodles, soy.'],
+    ['breadcrumbs', 'chicken breast, breadcrumbs, oil.'],
+    ['panko', 'shrimp, panko, oil.'],
+    ['Paniermehl', 'Kartoffeln, Paniermehl, Öl.'],
+    ['chapelure', 'poisson, chapelure, huile.'],
+    ['freekeh', 'freekeh, olive oil, salt.'],
+    ['Grünkern', 'Grünkern, Wasser, Salz.'],
   ])('%s blocks safe', (_, text) => {
     expect(decideFastPath(off({ ingredients_text: text }), CLEAR)).toEqual({ settled: false, via: 'pattern_match' });
   });
@@ -280,6 +301,9 @@ describe('decideFastPath: word belts on the text side of safe (grill, 2026-09-24
     'Buchweizenmehl, Wasser, Salz.',
     'buckwheat flour, water.',
     'maltodextrin, rice flour, salt.',
+    'sugar, maltitol, cocoa butter.',
+    'pasta de cacao, azúcar.',
+    'grano saraceno, acqua.',
     'rice, water, sea salt.',
   ])('%s still settles safe', (text) => {
     expect(decideFastPath(off({ ingredients_text: text }), CLEAR).via).toBe('safe');

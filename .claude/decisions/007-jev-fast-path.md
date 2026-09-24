@@ -47,10 +47,14 @@ On the barcode path, for Open Food Facts records only:
        allergen or trace tags (`FAST_PATH_SAFE_TAGS`): Open Food Facts'
        canonical ids for the EU's other 13 allergens, `en:none`, and four
        canonical non-allergens. Any other tag sends the record to Claude.
-     - **Word belts on the text.** Oats, a gluten word, a compound grain stem
-       (Hartweizengrieß, Dinkelmehl, Malzextrakt, malted), a cereal word,
-       teriyaki, or blé or épeautre typed without the accent all block
-       `safe`, whatever Jev scores.
+     - **Word belts on the text.** Whatever Jev scores, `safe` is blocked by:
+       - oats or a gluten word;
+       - a compound grain word (Hartweizengrieß, Dinkelmehl, wholewheat,
+         wheatgerm, maltextract);
+       - wheat, spelt or oats in the Nordic languages or Polish;
+       - a food made from wheat (noodles, breadcrumbs, panko);
+       - a cereal word, or teriyaki;
+       - blé or épeautre typed without the accent.
      - **T3**: a wheat-derived glucose syrup or dextrose falls through.
 4. **Templates**, in the prompt's "original (english)" style:
    - unsafe: "This product lists blé (wheat), which contains gluten.", high
@@ -147,6 +151,13 @@ On the barcode path, for Open Food Facts records only:
     grain is named first when the list has one), and T3's split can name the
     wrong grain in "glucose syrup (maize, wheat)".
   - Neither can make a verdict wrong.
+- **Claude reads the product name; Jev and the rule don't.** Take a meat or
+  broth product whose list doesn't name the meat: Claude says
+  `undeclared_source`, but the fast path can settle it `safe`.
+  - A local check of the name for meat words is a follow-up. It can wait for
+    Stage 2 data, and the name would still never go to TypeSafe.
+  - The re-grill found 1 hit in the 167 replayed safes, and it was a false
+    one: "ham" inside "Champions". So the check needs word boundaries.
 - **A second engine**: every future verdict rule is written in the prompt and
   checked against this rule. A rule that changes what `safe` means must also
   pass the fast-path live eval. For example, decision 006 made natural flavors
