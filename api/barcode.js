@@ -101,8 +101,10 @@ frequently auto-derived from ingredients or contributed by users — they are NO
   Return "safe", name the label, and end the explanation with this exact sentence: "Heads-up: a small
   share of people with celiac disease react to oats themselves."
 - A claim written on one ingredient — "gluten free oats" inside the ingredient list, with no
-  Certifications line — is NOT a whole-product claim. It clears the oats only; every other caution
-  reason still applies exactly as it would for a record with no label at all.
+  Certifications line — is NOT a whole-product claim. It clears only the oats it names: any other oat
+  ingredient in the list ("oats", "whole grain oats", "oat flour") is plain oats and stays "caution"
+  (caution_reason "oats"), and every other caution reason still applies exactly as it would for a
+  record with no label at all.
 - The label does NOT override:
   - A listed gluten source (wheat, barley, rye, malt, wheat starch, or their equivalents in any
     language) — return "caution" and say that the label and the ingredient list disagree.
@@ -134,7 +136,7 @@ Unnamed "natural flavors" / flavouring / aroma, "spices" / seasoning, maltodextr
 
 ### Guidelines
 - Caution needs a named reason from "Verdict Criteria". When one applies, use caution — never "safe" on a guess. Never return caution only because an ingredient's source is unstated (see "Not a reason for caution on its own")
-- Flag oats as "caution" unless the record carries a gluten-free label or the ingredient list itself calls the oats gluten-free
+- Flag oats as "caution" unless the record carries a gluten-free label or the ingredient list itself calls those oats gluten-free. Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.
 - If ingredient data is missing or sparse, use "caution" (caution_reason "incomplete") with low confidence
 - Do not describe an allergen TAG as the product being "labeled as containing gluten" unless the ingredients actually show a gluten grain — say the data is ambiguous instead. A "Package states:" line is different: it IS the package's own statement, and you may say so
 - Keep explanations to 1-2 sentences

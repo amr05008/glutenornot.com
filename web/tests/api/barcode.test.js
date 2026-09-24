@@ -294,6 +294,16 @@ describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
   it('no longer cautions whenever uncertain', () => {
     expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
   });
+
+  // 2026-09-23 live eval (case B9): "gluten-free rolled oats, …, whole grain
+  // oats" came back safe — "the list itself calls the oats gluten-free" /
+  // "clears the oats only" let one labeled oat ingredient clear every oat.
+  it('scopes an ingredient-level oats claim to the oats it names', () => {
+    expect(CLAUDE_PROMPT).toContain('Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.');
+    expect(CLAUDE_PROMPT).toMatch(/It clears only the oats it names/);
+    expect(CLAUDE_PROMPT).not.toContain('It clears the oats only');
+    expect(CLAUDE_PROMPT).not.toContain('calls the oats gluten-free');
+  });
 });
 
 describe('assessGlutenSignal', () => {

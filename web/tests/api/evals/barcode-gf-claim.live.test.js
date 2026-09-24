@@ -67,6 +67,12 @@ describe.skipIf(!LIVE).concurrent('barcode gf-claim live eval (real prompt, live
         expect(r.explanation).not.toMatch(FALLBACK_EXPLANATION);
       }
       expect(passes({ expect: c.expect, verdicts }), `verdicts: ${verdicts.join(', ')}`).toBe(true);
+      // Decision 006: a caution must carry the case's caution_reason on every sample.
+      if (c.reason) {
+        for (const r of runs) {
+          if (r.verdict === 'caution') expect(r.caution_reason, `caution_reason: ${r.explanation}`).toBe(c.reason);
+        }
+      }
       if (c.namesClaim) {
         for (const r of runs) expect(r.explanation, 'explanation names the claim').toMatch(NAMES_CLAIM);
       }

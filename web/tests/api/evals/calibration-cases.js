@@ -28,6 +28,10 @@ export const CALIBRATION_CASES = [
   { id: 'C19', expect: 'unsafe', why: 'a flavor that names barley', ocrText: 'BBQ CHIPS\nINGREDIENTS: Potatoes, sunflower oil, sugar, salt, natural flavor (barley), paprika.\nNET WT 8 OZ (227g)' },
   { id: 'C20', expect: 'unsafe', why: 'malt flavoring', ocrText: 'CORN FLAKES\nINGREDIENTS: Milled corn, sugar, malt flavoring, salt.\nNET WT 12 OZ (340g)' },
   { id: 'C22', expect: 'unsafe', why: 'barley malt syrup beside natural flavor', ocrText: 'HONEY RICE CRISPS\nINGREDIENTS: Rice, sugar, barley malt syrup, honey, natural flavor, salt.\nNET WT 10 OZ (283g)' },
+  // Retired claim-rule cases (decision 006): their only caution was an ingredient that is no longer a reason
+  { id: 'C23', expect: 'safe', why: 'was gf-claim #11 — no claim + natural flavors (decision 006: not a reason)', ocrText: 'SEA SALT & VINEGAR POTATO CHIPS\nINGREDIENTS: Potatoes, vegetable oil (sunflower, canola), sea salt, vinegar powder, natural flavors, citric acid.\nNET WT 5 OZ (142g)\nDistributed by Example Foods Co.' },
+  { id: 'C24', expect: 'safe', why: 'was gf-claim #17 — "Wheat-Free" + natural flavors', ocrText: 'COCONUT SNACK BITES\nWheat-Free\nINGREDIENTS: Coconut, tapioca starch, cane sugar, natural flavors, sea salt.\nNET WT 4 OZ (113g)' },
+  { id: 'C25', expect: 'safe', why: 'was gf-claim #18 — "Gluten Friendly" + maltodextrin + natural flavors', ocrText: 'KITCHEN CRAFTED VEGGIE STRAWS\nGluten Friendly\nINGREDIENTS: Potato starch, potato flour, sunflower oil, maltodextrin, natural flavors, salt, spinach powder, tomato powder.\nNET WT 6 OZ (170g)' },
 ];
 
 export const BARCODE_CALIBRATION_CASES = [
@@ -39,4 +43,5 @@ export const BARCODE_CALIBRATION_CASES = [
   { id: 'BC5', expect: 'caution', reason: 'undeclared_source', why: 'T3 — pork sausage, spices + flavorings', product: { product_name: 'Breakfast Pork Sausage', ingredients_text: 'pork, water, salt, spices, sugar, natural flavorings.', allergens_tags: [], traces_tags: [], labels_tags: [], source: 'openfoodfacts' } },
   { id: 'BC6', expect: 'unsafe', why: 'malt extract', product: { product_name: 'Chocolate Malt Drink', ingredients_text: 'sugar, cocoa, malt extract, milk powder, natural flavor.', allergens_tags: ['en:gluten', 'en:milk'], traces_tags: [], labels_tags: [], source: 'openfoodfacts' } },
   { id: 'BC8', expect: 'caution', reason: 'incomplete', why: 'placeholder ingredient text', product: { product_name: 'Snack Mix', ingredients_text: 'see package.', allergens_tags: [], traces_tags: [], labels_tags: [], source: 'openfoodfacts' } },
+  { id: 'BC9', expect: 'safe', why: 'was B10 — no label + natural flavors, no oats', product: { product_name: 'Sea Salt & Vinegar Potato Chips', ingredients_text: 'potatoes, vegetable oil (sunflower, canola), sea salt, vinegar powder, natural flavors, citric acid.', allergens_tags: [], traces_tags: [], labels_tags: ['en:vegan'], source: 'openfoodfacts' } },
 ];

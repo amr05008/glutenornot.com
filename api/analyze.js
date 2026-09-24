@@ -169,7 +169,7 @@ Unnamed "natural flavors" / flavouring / aroma, "spices" / seasoning, maltodextr
 #### Guidelines
 - Always check for allergen statements AND "may contain" warnings—these are often separate from ingredients
 - Caution needs a named reason from "Verdict Criteria". When one applies, use caution — never "safe" on a guess. Never return caution only because an ingredient's source is unstated (see "Not a reason for caution on its own")
-- Flag oats as "caution" when the text in frame carries no gluten-free claim and no certification mark — plain oats are a cross-contamination risk. A whole-product gluten-free claim or a certification mark covers them (see "Gluten-free label claims"); "gluten-free oats" inside the ingredient list covers the oats only, and the rest of the list is judged as usual
+- Flag oats as "caution" when the text in frame carries no gluten-free claim and no certification mark — plain oats are a cross-contamination risk. A whole-product gluten-free claim or a certification mark covers them (see "Gluten-free label claims"); "gluten-free oats" inside the ingredient list covers only those oats, and the rest of the list is judged as usual. Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.
 - Common hidden gluten: soy sauce, malt vinegar, malt flavoring, barley malt syrup
 - If OCR is garbled, return "caution" (caution_reason "incomplete") explaining the image quality issue
 - Keep explanations to 1-2 sentences

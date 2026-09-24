@@ -16,13 +16,18 @@
  *                defensible, a false safe is not)
  * `namesClaim: true` additionally requires every explanation to name the label
  * / certification as the reason (the definition of done says "with the claim
- * named").
+ * named"). `reason` is the caution_reason every caution sample must carry
+ * (decision 006).
  *
  * Adversarial cases are built so that "safe" is reachable ONLY through the
- * mistake under test: each carries an ambiguous ingredient (natural flavors,
- * maltodextrin…) that a real claim would clear, so a near-claim, a negated
- * claim, or an ingredient-level claim mistaken for a product claim shows up
- * as a false safe rather than hiding behind the baseline caution.
+ * mistake under test: each carries a caution reason that a real claim would
+ * clear (plain oats, or an `undeclared_source` ingredient such as yeast
+ * extract), so a near-claim, a negated claim, or an ingredient-level claim
+ * mistaken for a product claim shows up as a false safe rather than hiding
+ * behind the baseline caution. Decision 006 (2026-09-23) made natural flavors,
+ * maltodextrin, spices etc. no reason at all, so the cases that leaned on
+ * them now use plain oats; their old texts are safe cases in
+ * calibration-cases.js (C23–C25).
  *
  * The plan's toggles live here as expectations: T1 (advisory on a labeled
  * product → caution: cases 13, 14), T2 (a whole-product claim covers oats —
@@ -35,7 +40,6 @@ export const GF_CLAIM_CASES = [
   {
     id: 1,
     expect: 'safe',
-    namesClaim: true,
     why: 'the incident — labeled GF kettle corn with flavors + hydrolyzed soy protein',
     ocrText: `FARM STAND KETTLE CORN
 Gluten Free
@@ -46,7 +50,6 @@ NET WT 7 OZ (198g)`,
   {
     id: 2,
     expect: 'safe',
-    namesClaim: true,
     why: 'labeled GF + maltodextrin + modified food starch + spices',
     ocrText: `RANCH SEASONED VEGGIE CHIPS
 GLUTEN FREE
@@ -57,7 +60,6 @@ NET WT 4.5 OZ (128g)`,
   {
     id: 3,
     expect: 'safe',
-    namesClaim: true,
     why: 'Spanish "Sin gluten" + aromas naturales + almidón modificado',
     ocrText: `PATATAS FRITAS SABOR JAMÓN
 Sin gluten
@@ -68,7 +70,6 @@ Peso neto 130 g`,
   {
     id: 4,
     expect: 'safe',
-    namesClaim: true,
     why: "Dutch \"Glutenvrij\" + gemodificeerd zetmeel + natuurlijke aroma's",
     ocrText: `PAPRIKA CHIPS
 Glutenvrij
@@ -139,19 +140,22 @@ NET WT 8 OZ (227g)`,
   {
     id: 10,
     expect: 'caution',
-    why: 'negation guard — "Gluten-free options available" on a multi-product sheet + natural flavors',
+    reason: 'oats',
+    why: 'negation guard — "Gluten-free options available" on a multi-product sheet is not a claim, so it does not cover the rolled oats',
     ocrText: `MARKET PANTRY GRANOLA BARS — VARIETY PACK
 Gluten-free options available in our product line — see individual packaging.
-INGREDIENTS (Peanut Butter Bar): Peanuts, brown rice syrup, sugar, natural flavors, salt.
+INGREDIENTS (Peanut Butter Bar): Peanuts, brown rice syrup, sugar, rolled oats, salt.
 CONTAINS: PEANUTS.
 NET WT 8.8 OZ (250g)`,
   },
   {
     id: 11,
     expect: 'caution',
-    why: 'baseline, unchanged — no claim + natural flavors',
-    ocrText: `SEA SALT & VINEGAR POTATO CHIPS
-INGREDIENTS: Potatoes, vegetable oil (sunflower, canola), sea salt, vinegar powder, natural flavors, citric acid.
+    reason: 'oats',
+    // Decision 006: was "no claim + natural flavors", now safe (calibration C23).
+    why: 'baseline — no claim + plain oats',
+    ocrText: `OAT & HONEY CRUNCH BARS
+INGREDIENTS: Whole grain oats, honey, cane sugar, sunflower oil, sea salt.
 NET WT 5 OZ (142g)
 Distributed by Example Foods Co.`,
   },
@@ -187,7 +191,6 @@ NET WT 3.5 OZ (99g)`,
   {
     id: 15,
     expect: 'safe',
-    namesClaim: true,
     why: 'labeled GF + hydrolyzed vegetable protein (source unstated) — the claim covers it',
     ocrText: `SAVORY BROTH CUBES
 Gluten Free
@@ -210,19 +213,21 @@ NET WT 3 OZ (85g)`,
   {
     id: 17,
     expect: 'caution',
-    why: 'near-claim — "Wheat-Free" is not a gluten-free claim; natural flavors stay ambiguous',
+    reason: 'oats',
+    why: 'near-claim — "Wheat-Free" is not a gluten-free claim, so it does not cover the rolled oats',
     ocrText: `COCONUT SNACK BITES
 Wheat-Free
-INGREDIENTS: Coconut, tapioca starch, cane sugar, natural flavors, sea salt.
+INGREDIENTS: Coconut, tapioca starch, cane sugar, rolled oats, sea salt.
 NET WT 4 OZ (113g)`,
   },
   {
     id: 18,
     expect: 'caution',
-    why: 'near-claim — "Gluten Friendly" is not a gluten-free claim; maltodextrin + natural flavors stay ambiguous',
+    reason: 'oats',
+    why: 'near-claim — "Gluten Friendly" is not a gluten-free claim, so it does not cover the rolled oats',
     ocrText: `KITCHEN CRAFTED VEGGIE STRAWS
 Gluten Friendly
-INGREDIENTS: Potato starch, potato flour, sunflower oil, maltodextrin, natural flavors, salt, spinach powder, tomato powder.
+INGREDIENTS: Potato starch, potato flour, sunflower oil, rolled oats, salt, spinach powder, tomato powder.
 NET WT 6 OZ (170g)`,
   },
   {
@@ -246,9 +251,10 @@ NET WT 8 OZ (227g)`,
   {
     id: 21,
     expect: 'caution',
-    why: 'ingredient-level claim — "gluten-free soy sauce" covers the soy sauce only; natural flavors stay ambiguous',
+    reason: 'oats',
+    why: 'ingredient-level claim — "gluten-free soy sauce" covers the soy sauce only, not the rolled oats',
     ocrText: `SESAME GINGER RICE CRISPS
-INGREDIENTS: Brown rice, gluten-free soy sauce (water, soybeans, rice, salt), sesame oil, sugar, natural flavors, ginger powder.
+INGREDIENTS: Brown rice, gluten-free soy sauce (water, soybeans, rice, salt), sesame oil, sugar, rolled oats, ginger powder.
 CONTAINS: SOY, SESAME.
 NET WT 4 OZ (113g)`,
   },
@@ -286,9 +292,10 @@ NET WT 11 OZ (312g)`,
   {
     id: 25,
     expect: 'caution',
-    why: 'ingredient-level "gluten-free oats" with no product claim covers the oats only; natural flavors stay ambiguous',
+    reason: 'oats',
+    why: 'ingredient-level "gluten-free oats" with no product claim covers those oats only, not the plain oat flour beside them',
     ocrText: `MAPLE PECAN OATMEAL CUP
-INGREDIENTS: Gluten-free whole grain rolled oats, maple sugar, pecans, chia seeds, natural flavor, sea salt.
+INGREDIENTS: Gluten-free whole grain rolled oats, maple sugar, pecans, oat flour, chia seeds, sea salt.
 CONTAINS: TREE NUTS (PECANS).
 NET WT 2.1 OZ (60g)`,
   },

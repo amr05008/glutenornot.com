@@ -10,7 +10,7 @@
  * product arrives as label + oats + gluten tag, and that record used to come
  * back caution.
  *
- * `expect` semantics match gf-claim-cases.js (enforced by
+ * `expect` and `reason` semantics match gf-claim-cases.js (enforced by
  * barcode-gf-claim.live.test.js).
  */
 export const BARCODE_GF_CLAIM_CASES = [
@@ -50,7 +50,6 @@ export const BARCODE_GF_CLAIM_CASES = [
   {
     id: 'B3',
     expect: 'safe',
-    namesClaim: true,
     why: 'claim block ported — "No gluten" label + natural flavors + maltodextrin, no oats',
     product: {
       product_name: 'Ranch Seasoned Veggie Chips',
@@ -136,10 +135,11 @@ export const BARCODE_GF_CLAIM_CASES = [
   {
     id: 'B9',
     expect: 'caution',
-    why: 'free-text "gluten-free-oats" tag is not a whole-product claim — oats covered at ingredient level, natural flavors stay ambiguous',
+    reason: 'oats',
+    why: 'free-text "gluten-free-oats" tag is not a whole-product claim — it covers the gluten-free rolled oats, not the plain whole grain oats beside them',
     product: {
       product_name: 'Maple Oatmeal Cup',
-      ingredients_text: 'gluten-free rolled oats, maple sugar, pecans, natural flavor, sea salt.',
+      ingredients_text: 'gluten-free rolled oats, maple sugar, pecans, whole grain oats, sea salt.',
       allergens_tags: ['en:gluten', 'en:nuts'],
       traces_tags: [],
       labels_tags: ['en:gluten-free-oats'],
@@ -149,10 +149,12 @@ export const BARCODE_GF_CLAIM_CASES = [
   {
     id: 'B10',
     expect: 'caution',
-    why: 'baseline, unchanged — no label + natural flavors, no oats (the barcode twin of OCR case 11)',
+    reason: 'oats',
+    // Decision 006: was "no label + natural flavors", now safe (calibration BC9).
+    why: 'baseline — no label + plain oats, no gluten tag (the barcode twin of OCR case 11)',
     product: {
-      product_name: 'Sea Salt & Vinegar Potato Chips',
-      ingredients_text: 'potatoes, vegetable oil (sunflower, canola), sea salt, vinegar powder, natural flavors, citric acid.',
+      product_name: 'Oat & Honey Crunch Bars',
+      ingredients_text: 'whole grain oats, honey, cane sugar, sunflower oil, sea salt.',
       allergens_tags: [],
       traces_tags: [],
       labels_tags: ['en:vegan'],

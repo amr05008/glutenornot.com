@@ -849,6 +849,14 @@ describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
     expect(CLAUDE_PROMPT).not.toContain('Be conservative—when uncertain, use "caution"');
     expect(CLAUDE_PROMPT).not.toContain("The 'natural flavors' could contain gluten");
   });
+
+  // 2026-09-23 live eval: "gluten-free rolled oats … whole grain oats" came back
+  // safe on the barcode path — "covers the oats only" let one labeled oat
+  // ingredient clear every oat in the list. Same wording on both paths.
+  it('scopes an ingredient-level oats claim to the oats it names', () => {
+    expect(CLAUDE_PROMPT).toContain('Judge each oat ingredient on its own: "gluten-free rolled oats, oat flour" still lists plain oat flour.');
+    expect(CLAUDE_PROMPT).not.toContain('covers the oats only');
+  });
 });
 
 // Presence signal for the gf_claim_present analytics property — a boolean for
