@@ -732,7 +732,8 @@ function assessGlutenSignal(product) {
       ' This product also carries a gluten-free label AND unrecognized gluten-related label text (see ' +
       '"Other gluten-related labels"). If that text says gluten is present or the product is unsuitable for ' +
       'coeliacs, it wins — never "safe". Only if it does not, and oats are listed, is the gluten tag the ' +
-      'auto-derived-from-oats pattern that the label covers.';
+      'auto-derived-from-oats pattern that the label covers. With no oats listed, the record contradicts itself. ' +
+      'Never return "safe" on this record: return "caution" (caution_reason "conflict").';
   } else if (hasGlutenFreeLabel) {
     note +=
       ' This product also carries a gluten-free label, and the ingredient list shows neither a gluten grain ' +
@@ -746,10 +747,11 @@ function assessGlutenSignal(product) {
     // list to explain it, the tag may be the package's own "Contains: wheat"
     // — FALCPA's alternative to naming wheat inside the starch or flavor.
     note +=
-      ' There is no gluten-free label, and nothing in the list explains the tag (no oats, or a tag that names ' +
-      'a specific grain). It may be the package\'s own allergen statement ("Contains: wheat"), which US law ' +
-      'allows in place of naming wheat inside an ingredient such as modified food starch or natural flavor. ' +
-      'Never return "safe" on this record: return "caution" (caution_reason "conflict").';
+      ' There is no gluten-free label, and nothing this check recognizes in the list explains the tag (no oats, ' +
+      'or a tag that names a specific grain). It may be the package\'s own allergen statement ("Contains: wheat"), ' +
+      'which US law allows in place of naming wheat inside an ingredient such as modified food starch or natural ' +
+      'flavor. Never return "safe" on this record. If the list names a gluten grain in any language, return ' +
+      '"unsafe"; otherwise return "caution" (caution_reason "conflict").';
   }
 
   return note;
@@ -840,7 +842,8 @@ function buildIngredientContext(product) {
     parts.push(
       'DATA RELIABILITY: This record carries no allergen information. A US label may declare wheat only in ' +
       'a "Contains:" statement after the ingredient list, and this ingredient text may leave that statement ' +
-      'out. So unless the text itself includes a "Contains" statement, an ingredient whose gluten source is ' +
+      'out. So unless the text itself includes an allergen statement (for example "Contains: milk, soy" — ' +
+      'not "contains 2% or less of"), an ingredient whose gluten source is ' +
       'not stated (modified food starch, natural or artificial flavor, spices, seasoning, maltodextrin, ' +
       'dextrin, glucose syrup, caramel color, hydrolyzed protein) is NOT cleared by the labeling-law rule ' +
       'here: return "caution" (caution_reason "incomplete") and suggest checking the package\'s "Contains" line.'

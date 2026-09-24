@@ -234,4 +234,20 @@ export const BARCODE_GF_CLAIM_CASES = [
       source: 'openfoodfacts',
     },
   },
+  // PR #32 grill round 2 — B7's shape plus unrecognized gluten-free free text:
+  // the label-plus-unrecognized-text branch had no never-safe line.
+  {
+    id: 'B16',
+    expect: 'caution',
+    reason: 'conflict',
+    why: '"No gluten" label + unrecognized "gluten-free-certified" text + gluten tag + NO oats — the record contradicts itself',
+    product: {
+      product_name: 'Fruit Gummies',
+      ingredients_text: 'sugar, glucose syrup, natural flavouring, citric acid, salt.',
+      allergens_tags: ['en:gluten'],
+      traces_tags: [],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-certified'],
+      source: 'openfoodfacts',
+    },
+  },
 ];

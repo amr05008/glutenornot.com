@@ -392,6 +392,9 @@ describe('assessGlutenSignal', () => {
     expect(note).toMatch(/"Contains: wheat"/);
     expect(note).toMatch(/Never return "safe"/);
     expect(note).toMatch(/caution_reason "conflict"/);
+    // PR #32 grill round 2: the grain check covers English + common European
+    // languages only; a Polish "mąka pszenna" list must stay unsafe, not drop to caution.
+    expect(note).toMatch(/If the list names a gluten grain in any language, return "unsafe"/);
 
     // Oats cannot explain a wheat-specific tag either.
     const wheatTag = assessGlutenSignal({ ingredients_text: 'whole grain oats, honey', allergens_tags: ['en:wheat'], labels_tags: [] });
@@ -400,6 +403,18 @@ describe('assessGlutenSignal', () => {
     // A generic tag beside oats is the auto-derived pattern; the oats rule handles it.
     const oats = assessGlutenSignal({ ingredients_text: 'whole grain oats, honey', allergens_tags: ['en:gluten'], labels_tags: [] });
     expect(oats).not.toMatch(/Never return "safe"/);
+  });
+
+  // PR #32 grill round 2: B7's shape plus unrecognized label text had no
+  // never-safe line (the B7 fix covered only the plain-label branch).
+  it('keeps a labeled record with unrecognized gluten text and no oats at caution/conflict', () => {
+    const note = assessGlutenSignal({
+      ingredients_text: 'sugar, glucose syrup, natural flavouring, citric acid, salt',
+      allergens_tags: ['en:gluten'],
+      labels_tags: ['en:no-gluten', 'en:gluten-free-certified'],
+    });
+    expect(note).toMatch(/With no oats listed, the record contradicts itself/);
+    expect(note).toMatch(/Never return "safe" on this record/);
   });
 
   it('recognizes oats in the local language for the label-wins note', () => {
@@ -617,6 +632,8 @@ describe('buildIngredientContext data reliability (UPCitemdb)', () => {
     });
     expect(context).toMatch(/"Contains:" statement/);
     expect(context).toMatch(/caution_reason "incomplete"/);
+    // PR #32 grill round 2: "CONTAINS 2% OR LESS OF" is not an allergen statement.
+    expect(context).toMatch(/not "contains 2% or less of"/);
     expect(context).not.toMatch(/lean caution on anything ambiguous/);
   });
 

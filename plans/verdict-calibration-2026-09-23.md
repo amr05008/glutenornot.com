@@ -1075,4 +1075,4 @@ SQL="SELECT properties.method, properties.verdict, properties.caution_reason, co
 
 - [ ] **Step 3: Write Part B's plan** (`plans/retake-state-<date>.md`)
 
-Unreadable becomes a neutral retake screen, keyed on `caution_reason === 'incomplete'` on the photo path. It ships in the parked iOS 1.5.1.
+Unreadable becomes a neutral retake screen, keyed on `caution_reason === 'incomplete'` on the photo path. On the barcode path `incomplete` also covers the no-data branch and T9's no-allergen-data hold, which are not "unreadable", so Part B must not key the retake screen on it there. It ships in the parked iOS 1.5.1.
