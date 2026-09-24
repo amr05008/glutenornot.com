@@ -1,5 +1,7 @@
 # Verdict Calibration — caution means a specific reason to worry
 
+> **SHIPPED 2026-09-24:** PR #32, merged as `75713bb` and deployed at 14:35 UTC. It's server-only, so no iOS build is needed. What's left: Task 9 (the day-28 read, ~2026-10-22) and writing Part B's plan. See "Execution notes" for everything that departed from the tasks below.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stop "caution" from being the default answer. Every caution must name one specific, nameable reason, and an ingredient whose source labeling law already covers is no longer a reason.
@@ -1057,10 +1059,15 @@ Then run a fresh-reviewer grill, the way PR #31 did: an Opus 5.5 session in a He
 - [ ] **Step 4: After merge, verify the deploy by asking a question only the new code can answer**
 
 ```bash
-curl -sS -X POST https://glutenornot.com/api/barcode -H 'Content-Type: application/json' -H 'x-client: web' -d '{"barcode":"<an OFF barcode for a product whose only ambiguous ingredient is natural flavor>"}' | jq '{verdict, caution_reason}'
+curl -sS -X POST https://www.glutenornot.com/api/barcode -H 'Content-Type: application/json' -H 'x-client: web' -d '{"barcode":"<an OFF barcode for a product whose only ambiguous ingredient is natural flavor>"}' | jq '{verdict, caution_reason}'
 ```
 
 Expected: `"verdict": "safe"`, and no `caution_reason`. The old deploy returns `caution`. Pick the barcode from a public OFF record during this step, and don't record it anywhere.
+
+**Result (2026-09-24):**
+- **The URL needs `www`.** `glutenornot.com` answers a POST with a 307 to `www`, and curl doesn't follow it.
+- **The natural-flavor spot check wasn't possible.** OFF's search was down (503) and its product API was rate-limiting (429).
+- **The deploy is verified another way.** A name-only OFF record returned `{"verdict":"caution","caution_reason":"incomplete","result_reason":"missing_context"}`, and only the new code sets `caution_reason`. The FULL run already covers the natural-flavor behavior on the same deploy.
 
 ---
 
