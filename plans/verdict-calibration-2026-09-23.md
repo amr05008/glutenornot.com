@@ -163,6 +163,16 @@ These are the places where execution departed from the task text. Each one is in
   - README step 4 was rewritten as a whole. The prescribed splice would have kept "the claim clears natural flavors" and the stale "oats (unless certified)".
   - The simple diagram's "Unsure? Says caution" became "Caution names its reason", along with its aria-label.
   - The unit test that checks eval labels against the cut-off gate now covers the calibration safe cases.
+- **Four grill rounds by a fresh Opus 5.5 session in a Herdr tab (report-only, no live evals).**
+  - Round 1 said DON'T SHIP. The red finding: with decision 006 clearing the rest of the list, an unlabeled Open Food Facts record whose `en:gluten` tag nothing explains could read `safe`. That tag may be the package's "Contains: wheat". It's now `conflict`, never `safe`.
+  - Round 1 also brought T9 (records with no allergen data), the "Contains:" wording, unnamed glucose syrup only, the wider meat-product scope, and the malt vinegar, German "Aroma" and yeast-extract cases.
+  - The author's single-sample runs between rounds caught two false safes the prompt edits caused: C16 (yeast extract buried by the meat widening) and B7 (the soft "lean caution" wording on a self-contradicting record). Both are fixed and pinned.
+  - Rounds 2–4 said SHIP. Their yellows were landed before the FULL run.
+- **Aaron's call on the cropped "Contains:" line (2026-09-24): no gate.** In his words, "garbage photo in, garbage result". It's recorded in decision 006's costs.
+- **FULL run, 2026-09-24 (the merge gate): all 87 cases pass across the three runners, 346 calls.**
+  - 0 of 280 adversarial samples came back `safe`.
+  - 62 of 62 safe samples came back `safe`.
+  - Every caution carried its case's `caution_reason`.
 
 ---
 
