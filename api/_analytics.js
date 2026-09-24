@@ -26,12 +26,18 @@ const BARCODE_RECOVERY_EVENT = 'barcode_recovery';
 // are "we handed a request to iOS" and "the user tapped our write-review
 // link". Two stages, no content. Its own event so it can never inflate `scan`.
 const REVIEW_PROMPT_EVENT = 'review_prompt';
+// Jev fast path (decision 007, plans/jev-fast-path-2026-09-24.md): one event
+// per barcode scan where Jev settled a verdict, pairing it with Claude's
+// verdict on the same record. Sent after the response. Its own event so it
+// can never inflate `scan`, and so the Stage 2 gate and tripwire read one
+// table. Enums only.
+const ENGINE_AUDIT_EVENT = 'engine_audit';
 
 /**
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, ocrMs, claudeMs, totalMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -41,9 +47,22 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // X-Client-Version header). Without it a release is unattributable: every
   // event carries $lib_version = posthog-node, which is the SDK, not the app.
   if (appVersion != null) props.app_version = appVersion;
-  // Which Claude model produced the verdict, so a model swap is attributable
-  // at the time it happens instead of archaeologically.
+  // Which model produced the served verdict (a Claude model, or Jev's pinned
+  // version when engine = jev), so a model swap is attributable at the time
+  // it happens instead of archaeologically.
   if (model != null) props.model = model;
+  // Barcode path only (decision 007): which engine's verdict the user saw —
+  // `claude`, or `jev` when the fast path served it. Absent when no engine
+  // ran (no ingredient data) and on OCR scans.
+  if (engine != null) props.engine = engine;
+  // Barcode path, JEV_MODE other than off: what the fast path did.
+  // jev_outcome is settled_safe | settled_unsafe | fell_through | timeout |
+  // error | skipped (never asked: a code gate hit, or no key); jev_via is the
+  // rule branch or gate that decided (a fixed enum from decideFastPath), and
+  // jev_ms Jev's round trip. Names of code branches, never content.
+  if (jevOutcome != null) props.jev_outcome = jevOutcome;
+  if (jevVia != null) props.jev_via = jevVia;
+  if (jevMs != null) props.jev_ms = jevMs;
   if (confidence != null) props.confidence = confidence;
   // Barcode path only: splits caution verdicts into "the database had no
   // ingredient data" vs a real judgement call on actual ingredients.
@@ -77,7 +96,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // decision 002 accepted Opus latency pending scan-duration data. Milliseconds
   // only. The upload leg is not visible here — the server clock starts when
   // the body has arrived; see elapsed_ms on client-beaconed failures for that.
+  // Barcode path (decision 007, the speed plan's timing): lookup_ms is the
+  // database waterfall; claude_ms and total_ms mean the same as on OCR. A
+  // Jev-served scan has no claude_ms — Claude is still running as its audit.
   if (ocrMs != null) props.ocr_ms = ocrMs;
+  if (lookupMs != null) props.lookup_ms = lookupMs;
   if (claudeMs != null) props.claude_ms = claudeMs;
   if (totalMs != null) props.total_ms = totalMs;
   // IP-derived geo from the Vercel edge (see getClientGeo). Use PostHog's
@@ -168,6 +191,27 @@ function buildReviewPromptProperties({ stage, platform, appVersion, country, reg
 }
 
 /**
+ * Build the PostHog event properties for one engine audit (decision 007):
+ * Jev settled a verdict, and Claude read the same record. `mode` is JEV_MODE;
+ * `served` is which verdict the user saw (`jev` | `claude`); `claude_verdict`
+ * is `error` when the Claude call failed, and then `agree` is absent. Named
+ * fields only — nothing else a caller passes can reach the event.
+ * Pure — no I/O.
+ */
+function buildEngineAuditProperties({ mode, jevVerdict, claudeVerdict, claudeCautionReason, served, agree, platform, appVersion, country, region, city } = {}) {
+  const props = { mode, jev_verdict: jevVerdict, claude_verdict: claudeVerdict };
+  if (claudeCautionReason != null) props.claude_caution_reason = claudeCautionReason;
+  props.served = served;
+  if (agree != null) props.agree = agree;
+  if (platform != null) props.platform = platform;
+  if (appVersion != null) props.app_version = appVersion;
+  if (country != null) props.$geoip_country_code = country;
+  if (region != null) props.$geoip_subdivision_1_code = region;
+  if (city != null) props.$geoip_city_name = city;
+  return props;
+}
+
+/**
  * Normalize the client-supplied `X-Client` header into a known platform.
  * Header values are untrusted, so whitelist to ios/web and bucket everything
  * else (missing header, old app versions, scripts) as "unknown".
@@ -239,8 +283,13 @@ function anonId(ip) {
  * @param {'oats'|'may_contain'|'conflict'|'undeclared_source'|'incomplete'|'other'} [input.cautionReason] label cautions only
  * @param {boolean} [input.gfLabelPresent]  Barcode path only: the record carried a gluten-free label tag
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
- * @param {number} [input.claudeMs]         OCR path only: Claude round-trip in ms (incl. retries)
- * @param {number} [input.totalMs]          OCR path only: body-received → verdict, in ms
+ * @param {number} [input.claudeMs]         Claude round-trip in ms (incl. retries); absent on a Jev-served scan
+ * @param {number} [input.totalMs]          request → verdict in ms (OCR: from the body's arrival)
+ * @param {number} [input.lookupMs]         Barcode path only: database waterfall in ms
+ * @param {'claude'|'jev'} [input.engine]   Barcode path only: whose verdict was served
+ * @param {'settled_safe'|'settled_unsafe'|'fell_through'|'timeout'|'error'|'skipped'} [input.jevOutcome] Barcode path, JEV_MODE ≠ off
+ * @param {string} [input.jevVia]           Barcode path, JEV_MODE ≠ off: the fast-path rule branch or gate
+ * @param {number} [input.jevMs]            Barcode path, JEV_MODE ≠ off: Jev round-trip in ms, when asked
  */
 async function trackScan({ ip, ...fields } = {}) {
   return captureEvent(SCAN_EVENT, ip, buildScanProperties(fields));
@@ -307,7 +356,42 @@ async function trackReviewPrompt({ ip, ...fields } = {}) {
   return captureEvent(REVIEW_PROMPT_EVENT, ip, buildReviewPromptProperties(fields));
 }
 
-async function captureEvent(event, ip, properties) {
+/**
+ * Record one engine audit (decision 007). Always called off the response path
+ * (inside runAfterResponse), so it awaits its own flush rather than
+ * registering another waitUntil from inside one. Same safety contract as
+ * {@link trackScan}.
+ *
+ * @param {object} input
+ * @param {string} [input.ip]               client IP, hashed into the distinct ID
+ * @param {'shadow'|'unsafe'|'full'} input.mode  JEV_MODE at the time
+ * @param {'safe'|'unsafe'} input.jevVerdict      what the fast path settled
+ * @param {'safe'|'caution'|'unsafe'|'error'} input.claudeVerdict
+ * @param {string} [input.claudeCautionReason]    Claude's caution_reason, on a caution
+ * @param {'jev'|'claude'} input.served           whose verdict the user saw
+ * @param {boolean} [input.agree]                 jevVerdict === claudeVerdict (absent on error)
+ * @param {'ios'|'web'|'unknown'} [input.platform]
+ * @param {string} [input.appVersion]
+ * @param {string} [input.country]
+ * @param {string} [input.region]
+ * @param {string} [input.city]
+ */
+async function trackEngineAudit({ ip, ...fields } = {}) {
+  return captureEvent(ENGINE_AUDIT_EVENT, ip, buildEngineAuditProperties(fields), { awaitFlush: true });
+}
+
+/**
+ * Let `promise` finish after the response is sent: on Vercel it is handed to
+ * the request context's waitUntil (the function stays alive until it
+ * settles); elsewhere it just runs. A rejection is logged, never thrown.
+ */
+function runAfterResponse(promise) {
+  const guarded = Promise.resolve(promise).catch((err) => console.error('after-response work failed:', err));
+  const waitUntil = getWaitUntil();
+  if (waitUntil) waitUntil(guarded);
+}
+
+async function captureEvent(event, ip, properties, { awaitFlush = false } = {}) {
   const apiKey = process.env.POSTHOG_API_KEY;
   if (!apiKey) return; // not configured — no-op
 
@@ -331,7 +415,7 @@ async function captureEvent(event, ip, properties) {
     // it runs after the response is sent and still completes before the
     // function freezes. Without a context (local/dev), await as before.
     const flush = client.shutdown(2000);
-    const waitUntil = getWaitUntil();
+    const waitUntil = awaitFlush ? null : getWaitUntil();
     if (waitUntil) {
       waitUntil(flush.catch((err) => console.error(`${event} flush failed:`, err)));
     } else {
@@ -358,10 +442,12 @@ export {
   SCAN_FAILED_EVENT,
   BARCODE_RECOVERY_EVENT,
   REVIEW_PROMPT_EVENT,
+  ENGINE_AUDIT_EVENT,
   buildScanProperties,
   buildScanFailureProperties,
   buildRecoveryProperties,
   buildReviewPromptProperties,
+  buildEngineAuditProperties,
   anonId,
   normalizeClient,
   normalizeAppVersion,
@@ -369,4 +455,6 @@ export {
   trackScanFailure,
   trackBarcodeRecovery,
   trackReviewPrompt,
+  trackEngineAudit,
+  runAfterResponse,
 };

@@ -108,6 +108,36 @@ describe('health handler', () => {
     expect(res.body.healthy).toBe(false);
   });
 
+  it('reports the Jev fast path (key presence and JEV_MODE) without affecting health', async () => {
+    const saved = { key: process.env.TYPESAFE_API_KEY, mode: process.env.JEV_MODE };
+    try {
+      delete process.env.TYPESAFE_API_KEY;
+      delete process.env.JEV_MODE;
+      let res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.healthy).toBe(true);
+      expect(res.body.services.fast_path).toEqual({ key: 'missing_key', mode: 'off' });
+
+      process.env.TYPESAFE_API_KEY = 'ts-secret-value';
+      process.env.JEV_MODE = 'Unsafe';
+      res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      expect(res.body.services.fast_path).toEqual({ key: 'configured', mode: 'unsafe' });
+      // Presence only: the key never appears in the response.
+      expect(JSON.stringify(res.body)).not.toContain('ts-secret-value');
+
+      // A mode that isn't one of the four reads as off, as the barcode path treats it.
+      process.env.JEV_MODE = 'on';
+      res = mockRes();
+      await handler({ method: 'GET', query: {}, headers: {} }, res);
+      expect(res.body.services.fast_path.mode).toBe('off');
+    } finally {
+      restore('TYPESAFE_API_KEY', saved.key);
+      restore('JEV_MODE', saved.mode);
+    }
+  });
+
   it('reports barcode fallback key presence without affecting health', async () => {
     const saved = {
       usda: process.env.USDA_API_KEY,

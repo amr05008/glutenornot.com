@@ -122,6 +122,23 @@ describe('guardLiveRun (what the runners call at collection)', () => {
     expect(lines[0]).toMatch(/single sample/);
   });
 
+  it('prices a Jev runner as Jev calls: no Opus, no warm-up (decision 007)', () => {
+    const lines = [];
+    const runs = guardLiveRun({ key: 'jev-fast-path', engine: 'jev', cases: CASES, stateDir: tmpState(), env: {}, log: (l) => lines.push(l) });
+    expect(runs).toEqual(sampleRuns({ full: false }));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/5 Jev calls ≈ \$0\.0003 \(TypeSafe; no Anthropic spend\)/);
+    expect(lines[0]).not.toMatch(/Opus/);
+  });
+
+  it('holds a Jev runner to the same one-FULL-run-an-hour cooldown', () => {
+    const dir = tmpState();
+    guardLiveRun({ key: 'jev-fast-path', engine: 'jev', cases: CASES, stateDir: dir, env: { FULL: '1' }, log: () => {} });
+    expect(() =>
+      guardLiveRun({ key: 'jev-fast-path', engine: 'jev', cases: CASES, stateDir: dir, env: { FULL: '1' }, log: () => {} })
+    ).toThrow(/FORCE=1/);
+  });
+
   it('records a FULL run and refuses the next one inside the cooldown', () => {
     const dir = tmpState();
     const runs = guardLiveRun({ key: 'gf-claim', cases: CASES, stateDir: dir, env: { FULL: '1' }, log: () => {} });

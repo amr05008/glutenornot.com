@@ -26,6 +26,10 @@ import {
   trackScanFailure,
   trackBarcodeRecovery,
   trackReviewPrompt,
+  trackEngineAudit,
+  buildEngineAuditProperties,
+  runAfterResponse,
+  ENGINE_AUDIT_EVENT,
   SCAN_EVENT,
   SCAN_FAILED_EVENT,
   BARCODE_RECOVERY_EVENT,
@@ -602,5 +606,132 @@ describe('review_prompt event (plans/review-prompt-visibility-2026-09-15.md)', (
       expect(ev.properties).toEqual({ stage: 'store_opened' });
       expect(JSON.stringify(ev)).not.toContain('203.0.113.9');
     });
+  });
+});
+
+describe('buildScanProperties (Jev fast path — decision 007)', () => {
+  it('maps the engine, the fast path outcome and the barcode timings', () => {
+    const props = buildScanProperties({
+      method: 'barcode',
+      verdict: 'unsafe',
+      engine: 'jev',
+      jevOutcome: 'settled_unsafe',
+      jevVia: 'unsafe',
+      jevMs: 182,
+      lookupMs: 310,
+      claudeMs: 2900,
+      totalMs: 505,
+    });
+    expect(props).toMatchObject({
+      engine: 'jev',
+      jev_outcome: 'settled_unsafe',
+      jev_via: 'unsafe',
+      jev_ms: 182,
+      lookup_ms: 310,
+      claude_ms: 2900,
+      total_ms: 505,
+    });
+  });
+
+  it('omits them all when absent (JEV_MODE=off omits the jev_* fields; OCR has no engine)', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe' });
+    for (const k of ['engine', 'jev_outcome', 'jev_via', 'jev_ms', 'lookup_ms']) expect(props).not.toHaveProperty(k);
+  });
+});
+
+describe('engine_audit (decision 007)', () => {
+  it('is the stable event name "engine_audit"', () => {
+    expect(ENGINE_AUDIT_EVENT).toBe('engine_audit');
+  });
+
+  it('maps every field to snake_case, keeping an explicit false', () => {
+    const props = buildEngineAuditProperties({
+      mode: 'full',
+      jevVerdict: 'safe',
+      claudeVerdict: 'caution',
+      claudeCautionReason: 'may_contain',
+      served: 'jev',
+      agree: false,
+      platform: 'ios',
+      appVersion: '1.5.0',
+      country: 'US',
+      region: 'NY',
+      city: 'Brooklyn',
+    });
+    expect(props).toEqual({
+      mode: 'full',
+      jev_verdict: 'safe',
+      claude_verdict: 'caution',
+      claude_caution_reason: 'may_contain',
+      served: 'jev',
+      agree: false,
+      platform: 'ios',
+      app_version: '1.5.0',
+      $geoip_country_code: 'US',
+      $geoip_subdivision_1_code: 'NY',
+      $geoip_city_name: 'Brooklyn',
+    });
+  });
+
+  it('omits agree and the caution reason when absent (a failed Claude audit has no agreement)', () => {
+    const props = buildEngineAuditProperties({ mode: 'unsafe', jevVerdict: 'unsafe', claudeVerdict: 'error', served: 'jev' });
+    expect(props).toEqual({ mode: 'unsafe', jev_verdict: 'unsafe', claude_verdict: 'error', served: 'jev' });
+  });
+
+  it('never records a product, barcode or explanation, even if a caller passes one', () => {
+    const props = buildEngineAuditProperties({
+      mode: 'full', jevVerdict: 'safe', claudeVerdict: 'safe', served: 'jev', agree: true,
+      barcode: '0012345678905', product_name: 'Crackers', explanation: 'Lists wheat',
+    });
+    expect(JSON.stringify(props)).not.toMatch(/0012345678905|Crackers|wheat/);
+  });
+});
+
+describe('trackEngineAudit and runAfterResponse (off the response path)', () => {
+  const CTX_SYMBOL = Symbol.for('@vercel/request-context');
+  const originalKey = process.env.POSTHOG_API_KEY;
+
+  afterEach(() => {
+    delete globalThis[CTX_SYMBOL];
+    if (originalKey === undefined) delete process.env.POSTHOG_API_KEY;
+    else process.env.POSTHOG_API_KEY = originalKey;
+    posthogControl.shutdown = () => Promise.resolve();
+    posthogControl.captured = [];
+  });
+
+  it('trackEngineAudit awaits its own flush even inside a request context (it already runs in waitUntil)', async () => {
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    let flushed = false;
+    posthogControl.shutdown = async () => { flushed = true; };
+    const waitUntil = vi.fn();
+    globalThis[CTX_SYMBOL] = { get: () => ({ waitUntil }) };
+
+    await trackEngineAudit({ ip: '203.0.113.7', mode: 'shadow', jevVerdict: 'safe', claudeVerdict: 'safe', served: 'claude', agree: true });
+
+    expect(flushed).toBe(true);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(posthogControl.captured[0]).toMatchObject({ event: 'engine_audit', properties: { served: 'claude' } });
+  });
+
+  it('runAfterResponse hands the work to waitUntil when a request context exists', async () => {
+    const waitUntil = vi.fn();
+    globalThis[CTX_SYMBOL] = { get: () => ({ waitUntil }) };
+    runAfterResponse(Promise.resolve('done'));
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBe('done');
+  });
+
+  it('runAfterResponse swallows a failure (logged), with or without a context', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const waitUntil = vi.fn();
+    globalThis[CTX_SYMBOL] = { get: () => ({ waitUntil }) };
+    runAfterResponse(Promise.reject(new Error('boom')));
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+
+    delete globalThis[CTX_SYMBOL];
+    runAfterResponse(Promise.reject(new Error('boom again')));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(error).toHaveBeenCalledTimes(2);
+    error.mockRestore();
   });
 });

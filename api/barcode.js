@@ -20,7 +20,8 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
+import { trackScan, trackScanFailure, trackEngineAudit, runAfterResponse, normalizeClient, normalizeAppVersion } from './_analytics.js';
+import { JEV_MODEL, SOURCE_AT, CLEAR_BELOW, LIST_OK_AT, JEV_SOURCES, JEV_DANGER, jevMode, askJev } from './_jev.js';
 
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 const USDA_API = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -192,8 +193,13 @@ export default async function handler(req, res) {
       });
     }
 
+    // Server-leg timing (decision 007 / plans/barcode-speed-2026-09-24.md):
+    // the barcode path had none; the OCR path has had it since 2026-08-28.
+    const startedAt = Date.now();
+
     // Step 1: Look up product in Open Food Facts
     const product = await lookupProduct(cleanBarcode);
+    const lookupMs = Date.now() - startedAt;
 
     if (!product) {
       // Ephemeral Vercel-log breadcrumb only — the barcode must NOT go to
@@ -235,6 +241,8 @@ export default async function handler(req, res) {
         cautionReason: 'incomplete',
         gfLabelPresent: hasGlutenFreeLabelTag(product.labels_tags),
         dataSource: product.source,
+        lookupMs,
+        totalMs: Date.now() - startedAt,
         ...geo,
       });
       return res.status(200).json({
@@ -252,31 +260,101 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 3: Analyze with Claude
-    const analysis = await analyzeWithClaude(ingredientContext);
+    // Step 3: Claude starts now, on every scan (F2). With JEV_MODE on, Jev is
+    // asked in parallel (≤800 ms); if it settles a verdict the mode serves,
+    // the response goes out at once and Claude finishes as the audit.
+    const claudeStart = Date.now();
+    const claude = analyzeWithClaude(ingredientContext).then(
+      (analysis) => ({ analysis, ms: Date.now() - claudeStart }),
+      (error) => ({ error, ms: Date.now() - claudeStart })
+    );
+    const mode = jevMode();
+    const fast = mode === 'off' ? null : await runFastPath(product);
+    const jevFields = {};
+    if (fast) {
+      jevFields.jevOutcome = fast.outcome;
+      if (fast.via) jevFields.jevVia = fast.via;
+      if (fast.ms != null) jevFields.jevMs = fast.ms;
+    }
+    const settled = fast?.decision?.settled ? fast.decision.result : null;
+    const scanBase = {
+      ip: clientIP,
+      platform,
+      appVersion,
+      method: 'barcode',
+      hadIngredientData: true,
+      gfLabelPresent: hasGlutenFreeLabelTag(product.labels_tags),
+      dataSource: product.source,
+      lookupMs,
+      ...jevFields,
+      ...geo,
+    };
+    const audit = (served, c) => trackEngineAudit({
+      ip: clientIP,
+      platform,
+      appVersion,
+      mode,
+      jevVerdict: settled.verdict,
+      served,
+      ...(c.error
+        ? { claudeVerdict: 'error' }
+        : {
+            claudeVerdict: c.analysis.verdict,
+            claudeCautionReason: c.analysis.caution_reason,
+            agree: c.analysis.verdict === settled.verdict,
+          }),
+      ...geo,
+    });
+
+    if (settled && servesVerdict(mode, settled.verdict)) {
+      const result = {
+        ...settled,
+        product_name: displayName || null,
+        barcode: cleanBarcode,
+        data_source: product.source,
+      };
+      incrementRateLimit(clientIP);
+      await trackScan({
+        ...scanBase,
+        engine: 'jev',
+        model: JEV_MODEL,
+        mode: result.mode,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        totalMs: Date.now() - startedAt,
+      });
+      runAfterResponse(claude.then((c) => {
+        if (c.error) console.warn('Claude audit call failed:', describeClaudeError(c.error));
+        return audit('jev', c);
+      }));
+      return res.status(200).json(result);
+    }
+
+    const c = await claude;
+    if (c.error) throw c.error;
+    const analysis = c.analysis;
 
     // Add product metadata
     analysis.product_name = displayName || null;
     analysis.barcode = cleanBarcode;
     analysis.data_source = product.source;
+    analysis.engine = 'claude';
 
     incrementRateLimit(clientIP);
 
     await trackScan({
-      ip: clientIP,
-      platform,
-      appVersion,
+      ...scanBase,
+      engine: 'claude',
       model: CLAUDE_MODEL,
-      method: 'barcode',
       mode: analysis.mode,
       verdict: analysis.verdict,
       confidence: analysis.confidence,
-      hadIngredientData: true,
       cautionReason: analysis.caution_reason,
-      gfLabelPresent: hasGlutenFreeLabelTag(product.labels_tags),
-      dataSource: product.source,
-      ...geo,
+      claudeMs: c.ms,
+      totalMs: Date.now() - startedAt,
     });
+    // A settled verdict the mode didn't serve: shadowed, and audited.
+    if (settled) runAfterResponse(audit('claude', c));
 
     return res.status(200).json(analysis);
 
@@ -295,6 +373,39 @@ export default async function handler(req, res) {
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'
     });
+  }
+}
+
+/** Does JEV_MODE serve this settled verdict? (F3) */
+function servesVerdict(mode, verdict) {
+  return mode === 'full' || (mode === 'unsafe' && verdict === 'unsafe');
+}
+
+/**
+ * The fast path for one record: the code gates, then Jev, then the rule.
+ * Resolves to `{ outcome, via, ms, decision }` for the scan event; never
+ * throws. Only the ingredient text reaches Jev.
+ */
+async function runFastPath(product) {
+  let jevMs;
+  try {
+    const gate = fastPathGate(product);
+    if (gate) return { outcome: 'skipped', via: gate };
+    if (!process.env.TYPESAFE_API_KEY?.trim()) return { outcome: 'skipped', via: 'no_key' };
+    const jev = await askJev(product.ingredients_text);
+    jevMs = jev.ms;
+    if (jev.outcome !== 'ok') return { outcome: jev.outcome, ms: jev.ms };
+    const decision = decideFastPath(product, jev.scores);
+    return {
+      outcome: decision.settled ? `settled_${decision.result.verdict}` : 'fell_through',
+      via: decision.via,
+      ms: jev.ms,
+      decision,
+    };
+  } catch (err) {
+    // A fast-path bug must never cost the user a scan: Claude is already running.
+    console.error('Jev fast path failed:', err?.name || 'error');
+    return { outcome: 'error', ms: jevMs };
   }
 }
 
@@ -872,6 +983,170 @@ async function analyzeWithClaude(ingredientContext) {
   return parseClaudeResponse(content);
 }
 
+// ── Jev fast path (decision 007, plans/jev-fast-path-2026-09-24.md) ─────────
+// Jev's scores (api/_jev.js) plus this rule settle only a clear `unsafe` or a
+// clear `safe`; everything else falls through to Claude. The rule is the
+// bake-off's E2 v2 (jev-sandbox experiments/07-barcode-bakeoff/engines.ts,
+// e2RuleV2) with two changes: its own multilingual tag check replaces
+// isGlutenFamilyTag, and a wheat-derived glucose syrup or dextrose falls
+// through (T3). It lives here, not in _jev.js, because it is built on this
+// file's tag helpers. isGlutenFamilyTag itself is untouched: it shapes what
+// Claude sees, and changing it needs its own eval-gated PR.
+
+// A gluten word in any of the forms the bake-off found in allergen and trace
+// tags (gluten, glutine, glutén, glúten, glutenhaltig, gluteeni), matched
+// after the tag is lowercased and its accents stripped.
+const GLUTEN_WORD_PATTERN = /glut(?:e+|i)n/;
+// Plus celiac in the languages GLUTEN_GRAIN_PATTERN covers (celiac, coeliac,
+// cœliaque, celíaco, celiachia, coeliakie, Zöliakie), for label tags.
+const GLUTEN_LABEL_WORD_PATTERN = /glut(?:e+|i)n|(?:c(?:o|oe)?e|zo)lia[ckq]/;
+
+function normalizeTag(tag) {
+  return tag.toLowerCase().replace(/^[a-z]{2,3}:/, '');
+}
+
+// NFKD leaves the œ ligature whole, so spell it out.
+function stripAccents(text) {
+  return text.normalize('NFKD').replace(/\p{M}/gu, '').replace(/œ/g, 'oe');
+}
+
+/**
+ * Does this allergen or trace tag stop the fast path from settling `safe`?
+ * Case-insensitive, any language: a gluten word, a gluten grain
+ * (GLUTEN_GRAIN_PATTERN) or oats (a caution reason in this app). Open Food
+ * Facts tags nearly every wheat product `en:gluten`, so a tag never blocks
+ * `unsafe` — only `safe`.
+ */
+function blocksFastPathSafe(tag) {
+  if (typeof tag !== 'string') return false;
+  const t = normalizeTag(tag);
+  return GLUTEN_WORD_PATTERN.test(stripAccents(t)) || GLUTEN_GRAIN_PATTERN.test(t) || OATS_PATTERN.test(t);
+}
+
+/**
+ * The code gates, run before Jev is asked: a hit names why the fast path
+ * doesn't judge this record, and Claude answers alone. Null means ask Jev.
+ */
+function fastPathGate(product) {
+  if (product.source !== 'openfoodfacts') return 'source';
+  if (!String(product.ingredients_text ?? '').trim()) return 'no_text';
+  const labels = Array.isArray(product.labels_tags) ? product.labels_tags : [];
+  // Claim scope is subtle and it's ~4% of records: Claude reads the claim.
+  if (hasGlutenFreeLabelTag(labels)) return 'gf_label';
+  // Any other gluten-related label, in any language ("senza glutine" isn't
+  // caught by the English-only helpers).
+  if (
+    adverseGlutenLabels(labels).length > 0 ||
+    unrecognizedGlutenLabels(labels).length > 0 ||
+    labels.some((tag) => typeof tag === 'string' && GLUTEN_LABEL_WORD_PATTERN.test(stripAccents(normalizeTag(tag))))
+  ) {
+    return 'label_text';
+  }
+  // A gluten allergen tag nothing in the list explains: Claude gets the note.
+  if (assessGlutenSignal(product)) return 'signal_note';
+  return null;
+}
+
+// Glucose syrup and dextrose in the languages GLUTEN_GRAIN_PATTERN covers.
+const GRAIN_SUGAR_PATTERN = /(?:gluc|gluk|glic)os|dextros|destros/iu;
+
+/**
+ * Every GLUTEN_GRAIN_PATTERN match in the list, each marked `sugar` when it
+ * shares an ingredient entry (split on commas and semicolons) with a glucose
+ * or dextrose word: "dextrose de blé", "glucose syrup (wheat)",
+ * "Weizenglukosesirup". The split errs toward `sugar` when a grain and a
+ * sugar share an entry, which only sends the record to Claude (T3).
+ */
+function grainMatches(text) {
+  const matches = [];
+  let offset = 0;
+  for (const entry of text.split(/[,;]/)) {
+    const sugar = GRAIN_SUGAR_PATTERN.test(entry);
+    for (const m of entry.matchAll(new RegExp(GLUTEN_GRAIN_PATTERN.source, 'giu'))) {
+      matches.push({ word: m[0].toLowerCase(), index: offset + m.index, sugar });
+    }
+    offset += entry.length + 1;
+  }
+  return matches;
+}
+
+// GLUTEN_GRAIN_PATTERN's non-English words, for the "original (english)"
+// style the prompt uses for flagged ingredients. English words, and words
+// that mean something else in English (orzo is pasta, farro is farro), stay
+// as they are.
+const GRAIN_IN_ENGLISH = {
+  trigo: 'wheat', cebada: 'barley', centeno: 'rye', malta: 'malt', sémola: 'semolina', espelta: 'spelt',
+  mout: 'malt', griesmeel: 'semolina',
+  blat: 'wheat', ordi: 'barley', sègol: 'rye', sèmola: 'semolina',
+  blé: 'wheat', froment: 'wheat', orge: 'barley', seigle: 'rye', semoule: 'semolina', épeautre: 'spelt',
+  gerste: 'barley', roggen: 'rye', malz: 'malt', dinkel: 'spelt',
+  frumento: 'wheat', segale: 'rye', malto: 'malt', semola: 'semolina',
+  cevada: 'barley', centeio: 'rye', malte: 'malt',
+};
+// The pattern's compound families (tarwebloem, Weizenmehl, Roggenmehl, Gerstenmalz).
+const GRAIN_PREFIX_IN_ENGLISH = [['tarwe', 'wheat'], ['weizen', 'wheat'], ['gerst', 'barley'], ['rogge', 'rye']];
+// "farina" is flour of any kind in Italian ("farina di riso"): name it only
+// when the list names nothing more specific.
+const VAGUE_GRAIN_WORDS = new Set(['farina']);
+
+function grainInEnglish(word) {
+  if (GRAIN_IN_ENGLISH[word]) return `${word} (${GRAIN_IN_ENGLISH[word]})`;
+  const prefix = GRAIN_PREFIX_IN_ENGLISH.find(([p]) => word.startsWith(p));
+  return prefix ? `${word} (${prefix[1]})` : word;
+}
+
+const FAST_PATH_SAFE_EXPLANATION = "No gluten ingredients are listed, and there's no may-contain warning.";
+
+function fastPathResult(verdict, flagged) {
+  return {
+    mode: 'label',
+    verdict,
+    flagged_ingredients: flagged ? [flagged] : [],
+    allergen_warnings: [],
+    explanation: flagged ? `This product lists ${flagged}, which contains gluten.` : FAST_PATH_SAFE_EXPLANATION,
+    // T2: a named grain Jev and the pattern agree on is high; a clean list is
+    // a thinner basis than Opus's reading, so medium.
+    confidence: verdict === 'unsafe' ? 'high' : 'medium',
+    engine: 'jev',
+  };
+}
+
+/**
+ * The fast-path rule: `{ settled: true, via, result }` with a servable result,
+ * or `{ settled: false, via }` naming why Claude answers. `via` is a fixed
+ * enum, safe for analytics. `scores` are Jev's probabilities (askJev).
+ */
+function decideFastPath(product, scores) {
+  const gate = fastPathGate(product);
+  if (gate) return { settled: false, via: gate };
+  if (!scores) return { settled: false, via: 'no_scores' };
+
+  const text = String(product.ingredients_text).trim();
+  const matches = grainMatches(text);
+  const grains = matches.filter((m) => !m.sugar);
+  const source = Math.max(...JEV_SOURCES.map((k) => scores[k]));
+
+  // Unsafe needs Jev (a source question) AND the pattern (a named grain) —
+  // neither alone settles anything — with no may-contain warning the match
+  // could be sitting inside.
+  if (source >= SOURCE_AT && scores.may_contain < SOURCE_AT && matches.length > 0) {
+    // T3: a wheat-derived glucose syrup or dextrose is Claude's call (Opus
+    // says caution/undeclared_source; the photo path's C27 says not-safe).
+    if (grains.length === 0) return { settled: false, via: 'wheat_sugar' };
+    const named = grains.find((m) => !VAGUE_GRAIN_WORDS.has(m.word)) || grains[0];
+    return { settled: true, via: 'unsafe', result: fastPathResult('unsafe', grainInEnglish(named.word)) };
+  }
+
+  // A gluten-family allergen or trace tag, in any language, blocks safe.
+  const tagged = [...(product.allergens_tags || []), ...(product.traces_tags || [])].some(blocksFastPathSafe);
+  const listOk = scores.is_ingredient_list >= LIST_OK_AT && scores.looks_complete >= LIST_OK_AT;
+  const danger = Math.max(...JEV_DANGER.map((k) => scores[k]));
+  if (!tagged && matches.length === 0 && listOk && danger < CLEAR_BELOW) {
+    return { settled: true, via: 'safe', result: fastPathResult('safe') };
+  }
+  return { settled: false, via: tagged ? 'gluten_tag' : matches.length > 0 ? 'pattern_match' : !listOk ? 'list_quality' : 'not_clear' };
+}
+
 /**
  * Parse and validate Claude's response
  */
@@ -937,6 +1212,10 @@ export {
   adverseGlutenLabels,
   unrecognizedGlutenLabels,
   isGlutenFamilyTag,
+  GLUTEN_GRAIN_PATTERN,
+  fastPathGate,
+  blocksFastPathSafe,
+  decideFastPath,
   lookupOpenFoodFacts,
   lookupUSDA,
   lookupNutritionix,
