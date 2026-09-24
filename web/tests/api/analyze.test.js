@@ -841,7 +841,7 @@ describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
   });
 
   it('keeps meat products, soy sauce and yeast extract as undeclared_source (T3–T5)', () => {
-    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*meat or poultry product/);
+    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*\n\s+- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product/);
     expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[\s\S]*soy sauce[\s\S]*yeast extract/);
   });
 
@@ -873,7 +873,22 @@ describe('CLAUDE_PROMPT caution reasons (decision 006)', () => {
   });
 
   it('treats any product made with meat or poultry as a meat product (T3)', () => {
-    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+    expect(CLAUDE_PROMPT).toMatch(/- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+  });
+
+  // PR #32 grill round-1 live run: with the meat clause widened, a vegetable
+  // broth's yeast extract came back safe — the T4 item sat at the tail of a
+  // long meat-product line. Each undeclared_source now stands on its own line.
+  it('keeps yeast extract an undeclared_source in any product, on its own line (T4)', () => {
+    expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
+    expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
+  });
+
+  // Same run: "near-claims such as …" made the model read "Gluten Friendly" as
+  // a statement that gluten is present (conflict). Name the statements instead.
+  it('files only a statement that gluten is present under conflict, not every near-claim', () => {
+    expect(CLAUDE_PROMPT).not.toContain('(near-claims such as "very low gluten" / "gluten-reduced")');
+    expect(CLAUDE_PROMPT).toContain('the label itself says gluten is present ("low gluten", "very low gluten", "gluten-reduced", "crafted to remove gluten")');
   });
 });
 

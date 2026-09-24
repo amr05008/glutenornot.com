@@ -312,7 +312,9 @@ describe('CLAUDE_PROMPT caution reasons (decision 006, barcode path)', () => {
     expect(CLAUDE_PROMPT).toContain('in the ingredient list, or in a "Contains:" statement right after it');
     expect(CLAUDE_PROMPT).toContain('no "Contains"/allergen statement names wheat, barley, rye, or gluten');
     expect(CLAUDE_PROMPT).toContain('One labeled with its wheat source ("glucose syrup (wheat)", "wheat maltodextrin") names wheat');
-    expect(CLAUDE_PROMPT).toMatch(/`undeclared_source`[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+    expect(CLAUDE_PROMPT).toMatch(/- flavorings, spices, seasoning, or hydrolyzed protein in a meat or poultry product[^\n]*soups, broths, bouillon, chili, or frozen meals made with meat or poultry/);
+    expect(CLAUDE_PROMPT).toContain("    - yeast extract (or autolyzed yeast) of unstated source, in any product — it can come from brewer's yeast, which is barley");
+    expect(CLAUDE_PROMPT).toContain('Yeast extract is not on this list');
   });
 
   it('names malt vinegar as hidden gluten, like the photo prompt', () => {
