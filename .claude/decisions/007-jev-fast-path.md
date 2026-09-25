@@ -138,7 +138,12 @@ On the barcode path, for Open Food Facts records only:
   - Single sample on the 30 cases (2026-09-24, before the grill fixes):
     **0 settled false-safe**. 13 cases reached Jev and 5 settled. p50 was
     300 ms from a Mac.
-  - The FULL run is in the PR.
+  - **FULL run** (2026-09-24, after the grill fixes; the merge gate):
+    - 40 cases, 97 Jev samples: **0 settled false-safe and 0 false
+      unsafe**;
+    - 20 samples settled (10 safe, 10 unsafe), and every sample of a case
+      gave the same outcome;
+    - 17 cases were gated before Jev; p50 137 ms, p95 341 ms from a Mac.
 
 ## Costs and risks
 

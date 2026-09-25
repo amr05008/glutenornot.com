@@ -39,9 +39,12 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
   - D1: 0 false-safe.
   - Not a fresh grade: the tag fix and T3 answer misses seen on the test
     split.
-- **Live eval:** single sample on the 30 frozen cases, run before the grill
-  fixes: 0 settled false-safe.
-- **Left:** the one FULL run (40 cases), and then rollout steps 1–4 below.
+- **Live eval:**
+  - Single sample on the 30 frozen cases, before the grill fixes: 0 settled
+    false-safe.
+  - **FULL (the merge gate, 40 cases, 97 Jev samples): 0 settled false-safe
+    and 0 false unsafe.** 20 samples settled.
+- **Left:** review, then Aaron's merge, then rollout steps 1–4 below.
 - **Note on "about 0.2 s" in the rollout:** that is Jev alone. A Jev-served
   response is the database lookup (~0.3 s) plus Jev, still well under
   Claude's ~3 s.
