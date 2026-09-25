@@ -12,6 +12,7 @@
  */
 
 import { CLAUDE_MODEL } from './_utils.js';
+import { jevMode } from './_jev.js';
 
 /**
  * Minimal, cheap liveness ping against the configured Claude model.
@@ -99,6 +100,13 @@ export default async function handler(req, res) {
         nutritionix: hasNutritionixKeys ? 'configured' : 'missing_key',
         // UPCitemdb's trial tier is keyless — always available, nothing to configure.
         upcitemdb: 'available',
+      },
+      // Jev fast path (decision 007): key presence and the mode the barcode
+      // path reads. Visibility only — with no key or JEV_MODE=off every scan
+      // uses Claude, so it never affects `healthy`.
+      fast_path: {
+        key: process.env.TYPESAFE_API_KEY?.trim() ? 'configured' : 'missing_key',
+        mode: jevMode(),
       },
     },
   };

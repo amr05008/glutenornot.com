@@ -68,6 +68,11 @@ export const FULL_RUN_COOLDOWN_MS = 60 * 60 * 1000;
 const USD_PER_M = { input: 5, output: 25, cacheRead: 0.5 };
 const TOKENS = { staticPrompt: 6000, dynamic: 250, output: 200 };
 
+// TypeSafe's Jev (decision 007): the barcode bake-off's estimate, ~$0.05 for
+// its ~1,100 calls (~900 tokens in, 200 out). A Jev runner makes no Anthropic
+// call and needs no cache warm-up, but a FULL run still takes the cooldown.
+export const JEV_USD_PER_CALL = 0.00005;
+
 export function sampleRuns({ full }) {
   return full
     ? { safe: 2, caution: 5, unsafe: 5, 'not-safe': 5 }
@@ -125,7 +130,7 @@ export function recordFullRun({ key, stateDir, now = Date.now() }) {
  * line; throws when a FULL run is inside the cooldown. `cases` is the case
  * list, `key` names the runner in the state file.
  */
-export function guardLiveRun({ key, cases, stateDir, env = process.env, log = console.log }) {
+export function guardLiveRun({ key, cases, stateDir, engine = 'opus', env = process.env, log = console.log }) {
   // Watch mode re-collects the runner on every save: a live bill per keystroke.
   if (String(env.VITEST_MODE).toUpperCase() === 'WATCH') {
     throw new Error(`${key}: live evals refuse to run under vitest watch mode; use \`vitest run\`.`);
@@ -133,14 +138,23 @@ export function guardLiveRun({ key, cases, stateDir, env = process.env, log = co
   const full = env.FULL === '1';
   const runs = sampleRuns({ full });
   const sampled = countCalls(cases, runs);
+  const mode = full ? 'FULL (2× safe / 5× adversarial)' : 'single sample (FULL=1 for the merge gate)';
+  if (engine === 'jev') {
+    log(`[${key} live eval] ${cases.length} cases, ${mode}: up to ${sampled} Jev calls ≈ $${(sampled * JEV_USD_PER_CALL).toFixed(4)} (TypeSafe; gated cases make none; no Anthropic spend)`);
+    return recordIfFull({ key, stateDir, env, full, runs });
+  }
   const calls = sampled + WARMUP_CALLS;
   const uncached = estimateUsd({ calls, cached: false });
   // The warm-up is billed uncached (plus a 0.25× write premium, ignored here).
   const cached = estimateUsd({ calls: sampled, cached: true }) + estimateUsd({ calls: WARMUP_CALLS, cached: false });
   log(
-    `[${key} live eval] ${cases.length} cases, ${full ? 'FULL (2× safe / 5× adversarial)' : 'single sample (FULL=1 for the merge gate)'}: ` +
+    `[${key} live eval] ${cases.length} cases, ${mode}: ` +
       `${calls} Opus 4.8 calls (incl. ${WARMUP_CALLS} cache warm-up) ≈ $${cached.toFixed(2)} with the prompt cached (≈ $${uncached.toFixed(2)} uncached; less under a -t filter)`
   );
+  return recordIfFull({ key, stateDir, env, full, runs });
+}
+
+function recordIfFull({ key, stateDir, env, full, runs }) {
   if (full) {
     const check = checkFullRun({ key, stateDir, force: env.FORCE === '1' });
     if (!check.ok) throw new Error(check.reason);

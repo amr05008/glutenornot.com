@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="510" viewBox="0 190 1600 510" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict; a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 90 1600 610" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict. For an Open Food Facts barcode, TypeSafe's Jev runs alongside as a fast path on the ingredient text only: a sure unsafe or safe goes straight to the verdict without waiting for Claude (Jev answers in about 0.2 seconds), and anything else is answered by Claude, which always runs and audits Jev's answer; a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
   <defs><style>
 
 @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400 800;
@@ -33,12 +33,12 @@ svg { color: #0E0E0F; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
       <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
     </marker>
   </defs>
-  <rect x="0" y="190" width="1600" height="510" fill="#FFFFFF"/>
+  <rect x="0" y="90" width="1600" height="610" fill="#FFFFFF"/>
 
   <!-- Regions -->
-  <rect class="region" x="440" y="196" width="840" height="490" rx="20"/>
+  <rect class="region" x="440" y="96" width="840" height="590" rx="20"/>
   <text class="t-step" x="100" y="218">On your phone</text>
-  <text class="t-step" x="456" y="218">GlutenOrNot API · Vercel serverless functions</text>
+  <text class="t-step" x="456" y="118">GlutenOrNot API · Vercel serverless functions</text>
   <text class="t-step" x="1300" y="218">On your phone</text>
 
   <!-- 1 · Capture -->
@@ -89,6 +89,23 @@ svg { color: #0E0E0F; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
   <text class="t-mono" x="748" y="318" text-anchor="end">miss ↓</text>
   <text class="t-mono" x="748" y="354" text-anchor="end">miss ↓</text>
   <text class="t-mono" x="748" y="390" text-anchor="end">miss ↓</text>
+
+  <!-- lookup → fast path (decision 007) -->
+  <path class="flow" d="M720 232 V170 H896"/>
+  <text class="t-arrow" x="808" y="160">ingredient text only</text>
+
+  <!-- 3F · Fast path -->
+  <rect class="box" x="900" y="120" width="260" height="96" rx="16"/>
+  <text class="t-step" x="920" y="144">Fast path</text>
+  <text class="t-mono" x="1140" y="144" text-anchor="end">Open Food Facts</text>
+  <text class="t-title" x="920" y="168">Jev · TypeSafe</text>
+  <text class="t-sub" x="920" y="188">anything unsure → Claude, which</text>
+  <text class="t-sub" x="920" y="204">always runs and audits Jev’s answer</text>
+
+  <!-- fast path → verdict -->
+  <path class="flow" d="M1160 170 H1460 V228"/>
+  <text class="t-arrow" x="1375" y="145">a sure unsafe or safe,</text>
+  <text class="t-arrow" x="1375" y="160">without waiting for Claude</text>
 
   <!-- lookup → Claude -->
   <path class="flow" d="M780 346 H896"/>
