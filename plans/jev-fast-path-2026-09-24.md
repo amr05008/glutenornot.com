@@ -51,7 +51,21 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
   response is the database lookup (~0.3 s) plus Jev, still well under
   Claude's ~3 s.
 
-**Status:** proposal (2026-09-24). Replaces the bake-off's proposed v3 re-grade
+**Status: SHADOW LIVE since 2026-09-25 ~02:00 UTC.**
+- **Rollout steps 1–2 are done:**
+  - PR #35 merged as `db196c8`.
+  - The prod key is in Vercel Production and `JEV_MODE=shadow` is set, applied
+    by a redeploy.
+  - `/api/health` showed `fast_path {configured, shadow}`.
+  - Two verification scans (Oreo `settled_unsafe` in 282 ms, Coca-Cola
+    `settled_safe` in 120 ms) each produced an agreeing `engine_audit`, so
+    `waitUntil` works on Vercel.
+- **Monitoring:** both F5 alerts are live, and the PostHog dashboard (id
+  2133661) sends a weekly email. See `api/ANALYTICS.md`.
+- **Next:** Stage 1, then Stage 2 behind the F4 gate and the meat-name PR.
+  The local checklist is `plans/jev-remaining-2026-09-25.md`.
+
+**Original status:** proposal (2026-09-24). Replaces the bake-off's proposed v3 re-grade
 (Aaron: "ive read nothing here that gives me pause about jev + opus"). The
 evidence is in `plans/barcode-bakeoff-2026-09-24.md`.
 
@@ -224,9 +238,9 @@ its own eval run.
   when the PR merges.
 
 ## Rollout
-1. Merge the PR with `JEV_MODE=off`, then verify a production scan still
-   carries `engine: claude`.
-2. Set `JEV_MODE=shadow` for a day. Check `jev_ms` p95 from Vercel stays
+1. **DONE 2026-09-25.** Merge the PR with `JEV_MODE=off`, then verify a
+   production scan still carries `engine: claude`.
+2. **LIVE 2026-09-25.** Set `JEV_MODE=shadow` for a day. Check `jev_ms` p95 from Vercel stays
    under 800 ms, and that `jev_outcome` looks like the bake-off (about half
    settle).
 3. Set `JEV_MODE=unsafe` (Stage 1). Now about a third of barcode scans answer
