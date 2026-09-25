@@ -156,10 +156,16 @@ allowlisted tags, so a disagreement comes from the text.
 
 **The Stage 2 tripwire (F5)**: any `engine_audit` with `served = jev`,
 `jev_verdict = safe` and `claude_verdict IN ('caution', 'unsafe')` — the user
-already saw a `safe` Claude disputes. Set it up as a PostHog alert on a trends
-insight counting exactly that (threshold: any), checked hourly. On a hit: set
-`JEV_MODE=unsafe` and redeploy, then read the audit's `claude_caution_reason`.
-`claude_verdict = error` is not a trip (Claude failed, it didn't disagree).
+already saw a `safe` Claude disputes. It's live as a PostHog alert:
+- **The insight:** SQL insight `arpKoP2Y`, which counts exactly that over the
+  last 2 hours.
+- **The alert:** "Jev Stage 2 tripwire". It's checked hourly, fires above 0,
+  and emails Aaron. Created 2026-09-25.
+- **On a hit:** set `JEV_MODE=unsafe` and redeploy, then read the audit's
+  `claude_caution_reason`.
+
+`claude_verdict = error` is not a trip, because Claude failed rather than
+disagreed.
 
 **The audit reconciliation read** (shadow day, then weekly): every settled
 fast-path scan should produce one `engine_audit`. They're sent after the
@@ -175,12 +181,31 @@ SELECT
 ```
 
 **Jev silently off**: a revoked key or a retired `jev-1.13.0` turns every call
-into `jev_outcome = error`, and nothing breaks — Claude answers. Watch the
-error share with a PostHog alert (any day where `error` is over 20% of
-barcode scans carrying a `jev_outcome`); shallow `/api/health` shows key
-presence only. And in `full`, a Claude outage leaves served Jev verdicts
-unaudited (`claude_verdict = error`, not a tripwire): the Claude deep health
-check and `claude_error` failures are the net for that.
+into `jev_outcome = error`, and nothing breaks, because Claude answers. A
+deleted `TYPESAFE_API_KEY` turns it into `skipped` with `jev_via = no_key`.
+Both are caught by a PostHog alert:
+- **The insight:** SQL insight `knnH9HjY`, over the last 24 hours:
+  - `jev_failed` counts `jev_outcome IN ('error', 'timeout')` plus
+    `skipped` with `jev_via = 'no_key'`;
+  - `jev_expected` counts every `jev_outcome` except `skipped`, plus
+    `no_key`;
+  - `jev_failed_pct` is the share, and reads 0 when `jev_expected < 3`, so a
+    single blip on a quiet day can't page.
+- **The alert:** "Jev silently off". It's checked daily and fires above 20.
+
+The denominator deliberately leaves out gate-skipped scans, because roughly a
+third of real barcode scans carry a gluten-free label and would dilute the
+share. Shallow `/api/health` shows key presence only.
+
+In `full`, a Claude outage leaves served Jev verdicts unaudited
+(`claude_verdict = error`, not a tripwire). The Claude deep health check and
+`claude_error` failures are the net for that.
+
+**Dashboard:** "Jev fast path: production bake-off" (PostHog dashboard
+2133661, tagged `jev-fast-path`) holds the scorecard, the trends, and the
+disagreement tables built from these reads. Its data starts 2026-09-25 02:09
+UTC, after the verification scans. A weekly email of it goes out Mondays at
+12:00 UTC.
 
 **The shadow-day read** (rollout step 2): `jev_ms` p95 under 800 ms from Vercel,
 and a `jev_outcome` mix like the bake-off's (about half of the asked records
