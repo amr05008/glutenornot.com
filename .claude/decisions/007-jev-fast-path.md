@@ -59,8 +59,9 @@ On the barcode path, for Open Food Facts records only:
 4. **Templates**, in the prompt's "original (english)" style:
    - unsafe: "This product lists blé (wheat), which contains gluten.", high
      confidence;
-   - safe: "No gluten ingredients are listed, and there's no may-contain
-     warning.", medium confidence.
+   - safe: "No gluten ingredients are listed, and there's no warning that it
+     may contain gluten.", medium confidence. (Not "no may-contain warning":
+     an allowlisted non-gluten trace such as nuts can be present.)
 5. **`JEV_MODE` stages the trust** (`off | shadow | unsafe | full`, and
    anything else reads as `off`):
    - `shadow`: nothing served;
@@ -71,6 +72,9 @@ On the barcode path, for Open Food Facts records only:
    goes into an `engine_audit` event, sent after the response.
    - Stage 2 needs ≥ 50 shadowed Jev-`safe` audits over ≥ 3 weeks with zero
      where Claude isn't `safe` (F4).
+   - **Stage 2 also doesn't start until the product-name meat check has
+     shipped** (PR #35 review). That's a local, whole-word meat/poultry check
+     of the product name, in its own PR. See "Costs and risks".
    - In Stage 2, a served `safe` that Claude disputes trips an alert (F5).
 
 ## Why this shape
@@ -159,10 +163,14 @@ On the barcode path, for Open Food Facts records only:
 - **Claude reads the product name; Jev and the rule don't.** Take a meat or
   broth product whose list doesn't name the meat: Claude says
   `undeclared_source`, but the fast path can settle it `safe`.
-  - A local check of the name for meat words is a follow-up. It can wait for
-    Stage 2 data, and the name would still never go to TypeSafe.
-  - The re-grill found 1 hit in the 167 replayed safes, and it was a false
-    one: "ham" inside "Champions". So the check needs word boundaries.
+  - **This is a hard precondition for `JEV_MODE=full`, not a follow-up**
+    (PR #35 review). Stage 2 doesn't start until a local, whole-word
+    meat/poultry check of the product name has shipped, in its own PR.
+    - The check blocks a fast `safe`.
+    - The name never goes to TypeSafe.
+    - It needs word boundaries: the re-grill's one hit in the 167 replayed
+      safes was a false "ham" inside "Champions".
+  - Stage 1 is unaffected, because it never serves a Jev `safe`.
 - **A second engine**: every future verdict rule is written in the prompt and
   checked against this rule. A rule that changes what `safe` means must also
   pass the fast-path live eval. For example, decision 006 made natural flavors

@@ -329,7 +329,7 @@ describe('JEV_MODE=full (Stage 2): serve both settled verdicts', () => {
       verdict: 'safe',
       confidence: 'medium',
       engine: 'jev',
-      explanation: "No gluten ingredients are listed, and there's no may-contain warning.",
+      explanation: "No gluten ingredients are listed, and there's no warning that it may contain gluten.",
     });
     await vi.waitFor(() => expect(trackEngineAudit).toHaveBeenCalled());
     // The F5 tripwire's shape: Jev served safe, Claude said caution.

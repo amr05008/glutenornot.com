@@ -35,7 +35,7 @@ describe('decideFastPath: the settled verdicts', () => {
         verdict: 'safe',
         flagged_ingredients: [],
         allergen_warnings: [],
-        explanation: "No gluten ingredients are listed, and there's no may-contain warning.",
+        explanation: "No gluten ingredients are listed, and there's no warning that it may contain gluten.",
         confidence: 'medium',
         engine: 'jev',
       },

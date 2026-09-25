@@ -131,7 +131,9 @@ in (`runAfterResponse` → `waitUntil`). Its own event so it can never inflate
 - `platform`, `app_version`, `$geoip_*` — same normalization as the other events.
 
 **The Stage 1 → 2 gate (F4)**: ≥ 50 shadowed Jev-`safe` audits over ≥ 3 weeks
-with **zero** where Claude isn't `safe`. Every disagreement blocks the gate until
+with **zero** where Claude isn't `safe`, and — a hard precondition that no
+query can clear — a shipped local, whole-word meat/poultry check of the
+product name (decision 007). Every disagreement blocks the gate until
 its `claude_caution_reason` explains it — the product is never logged, so that
 reason is all there is to read:
 

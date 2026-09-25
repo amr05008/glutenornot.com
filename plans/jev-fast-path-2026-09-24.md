@@ -44,7 +44,9 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
     false-safe.
   - **FULL (the merge gate, 40 cases, 97 Jev samples): 0 settled false-safe
     and 0 false unsafe.** 20 samples settled.
-- **Left:** review, then Aaron's merge, then rollout steps 1–4 below.
+- **Left:** Aaron's merge (the planning session's review: SHIP), rollout
+  steps 1–3 below, and the product-name meat check PR, which must ship
+  before step 4 (`full`).
 - **Note on "about 0.2 s" in the rollout:** that is Jev alone. A Jev-served
   response is the database lookup (~0.3 s) plus Jev, still well under
   Claude's ~3 s.
@@ -84,7 +86,8 @@ The staging below is how production shows it without betting a celiac user's
     unsafe can't hurt anyone. Jev's settled `safe` is only shadowed, and
     Claude answers those.
   - **Stage 2, `full`:** serve settled `safe` too, once Stage 1's shadow
-    data clears the gate in F4.
+    data clears the gate in F4 **and** the product-name meat check has
+    shipped (see F4).
   - `shadow` (nothing served) exists for a first-day smoke test.
 - **F4: The gate from Stage 1 to Stage 2 is ≥50 shadowed Jev-`safe` scans
   over ≥3 weeks, with zero cases of Jev `safe` and Claude not safe.**
@@ -93,6 +96,13 @@ The staging below is how production shows it without betting a celiac user's
   - Every disagreement blocks the gate until it's explained by its logged
     `caution_reason`. We can't look at the product: the privacy invariant
     means we never log it.
+  - **Hard precondition (PR #35 review): Stage 2 does not start until a
+    local, whole-word meat/poultry check of the product name has shipped,
+    in its own PR.**
+    - Claude reads the product name and Jev doesn't. Without the check, a
+      meat product whose list doesn't name the meat could get a fast `safe`.
+    - The check blocks a fast `safe`, and the name never goes to TypeSafe.
+    - It needs word boundaries ("ham" is inside "Champions").
 - **F5: Stage 2 has a tripwire.** Any audit where Jev *served* `safe` and
   Claude said caution or unsafe triggers an alert. The response is to set
   `JEV_MODE=unsafe` and redeploy (about a minute), then read the
@@ -146,8 +156,9 @@ The staging below is how production shows it without betting a celiac user's
    - unsafe: flagged `blé (wheat)`, explanation "This product lists blé
      (wheat), which contains gluten." (A small map covers the pattern's
      words in English.)
-   - safe: "No gluten ingredients are listed, and there's no may-contain
-     warning."
+   - safe: "No gluten ingredients are listed, and there's no warning that it
+     may contain gluten." (Built with this wording, PR #35 review: an
+     allowlisted non-gluten trace can be present.)
 3. **`api/barcode.js`:**
    - The code gates run first, and a gate hit means no Jev call.
    - Jev and Claude then start together, and `JEV_MODE` decides what is
@@ -220,7 +231,8 @@ its own eval run.
    settle).
 3. Set `JEV_MODE=unsafe` (Stage 1). Now about a third of barcode scans answer
    in about 0.2 s.
-4. Once the F4 gate clears, set `JEV_MODE=full` (Stage 2). Now about half of
+4. Once the F4 gate clears **and the product-name meat check has shipped**,
+   set `JEV_MODE=full` (Stage 2). Now about half of
    barcode scans answer in about 0.2 s, with the tripwire armed.
 
 The speed plan's fast-mode request stays open on the side; it would speed up

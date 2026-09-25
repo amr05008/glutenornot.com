@@ -1160,7 +1160,9 @@ function grainInEnglish(word) {
   return prefix ? `${word} (${prefix[1]})` : word;
 }
 
-const FAST_PATH_SAFE_EXPLANATION = "No gluten ingredients are listed, and there's no may-contain warning.";
+// "that it may contain gluten", not "no may-contain warning": an allowlisted
+// trace (en:nuts, en:milk) can sit on a fast-path safe.
+const FAST_PATH_SAFE_EXPLANATION = "No gluten ingredients are listed, and there's no warning that it may contain gluten.";
 
 function fastPathResult(verdict, flagged) {
   return {
