@@ -1,6 +1,6 @@
 # Jev fast path: launch it where it's trusted, watch it, then widen
 
-**Build status (2026-09-24): BUILT on branch `jev-fast-path-2026-09-24`, PR
+**Build status (2026-09-24): BUILT on branch `jev-fast-path-2026-09-24`, PR #35
 open, not merged.** Decision 007. It merges with `JEV_MODE=off`. Keys, Vercel
 env, the PostHog tripwire alert and the rollout are Aaron's.
 
