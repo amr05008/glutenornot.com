@@ -29,9 +29,11 @@ const OPENROUTER_PROVIDER = {
 // Anthropic statuses worth retrying: 429 (rate limit) and every 5xx — 529
 // (overloaded), 503, and Cloudflare's 520–527 in front of api.anthropic.com
 // (an unretried 522 reached a user on 2026-07-22). A transient failure also
-// takes the fallback once retries run out (decision 008). Everything else
-// (auth, credit, bad request) won't be fixed by an immediate retry, so we
-// surface it right away.
+// takes the fallback once retries run out (decision 008). 501 and 505 are
+// in too: nothing we send can earn one, a failed request isn't billed, and
+// the fallback only bills an answer — so a stray one costs ~1 s, not money
+// (grill, PR #39). Everything else (auth, credit, bad request) won't be
+// fixed by an immediate retry, so we surface it right away.
 function _isTransientStatus(status) {
   return status === 429 || status >= 500;
 }

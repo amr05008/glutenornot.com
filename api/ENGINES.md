@@ -68,7 +68,7 @@ This all happens inside `callClaude`, one scan at a time. There's no memory betw
 | 404 | `model_retired` | no | yes, at once |
 | 200 with no non-empty text block | `empty` | no | yes, at once |
 | any other 400 | `bad_request` | no | **no**: our malformed request fails on any route |
-| any other 4xx (402, 408, 409, 413, 422, …) | `error` | no | **no** |
+| any other non-OK status: the other 4xx (402, 408, 409, 413, 422, …), or a 3xx fetch didn't follow | `error` | no | **no** |
 
 - **Retries** apply to `overloaded` only:
   - at most 3 attempts;
