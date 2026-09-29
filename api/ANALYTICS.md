@@ -12,6 +12,14 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
 **`scan`** — one per successful analysis, both OCR and barcode paths. **Keep `scan` success-only** — existing dashboard insights count it as successful scans. Properties:
 
 - `confidence` (both paths)
+- `claude_via` (both paths, whenever Claude served the verdict) — which route
+  answered the Claude call (decision 008): `anthropic` (direct) or
+  `openrouter` (the same model through the OpenRouter fallback, on Bedrock or
+  Vertex). Every `openrouter` scan is one a user would otherwise have lost to
+  a direct-route failure; `model` stays the Claude pin either way. Absent on
+  Jev-served scans and on scans before 2026-09-29. A route, never content.
+  Also on `claude_ms`: a fallback-served scan includes the failed direct
+  attempts (up to 20 s), so split latency reads by `claude_via`.
 - `had_ingredient_data` (barcode only)
 - `image_kb`, `ocr_chars` (OCR only — capture metrics; counts only, never content)
 - `gf_claim_present` (OCR only) — boolean: the OCR text carried a gluten-free

@@ -264,8 +264,9 @@ export default async function handler(req, res) {
     // asked in parallel (≤800 ms); if it settles a verdict the mode serves,
     // the response goes out at once and Claude finishes as the audit.
     const claudeStart = Date.now();
-    const claude = analyzeWithClaude(ingredientContext).then(
-      (analysis) => ({ analysis, ms: Date.now() - claudeStart }),
+    const served = {};
+    const claude = analyzeWithClaude(ingredientContext, served).then(
+      (analysis) => ({ analysis, ms: Date.now() - claudeStart, via: served.via }),
       (error) => ({ error, ms: Date.now() - claudeStart })
     );
     const mode = jevMode();
@@ -346,6 +347,7 @@ export default async function handler(req, res) {
       ...scanBase,
       engine: 'claude',
       model: CLAUDE_MODEL,
+      claudeVia: c.via,
       mode: analysis.mode,
       verdict: analysis.verdict,
       confidence: analysis.confidence,
@@ -975,15 +977,17 @@ function buildIngredientContext(product) {
 }
 
 /**
- * Analyze ingredient context with Claude
+ * Analyze ingredient context with Claude. `served`, when passed, receives
+ * `via`: the route that answered (`anthropic` or `openrouter`, decision 008).
  */
-async function analyzeWithClaude(ingredientContext) {
-  const content = await callClaude({
+async function analyzeWithClaude(ingredientContext, served = {}) {
+  const { text, via } = await callClaude({
     maxTokens: 2048, // headroom for the Opus 4.7+ tokenizer (~1–1.35× Sonnet 4.6 counts)
     content: buildCachedContent(CLAUDE_PROMPT, `### Product Data:\n${ingredientContext}`),
   });
+  served.via = via;
 
-  return parseClaudeResponse(content);
+  return parseClaudeResponse(text);
 }
 
 // ── Jev fast path (decision 007, plans/jev-fast-path-2026-09-24.md) ─────────

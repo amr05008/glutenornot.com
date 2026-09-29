@@ -537,7 +537,8 @@ export default async function handler(req, res) {
 
     // Step 2: Analyze with Claude
     const claudeStart = Date.now();
-    const analysis = await analyzeWithClaude(ocrText);
+    const served = {};
+    const analysis = await analyzeWithClaude(ocrText, served);
     const claudeMs = Date.now() - claudeStart;
 
     // Step 3: safety floor — a near-empty read can never come back "safe".
@@ -555,6 +556,7 @@ export default async function handler(req, res) {
       platform,
       appVersion,
       model: CLAUDE_MODEL,
+      claudeVia: served.via,
       method: 'ocr',
       mode: analysis.mode,
       verdict: analysis.verdict,
@@ -752,15 +754,17 @@ function parseClaudeResponse(content) {
 }
 
 /**
- * Analyze ingredients with Claude
+ * Analyze ingredients with Claude. `served`, when passed, receives `via`: the
+ * route that answered (`anthropic` or `openrouter`, decision 008).
  */
-async function analyzeWithClaude(ocrText) {
-  const content = await callClaude({
+async function analyzeWithClaude(ocrText, served = {}) {
+  const { text, via } = await callClaude({
     maxTokens: 4096, // headroom for the Opus 4.7+ tokenizer (~1–1.35× Sonnet 4.6 counts); menu responses have the least room
     content: buildCachedContent(CLAUDE_PROMPT, `### OCR Text:\n${ocrText}`),
   });
+  served.via = via;
 
-  return parseClaudeResponse(content);
+  return parseClaudeResponse(text);
 }
 
 // Export internal functions for testing (re-export shared utils + local functions)

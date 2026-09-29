@@ -6,6 +6,12 @@ import {
   ClaudeError,
   CLAUDE_MODEL,
   buildCachedContent,
+  OPENROUTER_MODEL,
+  OPENROUTER_API_URL,
+  OPENROUTER_PROVIDER,
+  CLAUDE_ATTEMPT_TIMEOUT_MS,
+  CLAUDE_RETRY_DEADLINE_MS,
+  CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS,
 } from '../../../api/_utils.js';
 
 // Build a minimal fetch Response stand-in.
@@ -33,17 +39,20 @@ describe('callClaude', () => {
 
   beforeEach(() => {
     process.env.ANTHROPIC_API_KEY = 'test-key';
+    // These pin the direct path; the fallback has its own block below.
+    vi.stubEnv('OPENROUTER_API_KEY', '');
   });
 
   afterEach(() => {
     process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   it('returns the text content on a successful response', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okWithText('hello world'));
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('hello world');
+    expect(result).toEqual({ text: 'hello world', via: 'anthropic' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -54,7 +63,7 @@ describe('callClaude', () => {
       json: { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'the verdict' }] },
     }));
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('the verdict');
+    expect(result.text).toBe('the verdict');
   });
 
   it('skips an empty-string text block and returns a later non-empty one', async () => {
@@ -64,7 +73,7 @@ describe('callClaude', () => {
       json: { content: [{ type: 'text', text: '' }, { type: 'text', text: 'real content' }] },
     }));
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('real content');
+    expect(result.text).toBe('real content');
   });
 
   it('throws empty ClaudeError when the only text-bearing block lacks a type', async () => {
@@ -101,7 +110,7 @@ describe('callClaude', () => {
       },
     }));
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('{"verdict": "cau');
+    expect(result.text).toBe('{"verdict": "cau');
     expect(warnSpy).toHaveBeenCalledWith(
       'Claude response truncated at max_tokens',
       { maxTokens: 16, outputTokens: 16 }
@@ -133,7 +142,7 @@ describe('callClaude', () => {
       .mockResolvedValueOnce(makeResponse({ ok: false, status: 529, text: 'overloaded' }))
       .mockResolvedValueOnce(okWithText('recovered'));
     const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('recovered');
+    expect(result.text).toBe('recovered');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
@@ -146,7 +155,7 @@ describe('callClaude', () => {
       .mockRejectedValueOnce(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }))
       .mockResolvedValueOnce(okWithText('ok'));
     const result = await callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('ok');
+    expect(result.text).toBe('ok');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     for (const call of fetchImpl.mock.calls) {
       expect(call[1].signal).toBeInstanceOf(AbortSignal);
@@ -182,7 +191,7 @@ describe('callClaude', () => {
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce(okWithText('back'));
     const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
-    expect(result).toBe('back');
+    expect(result.text).toBe('back');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
@@ -218,6 +227,30 @@ describe('callClaude', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  // 2026-09-24: a Console spend limit answers 400 "specified API usage limits"
+  // — billing, like a credit run-out, not our malformed request.
+  it('classifies a 400 usage-limit error as credit', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse({
+        ok: false,
+        status: 400,
+        text: 'You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC.',
+      })
+    );
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'credit', status: 400 });
+  });
+
+  // 2026-06-17: a retired pin answers 404 not_found_error.
+  it('classifies a 404 as model_retired and does not retry', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      makeResponse({ ok: false, status: 404, text: '{"type":"error","error":{"type":"not_found_error","message":"model: claude-old"}}' })
+    );
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'model_retired', status: 404 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('classifies other 400s as bad_request', async () => {
     const fetchImpl = vi
       .fn()
@@ -232,6 +265,149 @@ describe('callClaude', () => {
       .mockResolvedValue(makeResponse({ ok: true, status: 200, json: { content: [] } }));
     await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
       .rejects.toMatchObject({ kind: 'empty' });
+  });
+});
+
+// Decision 008: when the direct Anthropic call fails, the same model answers
+// through OpenRouter (Bedrock / Vertex) — "same brain, different pipe".
+// 2026-09-29: Anthropic answered every keyed call from our org with 503
+// "credential validation failed" on every model.
+describe('callClaude OpenRouter fallback', () => {
+  const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
+  const ORIGINAL_OR_KEY = process.env.OPENROUTER_API_KEY;
+  const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
+
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY;
+    if (ORIGINAL_OR_KEY === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = ORIGINAL_OR_KEY;
+    vi.restoreAllMocks();
+  });
+
+  // Anthropic answers with `primary`; OpenRouter with `fallback`.
+  function routedFetch(primary, fallback) {
+    return vi.fn(async (url) => (url === ANTHROPIC ? primary() : fallback()));
+  }
+  const status = (s, text = '') => () => makeResponse({ ok: false, status: s, text });
+
+  it('pairs the fallback model with CLAUDE_MODEL', () => {
+    // OpenRouter spells the version with a dot: claude-opus-4-8 → anthropic/claude-opus-4.8.
+    expect(OPENROUTER_MODEL).toBe(`anthropic/${CLAUDE_MODEL.replace(/-(\d+)-(\d+)$/, '-$1.$2')}`);
+  });
+
+  it('never calls OpenRouter while Anthropic answers', async () => {
+    const fetchImpl = routedFetch(() => okWithText('direct'), () => okWithText('fallback'));
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toEqual({ text: 'direct', via: 'anthropic' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back after the Anthropic retries are spent on a persistent 503', async () => {
+    const fetchImpl = routedFetch(status(503), () => okWithText('via bedrock'));
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toEqual({ text: 'via bedrock', via: 'openrouter' });
+    const urls = fetchImpl.mock.calls.map(([url]) => url);
+    expect(urls).toEqual([ANTHROPIC, ANTHROPIC, ANTHROPIC, OPENROUTER_API_URL]);
+  });
+
+  it('sends the same model and message to OpenRouter, routed to Bedrock or Vertex only', async () => {
+    const fetchImpl = routedFetch(status(503), () => okWithText('ok'));
+    const content = buildCachedContent('STATIC', 'dynamic');
+    await callClaude({ maxTokens: 16, content }, { fetchImpl, ...fast });
+    const [url, opts] = fetchImpl.mock.calls.at(-1);
+    expect(url).toBe('https://openrouter.ai/api/v1/messages');
+    expect(opts.headers.Authorization).toBe('Bearer or-key');
+    expect(opts.headers['x-api-key']).toBeUndefined();
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(opts.body)).toEqual({
+      model: OPENROUTER_MODEL,
+      max_tokens: 16,
+      messages: [{ role: 'user', content }],
+      provider: OPENROUTER_PROVIDER,
+    });
+    expect(OPENROUTER_PROVIDER.only).toEqual(['amazon-bedrock', 'google-vertex']);
+  });
+
+  it.each([
+    ['auth (401)', status(401, 'invalid x-api-key')],
+    ['credit', status(400, 'Your credit balance is too low')],
+    ['a usage limit', status(400, 'You have reached your specified API usage limits.')],
+    ['model_retired (404)', status(404, 'not_found_error')],
+    ['empty', () => makeResponse({ ok: true, status: 200, json: { content: [] } })],
+  ])('falls back at once on %s, without retrying Anthropic', async (_label, primary) => {
+    const fetchImpl = routedFetch(primary, () => okWithText('fallback'));
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toEqual({ text: 'fallback', via: 'openrouter' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back when the Anthropic key is missing', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const fetchImpl = routedFetch(() => okWithText('direct'), () => okWithText('fallback'));
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toEqual({ text: 'fallback', via: 'openrouter' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  // Our own malformed request fails on any pipe; masking it helps no one.
+  it('does not fall back on a bad_request', async () => {
+    const fetchImpl = routedFetch(status(400, 'messages: field required'), () => okWithText('fallback'));
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'bad_request' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the Anthropic error when OpenRouter fails too', async () => {
+    const fetchImpl = routedFetch(status(503), status(502, 'no provider'));
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ name: 'ClaudeError', kind: 'overloaded', status: 503 });
+    expect(fetchImpl).toHaveBeenCalledTimes(4); // 3 Anthropic + 1 OpenRouter, no fallback retry
+  });
+
+  it('surfaces the Anthropic error when OpenRouter throws on the network', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url === ANTHROPIC) return makeResponse({ ok: false, status: 401, text: 'bad key' });
+      throw new Error('fetch failed');
+    });
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'auth', status: 401 });
+  });
+
+  it('leaves the fallback one attempt inside the old worst case', () => {
+    // A hung Anthropic attempt can start just before the retry deadline and
+    // run a full attempt timeout; the fallback then gets one more attempt.
+    // With a fallback configured that path must fit where the no-fallback
+    // path already ended (deadline + one hung attempt).
+    expect(CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS + 2 * CLAUDE_ATTEMPT_TIMEOUT_MS)
+      .toBeLessThanOrEqual(CLAUDE_RETRY_DEADLINE_MS + CLAUDE_ATTEMPT_TIMEOUT_MS);
+  });
+
+  it('stops retrying Anthropic at the shorter deadline when a fallback is configured', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fetchImpl = vi.fn(async (url) => {
+      if (url !== ANTHROPIC) return okWithText('fallback');
+      now += CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS; // each Anthropic attempt burns the whole budget
+      return makeResponse({ ok: false, status: 503 });
+    });
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result.via).toBe('openrouter');
+    expect(fetchImpl.mock.calls.filter(([url]) => url === ANTHROPIC)).toHaveLength(1);
+  });
+
+  it('keeps the old behavior when no OpenRouter key is set', async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const fetchImpl = routedFetch(status(503), () => okWithText('fallback'));
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'overloaded', status: 503 });
+    expect(fetchImpl.mock.calls.every(([url]) => url === ANTHROPIC)).toBe(true);
   });
 });
 

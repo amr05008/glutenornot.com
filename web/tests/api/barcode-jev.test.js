@@ -114,7 +114,7 @@ describe('JEV_MODE=off (the default): today\'s verdict path, plus the engine and
     expect(res.body.explanation).toBe('Claude: nothing to worry about.');
     expect(res.body.engine).toBe('claude');
     const props = trackScan.mock.calls[0][0];
-    expect(props).toMatchObject({ method: 'barcode', engine: 'claude', model: CLAUDE_MODEL, verdict: 'safe' });
+    expect(props).toMatchObject({ method: 'barcode', engine: 'claude', model: CLAUDE_MODEL, claudeVia: 'anthropic', verdict: 'safe' });
     expect(props.lookupMs).toEqual(expect.any(Number));
     expect(props.claudeMs).toEqual(expect.any(Number));
     expect(props.totalMs).toEqual(expect.any(Number));
