@@ -340,4 +340,88 @@ describe('health handler', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(res.body.services.analysis_fallback).toEqual({ key: 'missing_key' });
   });
+  // The UptimeRobot monitors match these exact strings in the body (keyword
+  // "does not exist" → incident). Changing the JSON shape breaks a monitor.
+  const DIRECT_OK_KEYWORD = '"analysis":{"status":"ok"';
+  const FALLBACK_OK_KEYWORD = '"analysis_fallback":{"key":"configured","status":"ok"';
+  const OK_MESSAGE = { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: 'P' }] }) };
+  const routed = (direct, fallback) => vi.fn(async (url) => (String(url).includes('anthropic.com') ? direct() : fallback()));
+
+  it('deep check: the direct monitor keyword appears only when the direct route answers', async () => {
+    process.env.HEALTH_CHECK_TOKEN = 'secret';
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    vi.stubGlobal('fetch', routed(() => ({ ok: true, status: 200 }), () => OK_MESSAGE));
+    let res = mockRes();
+    await handler({ method: 'GET', query: { deep: '1', token: 'secret' }, headers: {} }, res);
+    expect(JSON.stringify(res.body)).toContain(DIRECT_OK_KEYWORD);
+
+    // Direct down, fallback up: the fallback's "status":"ok" must not satisfy the direct monitor.
+    vi.stubGlobal('fetch', routed(() => ({ ok: false, status: 503, json: async () => { throw new Error('empty'); } }), () => OK_MESSAGE));
+    res = mockRes();
+    await handler({ method: 'GET', query: { deep: '1', token: 'secret' }, headers: {} }, res);
+    expect(res.statusCode).toBe(503);
+    expect(JSON.stringify(res.body)).not.toContain(DIRECT_OK_KEYWORD);
+  });
+
+  describe('fallback-only deep check (?deep=1&check=fallback)', () => {
+    it('pings OpenRouter alone and answers 200 while the direct route is down', async () => {
+      process.env.HEALTH_CHECK_TOKEN = 'secret';
+      process.env.OPENROUTER_API_KEY = 'or-key';
+      const fetchSpy = routed(() => ({ ok: false, status: 503, json: async () => ({}) }), () => OK_MESSAGE);
+      vi.stubGlobal('fetch', fetchSpy);
+      const res = mockRes();
+      await handler({ method: 'GET', query: { deep: '1', check: 'fallback' }, headers: { 'x-health-token': 'secret' } }, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.healthy).toBe(true);
+      expect(res.body.services.analysis_fallback).toMatchObject({ key: 'configured', status: 'ok', model: OPENROUTER_MODEL });
+      expect(res.body.services.analysis).toBeUndefined();
+      expect(JSON.stringify(res.body)).toContain(FALLBACK_OK_KEYWORD);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0][0])).toContain('openrouter.ai');
+    });
+
+    it('answers 503 when the fallback can\'t answer', async () => {
+      process.env.HEALTH_CHECK_TOKEN = 'secret';
+      process.env.OPENROUTER_API_KEY = 'or-key';
+      vi.stubGlobal('fetch', routed(() => ({ ok: true, status: 200 }), () => ({ ok: false, status: 402, json: async () => ({ error: { message: 'Insufficient credits' } }) })));
+      const res = mockRes();
+      await handler({ method: 'GET', query: { deep: '1', check: 'fallback', token: 'secret' }, headers: {} }, res);
+      expect(res.statusCode).toBe(503);
+      expect(res.body.healthy).toBe(false);
+      expect(res.body.services.analysis_fallback).toMatchObject({ key: 'configured', status: 'error', upstreamStatus: 402 });
+      expect(JSON.stringify(res.body)).not.toContain(FALLBACK_OK_KEYWORD);
+    });
+
+    it('answers 503 without a key, and makes no call', async () => {
+      process.env.HEALTH_CHECK_TOKEN = 'secret';
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const res = mockRes();
+      await handler({ method: 'GET', query: { deep: '1', check: 'fallback', token: 'secret' }, headers: {} }, res);
+      expect(res.statusCode).toBe(503);
+      expect(res.body.services.analysis_fallback).toEqual({ key: 'missing_key' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('still needs the health token', async () => {
+      process.env.HEALTH_CHECK_TOKEN = 'secret';
+      process.env.OPENROUTER_API_KEY = 'or-key';
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const res = mockRes();
+      await handler({ method: 'GET', query: { deep: '1', check: 'fallback', token: 'wrong' }, headers: {} }, res);
+      expect(res.statusCode).toBe(401);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not depend on the Anthropic key', async () => {
+      process.env.HEALTH_CHECK_TOKEN = 'secret';
+      process.env.OPENROUTER_API_KEY = 'or-key';
+      delete process.env.ANTHROPIC_API_KEY;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OK_MESSAGE));
+      const res = mockRes();
+      await handler({ method: 'GET', query: { deep: '1', check: 'fallback', token: 'secret' }, headers: {} }, res);
+      expect(res.statusCode).toBe(200);
+    });
+  });
 });

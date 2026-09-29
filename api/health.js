@@ -2,13 +2,21 @@
  * Health Check Endpoint
  * Returns status of dependent services.
  *
- * Two modes:
+ * Three modes:
  *  - Shallow (default): reports whether the required API keys are configured.
  *  - Deep (?deep=1, gated by HEALTH_CHECK_TOKEN): actually pings the Claude
  *    model so a retired/unreachable model or an invalid key is caught
  *    proactively — not just key presence. This is what an external uptime
  *    monitor should hit on an interval so an analysis outage pages us instead
- *    of going unnoticed.
+ *    of going unnoticed. Only the direct route decides the status; the
+ *    OpenRouter fallback is pinged and reported alongside.
+ *  - Fallback-only (?deep=1&check=fallback, same token): pings the OpenRouter
+ *    fallback alone, for its own monitor (decision 008).
+ *
+ * The uptime monitors are keyword monitors on the body, so the JSON shape is
+ * a contract: `"analysis":{"status":"ok"` (deep) and
+ * `"analysis_fallback":{"key":"configured","status":"ok"` (fallback-only).
+ * web/tests/api/health.test.js pins both strings.
  */
 
 import { CLAUDE_MODEL, OPENROUTER_MODEL, OPENROUTER_API_URL, OPENROUTER_PROVIDER } from './_utils.js';
@@ -185,6 +193,23 @@ export default async function handler(req, res) {
 
   if (provided !== expected) {
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing health token' });
+  }
+
+  // Fallback-only deep check (?deep=1&check=fallback, decision 008): pings
+  // OpenRouter alone and answers 200 or 503 on the fallback by itself. Its
+  // uptime monitor then asks one question — can the fallback answer? — and
+  // doesn't also go down when the direct route does (the full deep check is
+  // 503 then, whatever the fallback's state).
+  if (req.query?.check === 'fallback') {
+    const fallback = fallbackKey
+      ? { key: 'configured', ...(await checkFallback(fallbackKey)) }
+      : { key: 'missing_key' };
+    const healthy = fallback.status === 'ok';
+    return res.status(healthy ? 200 : 503).json({
+      healthy,
+      timestamp: health.timestamp,
+      services: { analysis_fallback: fallback },
+    });
   }
 
   if (!hasAnthropicKey) {
