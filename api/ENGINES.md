@@ -136,11 +136,11 @@ ORDER BY scans DESC
   - Shallow `/api/health`: `services.fast_path` (`key`, `mode`) and `services.analysis_fallback` (`key`).
   - Deep `?deep=1` (needs the token): `analysis`, the direct ping, which decides `healthy`; and `analysis_fallback`, a real one-token reply through OpenRouter, for visibility only.
   - Fallback-only `?deep=1&check=fallback` (same token): pings OpenRouter alone, answering 200 or 503 on the fallback by itself. Anthropic isn't called.
-  - **Uptime monitors** (UptimeRobot, keyword type, every 5 min; an incident starts when the keyword is missing):
+  - **Uptime monitors** (UptimeRobot, keyword type, every 5 min, e-mail alerts, both live since 2026-09-29; an incident starts when the keyword is missing):
     - direct: `"analysis":{"status":"ok"` on `?deep=1`;
     - fallback: `"analysis_fallback":{"key":"configured","status":"ok"` on `?deep=1&check=fallback`.
 
-    `web/tests/api/health.test.js` pins both strings. Change the JSON shape and you must change the monitors. The direct keyword names `analysis`, so the fallback's `"status":"ok"` can't keep the direct monitor up during an outage.
+    `web/tests/api/health.test.js` pins both strings. Change the JSON shape and you must change the monitors. The direct keyword names `analysis`, so the fallback's `"status":"ok"` can't keep the direct monitor up during an outage. UptimeRobot also marks a 503 as DOWN even when the keyword is present, which is why the fallback has its own URL rather than a second keyword on `?deep=1`.
   - The deep check doesn't ping Jev; its health is read from `jev_outcome`.
 - **Proving the fallback in production:**
   1. Disable (don't archive) the production workspace's Anthropic key in the Console. It takes effect at once, and there's no redeploy or secret to restore.
