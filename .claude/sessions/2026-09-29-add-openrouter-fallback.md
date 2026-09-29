@@ -49,19 +49,19 @@ A swap to GPT-6 Luna (Aaron's first idea) was declined. It had never passed the 
 - `api/ENGINES.md`: new (the wrap-up), with pointers from CLAUDE.md, README, ROADMAP, ANALYTICS.md and decisions 007/008.
 - Tests: `web/tests/api/claude.test.js`, `health.test.js`, `analytics.test.js`, `analyze.test.js`, `barcode-jev.test.js` (918 passing).
 
-Commits: `fc35df9`, `3d5fdb8`, `4e9eda3`, `f815144`; merge `421ae49` (PR #37).
+Commits: `fc35df9`, `3d5fdb8`, `4e9eda3`, `f815144`; merge `421ae49` (PR #37). Docs: `bac58a3`, merge `2e5bc03` (PR #38). Every 5xx → `overloaded`: `6ae97dc`, `0b4fb2c`, merge `b3ffd72` (PR #39; Pi/Luna SHIP, comment-only fold-ins).
 
 ## Decisions
 
 - **Same model, not a second vendor.** Decision 002 already tied the fallback to the primary model. It also avoids the eval gate, the policy wording about a new judge, and the `engine` accounting a new judge would need.
 - **Bedrock/Vertex only, `zdr: true`.** Aaron asked for Bedrock. Both providers skip Anthropic's own keys, billing and front door, which are the three things that failed this month.
-- **Don't fall back on `bad_request` / `error`.** The Cloudflare 52x half of that is now known gap 1 in ENGINES.md.
+- **Don't fall back on `bad_request` / `error`.** Our malformed request fails on any route. The same day, PR #39 made every 5xx `overloaded`, so Cloudflare's 520–527 retry and fall back. `error` now means only the other non-OK statuses. 501/505 stay retryable: a failed request isn't billed, and the fallback only bills an answer.
 - **Test in production with a Console key disable,** not a Vercel env swap. It's instant and reversible, with no redeploy and no secret to restore. Recipe in ENGINES.md.
 - **A separate production OpenRouter key.** The `.env` key is the one evals spend, and a drained eval key mustn't kill production's fallback. That's the same reason prod and evals got separate Anthropic workspaces on 09-18.
 
 ## Notes
 
-- **Known gaps** (ENGINES.md): Cloudflare 52x → no fallback; no circuit breaker (a hung outage is up to ~45 s before the fallback, past the barcode client's 30 s); a broken fallback doesn't page (it needs an UptimeRobot keyword monitor); unaudited Jev verdicts when both Claude routes are down.
+- **Known gaps** (ENGINES.md): no circuit breaker (a hung outage is up to ~45 s before the fallback, past the barcode client's 30 s); a broken fallback doesn't page (it needs an UptimeRobot keyword monitor); unaudited Jev verdicts when both Claude routes are down.
 - **SSH push failed** ("communication with agent failed"; the key agent was probably locked). I pushed over HTTPS through `gh`'s credential helper for one command; the remote was left as SSH.
 - **Timeline:**
   - outage ~14:06–~14:38 UTC;
