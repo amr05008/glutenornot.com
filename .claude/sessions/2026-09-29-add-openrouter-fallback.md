@@ -49,7 +49,12 @@ A swap to GPT-6 Luna (Aaron's first idea) was declined. It had never passed the 
 - `api/ENGINES.md`: new (the wrap-up), with pointers from CLAUDE.md, README, ROADMAP, ANALYTICS.md and decisions 007/008.
 - Tests: `web/tests/api/claude.test.js`, `health.test.js`, `analytics.test.js`, `analyze.test.js`, `barcode-jev.test.js` (918 passing).
 
-Commits: `fc35df9`, `3d5fdb8`, `4e9eda3`, `f815144`; merge `421ae49` (PR #37). Docs: `bac58a3`, merge `2e5bc03` (PR #38). Every 5xx → `overloaded`: `6ae97dc`, `0b4fb2c`, merge `b3ffd72` (PR #39; Pi/Luna SHIP, comment-only fold-ins).
+Commits: `fc35df9`, `3d5fdb8`, `4e9eda3`, `f815144`; merge `421ae49` (PR #37). Docs: `bac58a3`, merge `2e5bc03` (PR #38). Every 5xx → `overloaded`: `6ae97dc`, `0b4fb2c`, merge `b3ffd72` (PR #39; Pi/Luna SHIP, comment-only fold-ins). Fallback-only health check: `9d8d7ab`, merge `b2a1e75` (PR #41; Pi/Luna SHIP).
+
+**Monitoring.** A second UptimeRobot monitor was added, which took three steps:
+- **Why the fallback needed its own URL:** the existing keyword, `"status":"ok"`, could be satisfied by the fallback. It kept alerting only because UptimeRobot marks a 503 as down regardless of the keyword; the chart of my key-disable test showed that.
+- **PR #41** added `?deep=1&check=fallback`, which pings OpenRouter alone.
+- **In UptimeRobot:** the direct monitor's keyword became `"analysis":{"status":"ok"`, and a new fallback monitor watches `"analysis_fallback":{"key":"configured","status":"ok"`. Aaron pasted the token himself; Clone doesn't work on the free plan. Both monitors were UP by about 16:55 UTC.
 
 ## Decisions
 
@@ -61,7 +66,7 @@ Commits: `fc35df9`, `3d5fdb8`, `4e9eda3`, `f815144`; merge `421ae49` (PR #37). D
 
 ## Notes
 
-- **Known gaps** (ENGINES.md): no circuit breaker (a hung outage is up to ~45 s before the fallback, past the barcode client's 30 s); a broken fallback doesn't page (it needs an UptimeRobot keyword monitor); unaudited Jev verdicts when both Claude routes are down.
+- **Known gaps** (ENGINES.md): no circuit breaker (a hung outage is up to ~45 s before the fallback, past the barcode client's 30 s); unaudited Jev verdicts when both Claude routes are down.
 - **SSH push failed** ("communication with agent failed"; the key agent was probably locked). I pushed over HTTPS through `gh`'s credential helper for one command; the remote was left as SSH.
 - **Timeline:**
   - outage ~14:06–~14:38 UTC;

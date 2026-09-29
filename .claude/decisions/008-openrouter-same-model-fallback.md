@@ -1,7 +1,7 @@
 # 008 — When the direct Claude call fails, the same model answers through OpenRouter
 
 **Date**: 2026-09-29
-**Status**: Accepted (Aaron, 2026-09-29, during the third direct-route outage: "proceed with opus through bedrock fallback PR"). PR #37 merged; `OPENROUTER_API_KEY` set in Vercel Production the same day and proven by disabling the Anthropic key (15:27–15:30 UTC).
+**Status**: Accepted (Aaron, 2026-09-29, during the third direct-route outage: "proceed with opus through bedrock fallback PR"). PR #37 merged; `OPENROUTER_API_KEY` set in Vercel Production the same day and proven by disabling the Anthropic key (15:27–15:30 UTC). Watched by its own UptimeRobot monitor since PR #41, the same day.
 **Related**: decision 002 (picking the primary model also picks the fallback model); the pickup plan `claude-channels/plans/glutenornot-openrouter-fallback-2026-06.md` (revised 2026-07-19), which this implements with the changes below; `api/ENGINES.md` (how the fallback combines with Jev, the failure matrix, known gaps)
 
 ## Context
@@ -53,7 +53,11 @@ different verdicts.
    - `scan` events carry `claude_via` (`anthropic` | `openrouter`);
    - the deep health check pings the fallback on every run, but only the
      direct route decides `healthy`. So the uptime monitor still pages on a
-     direct outage while the fallback serves.
+     direct outage while the fallback serves;
+   - a second monitor watches the fallback alone on `?deep=1&check=fallback`
+     (PR #41). A broken fallback pages too, and a direct outage doesn't read
+     as a broken fallback. UptimeRobot marks a 503 as down even when the
+     keyword is present, so the fallback couldn't share the `?deep=1` URL.
 
 ## Trade-offs accepted
 

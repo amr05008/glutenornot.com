@@ -85,7 +85,11 @@ Optional:
 - **Scan analytics**: `POSTHOG_API_KEY` / `POSTHOG_HOST` — event contract, failure-reason taxonomy, and metric caveats are in **`api/ANALYTICS.md`**. **Privacy invariant: never put the scanned barcode/product in any analytics event** — the privacy policy promises "no record of what you scanned."
 - **Jev fast path** (decision 007): `TYPESAFE_API_KEY` (Vercel **Production scope only** — preview deploys get none and fall through to Claude; the live eval uses a separate `glutenornot-evals` key in `.env`) and `JEV_MODE` = `off` (default; any unrecognized value reads as off) | `shadow` | `unsafe` | `full`. Shallow `/api/health` reports both under `services.fast_path`. A change to either takes effect only after a Vercel redeploy: env vars apply to new deployments only.
 - **Analysis fallback** (decision 008): `OPENROUTER_API_KEY` — when set, a failed direct Claude call gets one attempt at the same model through OpenRouter; `scan` events record `claude_via`. Shallow `/api/health` reports the key under `services.analysis_fallback`; the deep check also pings it but never lets it change `healthy`, and `?deep=1&check=fallback` checks it alone for its own UptimeRobot monitor. The monitors are body-keyword matches, so `api/health.js`'s JSON shape is a contract, pinned in `health.test.js`: see `api/ENGINES.md`. Redeploy after setting it. It has been set in Vercel Production since 2026-09-29; use a production-only key, separate from the `.env` key that evals spend.
-- **Outage detection**: `HEALTH_CHECK_TOKEN` enables the deep health check (`GET /api/health?deep=1` + `x-health-token` header) — pings the live Claude model so an external uptime monitor catches model retirements/bad keys instead of silent 503s. Details in `api/health.js`.
+- **Outage detection**: `HEALTH_CHECK_TOKEN` enables the deep health check (`GET /api/health?deep=1` + `x-health-token` header, or `?token=`) — pings the live Claude model so an external uptime monitor catches model retirements/bad keys instead of silent 503s. There have been **two UptimeRobot keyword monitors** since 2026-09-29, each checking every 5 min with e-mail alerts; the free tier has no custom headers, so the token rides in the URL:
+  - the direct route on `?deep=1`, keyword `"analysis":{"status":"ok"`;
+  - the OpenRouter fallback alone on `?deep=1&check=fallback`, keyword `"analysis_fallback":{"key":"configured","status":"ok"`.
+
+  Which one fires when: `api/ENGINES.md`. Details in `api/health.js`.
 
 ## Guidelines
 
