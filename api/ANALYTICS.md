@@ -9,6 +9,8 @@ Server-side scan telemetry lives in `api/_analytics.js`. `trackScan()`/`trackSca
 
 ## Events
 
+Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fallback combine: `ENGINES.md`.
+
 **`scan`** — one per successful analysis, both OCR and barcode paths. **Keep `scan` success-only** — existing dashboard insights count it as successful scans. Properties:
 
 - `confidence` (both paths)

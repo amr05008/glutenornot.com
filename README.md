@@ -52,6 +52,8 @@ Scanning requires:
 - `GOOGLE_CLOUD_VISION_API_KEY`
 - `ANTHROPIC_API_KEY`
 
+Optional: `OPENROUTER_API_KEY`. With it set, a failed Anthropic call gets one attempt at the same Claude model through OpenRouter (decision 008). Without it, nothing changes. Which engine answers what: [`api/ENGINES.md`](./api/ENGINES.md).
+
 ## Project Structure
 
 ```
@@ -91,7 +93,7 @@ The engineering version, with the lookup waterfall, the prompt rules and the saf
 1. User provides image (camera, upload, drag-drop, or paste)
 2. Image is resized and sent to `/api/analyze`
 3. Google Cloud Vision extracts text via OCR
-4. Claude analyzes ingredients or menu items and returns verdict. Every "caution" names one specific reason (oats, a may-contain warning, a label conflict, an ingredient whose source the maker needn't declare, or an unreadable label); natural flavors, maltodextrin, spices and other ingredients labeling law already covers are not a reason on their own. An explicit gluten-free claim on the label ("gluten-free", "sin gluten", "glutenvrij", a GFCO mark…) is treated as the regulated claim it is (<20 ppm) and covers oats and those undeclared-source ingredients; a listed gluten source and "may contain" advisories still win
+4. Claude analyzes ingredients or menu items and returns verdict. If Anthropic's API fails, the same Claude model answers through OpenRouter (Bedrock/Vertex; decision 008). Every "caution" names one specific reason (oats, a may-contain warning, a label conflict, an ingredient whose source the maker needn't declare, or an unreadable label); natural flavors, maltodextrin, spices and other ingredients labeling law already covers are not a reason on their own. An explicit gluten-free claim on the label ("gluten-free", "sin gluten", "glutenvrij", a GFCO mark…) is treated as the regulated claim it is (<20 ppm) and covers oats and those undeclared-source ingredients; a listed gluten source and "may contain" advisories still win
 5. Verdicts are floored to "caution" when OCR extracted almost no text, or when a label's ingredient list looks cut off (no "Ingredients:" heading, or nothing marking its end) — "safe" requires a whole list to justify it
 6. UI displays result: Safe / Caution / Unsafe
 
@@ -99,7 +101,7 @@ The engineering version, with the lookup waterfall, the prompt rules and the saf
 1. Camera auto-detects barcodes (EAN-13, EAN-8, UPC-A, UPC-E)
 2. Barcode is sent to `/api/barcode`
 3. Product looked up via waterfall: Open Food Facts → USDA → Nutritionix (paid key only) → UPCitemdb (keyless)
-4. Claude analyzes the retrieved ingredients and returns verdict. With the fast path on (`JEV_MODE`, decision 007), TypeSafe's Jev reads an Open Food Facts ingredient list in parallel: when Jev and a code rule agree on a clear "unsafe" (and, in the final stage, a clear "safe"), that answer comes back without waiting for Claude (Jev itself takes about 0.2 s; Claude takes about 3) and Claude's verdict is recorded as its audit
+4. Claude analyzes the retrieved ingredients and returns verdict, with the same OpenRouter fallback as photo scans. With the fast path on (`JEV_MODE`, decision 007), TypeSafe's Jev reads an Open Food Facts ingredient list in parallel: when Jev and a code rule agree on a clear "unsafe" (and, in the final stage, a clear "safe"), that answer comes back without waiting for Claude (Jev itself takes about 0.2 s; Claude takes about 3) and Claude's verdict is recorded as its audit
 5. If the product isn't found, or is found without ingredient/allergen data (the response is marked `result_reason: "missing_context"`), the iOS app shows a neutral "we can't tell" state instead of a verdict and offers a photo-only capture of the ingredient label, which then goes through the photo path above
 
 ## Deployment
