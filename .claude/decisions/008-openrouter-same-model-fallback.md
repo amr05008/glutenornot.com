@@ -65,6 +65,23 @@ different verdicts.
 - **Not covered:** the model itself down on every provider, or OpenRouter
   dropping the slug. The deep-check ping shows either.
 
+## Validation (2026-09-29, before the PR)
+
+For each check the direct route was forced to fail with an invalid Anthropic
+key, so every verdict came through the fallback:
+
+- **Routing.** `zdr: true` with `data_collection: 'deny'` is accepted by
+  both providers: a Bedrock-only ping returned 200 from Amazon Bedrock, a
+  Vertex-only ping 200 from Google. With both allowed, OpenRouter picked
+  Google every time.
+- **Prompt cache.** It holds through the fallback: the first scan wrote 7,125
+  tokens, each later scan read them. That's $0.048 for the first scan, then
+  about $0.007 per scan.
+- **Live evals.** The three Claude runners (`gf-claim`, `barcode-gf-claim`,
+  `calibration`; non-FULL, 91 calls) passed 87 of 87 through the fallback,
+  with no false-safe. All 91 were served by Google; none failed on both routes.
+  A FULL run isn't this PR's gate, since no verdict rule changed.
+
 ## Changing it
 
 Changing `CLAUDE_MODEL` means changing `OPENROUTER_MODEL` too (the pairing
