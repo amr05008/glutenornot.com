@@ -49,6 +49,12 @@ describe('buildScanProperties', () => {
     expect(props.verdict).toBe('safe');
   });
 
+  it('records which route answered the Claude call (decision 008)', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe', claudeVia: 'openrouter' });
+    expect(props.claude_via).toBe('openrouter');
+    expect(buildScanProperties({ method: 'ocr', verdict: 'safe' })).not.toHaveProperty('claude_via');
+  });
+
   it('includes mode when provided', () => {
     const props = buildScanProperties({ method: 'ocr', mode: 'menu', verdict: 'caution' });
     expect(props.mode).toBe('menu');

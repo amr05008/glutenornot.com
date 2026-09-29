@@ -20,7 +20,7 @@
 //      the verdict legend in index.html describes decision 006.
 // v12: privacy policy discloses TypeSafe's Jev (barcode fast first check, ingredient
 //      text only), the engine/fast-path scan fields and the engine_audit event (decision 007).
-const CACHE_NAME = 'glutenornot-v12';
+const CACHE_NAME = 'glutenornot-v13';
 
 // Files to cache for offline use
 const PRECACHE_FILES = [

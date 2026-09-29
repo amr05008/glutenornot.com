@@ -1304,7 +1304,7 @@ describe('analyze handler analytics', () => {
       res,
     );
     expect(trackScan).toHaveBeenCalledWith(
-      expect.objectContaining({ appVersion: '1.4.2', model: 'claude-opus-4-8' })
+      expect.objectContaining({ appVersion: '1.4.2', model: 'claude-opus-4-8', claudeVia: 'anthropic' })
     );
   });
 

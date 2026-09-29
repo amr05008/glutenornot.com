@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 90 1600 610" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict. For an Open Food Facts barcode, TypeSafe's Jev runs alongside as a fast path on the ingredient text only: a sure unsafe or safe goes straight to the verdict without waiting for Claude (Jev answers in about 0.2 seconds), and anything else is answered by Claude, which always runs and audits Jev's answer; a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 90 1600 610" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict. For an Open Food Facts barcode, TypeSafe's Jev runs alongside as a fast path on the ingredient text only: a sure unsafe or safe goes straight to the verdict without waiting for Claude (Jev answers in about 0.2 seconds), and anything else is answered by Claude, which always runs and audits Jev's answer (if Anthropic's API is down, the same Claude model answers through OpenRouter on Amazon Bedrock or Google Vertex); a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
   <defs><style>
 
 @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400 800;
@@ -150,6 +150,8 @@ svg { color: #0E0E0F; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
   <text class="t-body" x="940" y="460">oats · may contain · conflict · …</text>
   <text class="t-body" x="940" y="486">“May contain” → caution</text>
   <text class="t-body" x="940" y="512">Natural flavors etc. aren’t one</text>
+  <text class="t-mono" x="920" y="552">direct call down → same Opus</text>
+  <text class="t-mono" x="920" y="570">via OpenRouter · Bedrock/Vertex</text>
   <line x1="920" y1="592" x2="1140" y2="592" stroke="rgba(0,0,0,0.18)" stroke-width="1"/>
   <text class="t-mono" x="920" y="618">returns: verdict · flagged items</text>
   <text class="t-mono" x="920" y="636">explanation · confidence</text>

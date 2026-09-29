@@ -3,7 +3,7 @@
 ## Quick Reference
 
 - **Tech Stack**: Vanilla HTML/CSS/JS (web), React Native/Expo (mobile), Vercel serverless functions, Sentry (crash reporting)
-- **APIs**: Google Cloud Vision (OCR), Claude API (Opus), TypeSafe Jev (barcode fast path, decision 007; off until `JEV_MODE` says otherwise)
+- **APIs**: Google Cloud Vision (OCR), Claude API (Opus), OpenRouter (the same Opus on Bedrock/Vertex when the direct call fails, decision 008; off until `OPENROUTER_API_KEY` is set), TypeSafe Jev (barcode fast path, decision 007; off until `JEV_MODE` says otherwise)
 - **Roadmap**: `ROADMAP.md` - prioritized improvement plan
 - **Active plans**: `plans/` — scoped work-in-progress. **Jev SHADOW mode LIVE since 2026-09-25 ~02:00 UTC:** `jev-fast-path-2026-09-24.md`, decision 007.
 - **What it is:** TypeSafe's Jev answers first on Open Food Facts barcodes (`api/_jev.js`, plus `decideFastPath` in `api/barcode.js`). Claude still runs on every scan and audits (`engine_audit`).
@@ -23,7 +23,7 @@
 
 Three deployables: `web/` (vanilla-JS PWA, vitest tests in `web/tests/`), `mobile/` (Expo Router / React Native iOS app, jest tests), and `api/` (shared Vercel serverless functions used by both clients). Browse the tree for the rest — only the non-obvious facts are listed here:
 
-- `api/_utils.js` — shared rate limiting, verdict normalization, and the Claude client + error classification; both endpoints (`analyze.js`, `barcode.js`) go through it.
+- `api/_utils.js` — shared rate limiting, verdict normalization, and the Claude client + error classification; both endpoints (`analyze.js`, `barcode.js`) go through it. `callClaude` returns `{ text, via }`: when the direct call fails (overloaded after retries, auth, credit, 404, empty — never a bad request), it makes one attempt at the same model through OpenRouter, Bedrock/Vertex only (decision 008). `OPENROUTER_MODEL` must stay paired with `CLAUDE_MODEL` (a test enforces it).
 - `api/barcode.js` — waterfall lookup: Open Food Facts → USDA → Nutritionix → UPCitemdb. Also the Jev fast path's rule and wiring (decision 007): `fastPathGate` (a hit means no Jev call), `decideFastPath` (settles only a clear `unsafe`/`safe`), and the handler's `JEV_MODE` switch; Claude starts on every scan either way.
 - `api/_jev.js` — the TypeSafe Jev client (plain `fetch`, hardcoded base URL, pinned `jev-1.13.0`, 800 ms, no retries, ingredient text only) and the bake-off's frozen v2 questions + thresholds. The request body is pinned byte-for-byte to SDK 0.6.0 by `web/tests/api/jev.test.js`; port questions verbatim or re-grade.
 - `api/track.js` — client failure beacon for the failures the server never sees as a request: `timeout`/`network` (die on the wire), `cancelled` (user tapped Cancel; carries `elapsed_ms`) and `interrupted` (app backgrounded mid-scan). `cancelled` lowers the weekly success-rate tile by design. Contract in `api/ANALYTICS.md`.
@@ -83,6 +83,7 @@ Optional:
 - **Barcode fallbacks**: `USDA_API_KEY` (free), `NUTRITIONIX_APP_ID`/`NUTRITIONIX_API_KEY` (paid only — free tier discontinued; the code keeps the hook but don't plan on it). The final fallback, UPCitemdb, is keyless.
 - **Scan analytics**: `POSTHOG_API_KEY` / `POSTHOG_HOST` — event contract, failure-reason taxonomy, and metric caveats are in **`api/ANALYTICS.md`**. **Privacy invariant: never put the scanned barcode/product in any analytics event** — the privacy policy promises "no record of what you scanned."
 - **Jev fast path** (decision 007): `TYPESAFE_API_KEY` (Vercel **Production scope only** — preview deploys get none and fall through to Claude; the live eval uses a separate `glutenornot-evals` key in `.env`) and `JEV_MODE` = `off` (default; any unrecognized value reads as off) | `shadow` | `unsafe` | `full`. Shallow `/api/health` reports both under `services.fast_path`. A change to either takes effect only after a Vercel redeploy: env vars apply to new deployments only.
+- **Analysis fallback** (decision 008): `OPENROUTER_API_KEY` — when set, a failed direct Claude call gets one attempt at the same model through OpenRouter; `scan` events record `claude_via`. Shallow `/api/health` reports the key under `services.analysis_fallback`; the deep check also pings it but never lets it change `healthy`. Redeploy after setting it.
 - **Outage detection**: `HEALTH_CHECK_TOKEN` enables the deep health check (`GET /api/health?deep=1` + `x-health-token` header) — pings the live Claude model so an external uptime monitor catches model retirements/bad keys instead of silent 503s. Details in `api/health.js`.
 
 ## Guidelines

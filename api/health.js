@@ -11,7 +11,7 @@
  *    of going unnoticed.
  */
 
-import { CLAUDE_MODEL } from './_utils.js';
+import { CLAUDE_MODEL, OPENROUTER_MODEL, OPENROUTER_API_URL, OPENROUTER_PROVIDER } from './_utils.js';
 import { jevMode } from './_jev.js';
 
 /**
@@ -27,21 +27,53 @@ import { jevMode } from './_jev.js';
 const PING_TIMEOUT_MS = 20000;
 
 async function checkModel(apiKey) {
+  return ping({
+    url: 'https://api.anthropic.com/v1/messages',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    model: CLAUDE_MODEL,
+  });
+}
+
+/**
+ * The same ping through the OpenRouter fallback (decision 008), routed the
+ * way callClaude routes it. A fallback that is never exercised fails exactly
+ * when it's needed — an expired key, drained credits, a slug OpenRouter
+ * dropped — so the deep check pings it every time, even while the direct
+ * route is healthy. Exported for testing.
+ */
+async function checkFallback(apiKey) {
+  return ping({
+    url: OPENROUTER_API_URL,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    model: OPENROUTER_MODEL,
+    extraBody: { provider: OPENROUTER_PROVIDER },
+    // An aggregator can answer 200 with something other than a Messages
+    // reply, which callClaude would reject. The direct ping keeps its 2xx
+    // rule: it decides `healthy`, so a new rule there could page.
+    requireMessage: true,
+  });
+}
+
+async function ping({ url, headers, model, extraBody = {}, requireMessage = false }) {
   const started = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers,
       body: JSON.stringify({
-        model: CLAUDE_MODEL,
+        model,
         max_tokens: 1,
         messages: [{ role: 'user', content: 'ping' }],
+        ...extraBody,
       }),
       signal: controller.signal,
     });
@@ -58,18 +90,32 @@ async function checkModel(apiKey) {
       }
       return {
         status: 'error',
-        model: CLAUDE_MODEL,
+        model,
         upstreamStatus: response.status,
         error: detail,
       };
     }
 
-    return { status: 'ok', model: CLAUDE_MODEL, latencyMs: Date.now() - started };
+    if (requireMessage) {
+      // The same acceptance rule as callClaude: a non-empty text block.
+      const data = await response.json().catch(() => null);
+      const blocks = Array.isArray(data?.content) ? data.content : [];
+      if (data?.type !== 'message' || !blocks.some((b) => b && b.type === 'text' && b.text)) {
+        return {
+          status: 'error',
+          model,
+          upstreamStatus: response.status,
+          error: data?.error?.message || 'response is not a Messages reply',
+        };
+      }
+    }
+
+    return { status: 'ok', model, latencyMs: Date.now() - started };
   } catch (error) {
     const detail = error?.name === 'AbortError'
       ? `timeout after ${PING_TIMEOUT_MS}ms`
       : (error.message || 'request failed');
-    return { status: 'error', model: CLAUDE_MODEL, error: detail };
+    return { status: 'error', model, error: detail };
   } finally {
     clearTimeout(timeout);
   }
@@ -85,6 +131,7 @@ export default async function handler(req, res) {
   const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
   const hasUsdaKey = !!process.env.USDA_API_KEY;
   const hasNutritionixKeys = !!(process.env.NUTRITIONIX_APP_ID && process.env.NUTRITIONIX_API_KEY);
+  const fallbackKey = process.env.OPENROUTER_API_KEY?.trim();
 
   const health = {
     healthy: true,
@@ -107,6 +154,12 @@ export default async function handler(req, res) {
       fast_path: {
         key: process.env.TYPESAFE_API_KEY?.trim() ? 'configured' : 'missing_key',
         mode: jevMode(),
+      },
+      // Decision 008: the same model through OpenRouter when the direct call
+      // fails. Visibility only — it never affects `healthy`, so a direct-route
+      // outage still pages even while the fallback is serving.
+      analysis_fallback: {
+        key: fallbackKey ? 'configured' : 'missing_key',
       },
     },
   };
@@ -139,10 +192,15 @@ export default async function handler(req, res) {
     return res.status(503).json(health);
   }
 
-  health.services.analysis = await checkModel(process.env.ANTHROPIC_API_KEY);
+  const [analysis, fallback] = await Promise.all([
+    checkModel(process.env.ANTHROPIC_API_KEY),
+    fallbackKey ? checkFallback(fallbackKey) : null,
+  ]);
+  health.services.analysis = analysis;
+  if (fallback) health.services.analysis_fallback = { key: 'configured', ...fallback };
   health.healthy = health.services.analysis.status === 'ok' && hasVisionKey;
 
   return res.status(health.healthy ? 200 : 503).json(health);
 }
 
-export { checkModel };
+export { checkModel, checkFallback };

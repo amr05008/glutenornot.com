@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import handler, { checkModel } from '../../../api/health.js';
-import { CLAUDE_MODEL } from '../../../api/_utils.js';
+import handler, { checkModel, checkFallback } from '../../../api/health.js';
+import { CLAUDE_MODEL, OPENROUTER_MODEL, OPENROUTER_PROVIDER } from '../../../api/_utils.js';
 
 function mockRes() {
   return {
@@ -67,6 +67,49 @@ describe('checkModel', () => {
   });
 });
 
+describe('checkFallback', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const MESSAGE = { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: 'P' }] }) };
+
+  it('pings the paired model through OpenRouter, routed as callClaude routes it', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(MESSAGE);
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await checkFallback('or-key');
+    expect(result).toMatchObject({ status: 'ok', model: OPENROUTER_MODEL });
+    const [url, opts] = fetchSpy.mock.calls[0];
+    expect(url).toBe('https://openrouter.ai/api/v1/messages');
+    expect(opts.headers.Authorization).toBe('Bearer or-key');
+    const body = JSON.parse(opts.body);
+    expect(body).toMatchObject({ model: OPENROUTER_MODEL, max_tokens: 1, provider: OPENROUTER_PROVIDER });
+  });
+
+  // Grill (PR #37): an aggregator can answer 200 with something that isn't a
+  // Messages reply; callClaude would reject it, so the canary must too.
+  it.each([
+    ['no body', { ok: true, status: 200, json: async () => { throw new Error('not json'); } }],
+    ['an error object', { ok: true, status: 200, json: async () => ({ error: { message: 'upstream failed' } }) }],
+    ['no content array', { ok: true, status: 200, json: async () => ({ type: 'message' }) }],
+    // Grill round 2: callClaude rejects a reply with no non-empty text block.
+    ['no text block', { ok: true, status: 200, json: async () => ({ type: 'message', content: [] }) }],
+    ['only an empty text block', { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: '' }] }) }],
+  ])('reports a 200 with %s as an error', async (_label, response) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+    const result = await checkFallback('or-key');
+    expect(result).toMatchObject({ status: 'error', upstreamStatus: 200, model: OPENROUTER_MODEL });
+  });
+
+  it('reports drained credits (402) with the upstream status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 402,
+      json: async () => ({ error: { message: 'Insufficient credits' } }),
+    }));
+    const result = await checkFallback('or-key');
+    expect(result).toMatchObject({ status: 'error', upstreamStatus: 402, model: OPENROUTER_MODEL });
+  });
+});
+
 describe('health handler', () => {
   let saved;
   beforeEach(() => {
@@ -74,15 +117,18 @@ describe('health handler', () => {
       vision: process.env.GOOGLE_CLOUD_VISION_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
       token: process.env.HEALTH_CHECK_TOKEN,
+      openrouter: process.env.OPENROUTER_API_KEY,
     };
     process.env.GOOGLE_CLOUD_VISION_API_KEY = 'vision-key';
     process.env.ANTHROPIC_API_KEY = 'anthropic-key';
     delete process.env.HEALTH_CHECK_TOKEN;
+    delete process.env.OPENROUTER_API_KEY;
   });
   afterEach(() => {
     restore('GOOGLE_CLOUD_VISION_API_KEY', saved.vision);
     restore('ANTHROPIC_API_KEY', saved.anthropic);
     restore('HEALTH_CHECK_TOKEN', saved.token);
+    restore('OPENROUTER_API_KEY', saved.openrouter);
     vi.unstubAllGlobals();
   });
 
@@ -253,5 +299,45 @@ describe('health handler', () => {
     expect(res.statusCode).toBe(503);
     expect(res.body.healthy).toBe(false);
     expect(res.body.services.analysis.upstreamStatus).toBe(404);
+  });
+  it('reports the analysis fallback key without affecting health, and never leaks it', async () => {
+    let res = mockRes();
+    await handler({ method: 'GET', query: {}, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.services.analysis_fallback).toEqual({ key: 'missing_key' });
+
+    process.env.OPENROUTER_API_KEY = 'or-secret-value';
+    res = mockRes();
+    await handler({ method: 'GET', query: {}, headers: {} }, res);
+    expect(res.body.services.analysis_fallback).toEqual({ key: 'configured' });
+    expect(JSON.stringify(res.body)).not.toContain('or-secret-value');
+  });
+
+  it('deep check pings the fallback too, but only the direct route decides health', async () => {
+    process.env.HEALTH_CHECK_TOKEN = 'secret';
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    const fetchSpy = vi.fn(async (url) => (String(url).includes('anthropic.com')
+      ? { ok: false, status: 503, json: async () => { throw new Error('empty body'); } }
+      : { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: 'P' }] }) }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { deep: '1' }, headers: { 'x-health-token': 'secret' } }, res);
+    // The direct route is down: still 503, so the uptime monitor pages...
+    expect(res.statusCode).toBe(503);
+    expect(res.body.services.analysis).toMatchObject({ status: 'error', upstreamStatus: 503 });
+    // ...while the body shows the fallback is serving.
+    expect(res.body.services.analysis_fallback).toMatchObject({ key: 'configured', status: 'ok', model: OPENROUTER_MODEL });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('deep check skips the fallback ping when no key is set', async () => {
+    process.env.HEALTH_CHECK_TOKEN = 'secret';
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', fetchSpy);
+    const res = mockRes();
+    await handler({ method: 'GET', query: { deep: '1', token: 'secret' }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(res.body.services.analysis_fallback).toEqual({ key: 'missing_key' });
   });
 });

@@ -37,7 +37,7 @@ const ENGINE_AUDIT_EVENT = 'engine_audit';
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, claudeVia, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -51,6 +51,11 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // version when engine = jev), so a model swap is attributable at the time
   // it happens instead of archaeologically.
   if (model != null) props.model = model;
+  // Decision 008: which route answered the Claude call — `anthropic` (direct)
+  // or `openrouter` (the same model through the fallback). Absent when Claude
+  // didn't serve the verdict. Its `openrouter` count is how often the primary
+  // was down while users still got a verdict.
+  if (claudeVia != null) props.claude_via = claudeVia;
   // Barcode path only (decision 007): which engine's verdict the user saw —
   // `claude`, or `jev` when the fast path served it. Absent when no engine
   // ran (no ingredient data) and on OCR scans.
@@ -273,6 +278,7 @@ function anonId(ip) {
  * @param {'ios'|'web'|'unknown'} [input.platform] originating client
  * @param {string} [input.appVersion]       client app version (absent on older clients)
  * @param {string} [input.model]            Claude model that produced the verdict
+ * @param {'anthropic'|'openrouter'} [input.claudeVia] route that answered the Claude call (decision 008)
  * @param {string} [input.country]          ISO 3166-1 alpha-2 country code (edge geo)
  * @param {string} [input.region]           subdivision/region code (edge geo)
  * @param {string} [input.city]             city name (edge geo)

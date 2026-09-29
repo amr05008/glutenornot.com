@@ -10,19 +10,41 @@ const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in ms
 const CLAUDE_MODEL = 'claude-opus-4-8';
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
+// Fallback route (decision 008): when the direct call fails, the same model
+// answers through OpenRouter's Anthropic-compatible Messages endpoint — "same
+// brain, different pipe", so the verdict rules and their evals still hold.
+// OpenRouter spells the version with a dot; a test keeps it paired with
+// CLAUDE_MODEL. Off unless OPENROUTER_API_KEY is set.
+const OPENROUTER_MODEL = 'anthropic/claude-opus-4.8';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/messages';
+// Bedrock and Vertex only: neither goes through Anthropic's own keys, billing
+// or front door, which is what failed on 2026-09-16, 09-24 and 09-29. No
+// provider that keeps prompts, and zero data retention endpoints only.
+const OPENROUTER_PROVIDER = {
+  only: ['amazon-bedrock', 'google-vertex'],
+  data_collection: 'deny',
+  zdr: true,
+};
+
 // Anthropic statuses worth retrying: 429 (rate limit), 529 (overloaded), and
 // transient 5xx. Everything else (auth, credit, bad request) won't be fixed by
 // an immediate retry, so we surface it right away.
 const CLAUDE_TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
 
+// Failures the fallback answers. Not bad_request or error: our own malformed
+// request fails the same way on any pipe, and masking it helps no one.
+const FALLBACK_KINDS = new Set(['overloaded', 'model_retired', 'auth', 'credit', 'empty']);
+
 /**
  * A classified failure from the Claude call. `kind` is the actionable bucket:
- *   'overloaded'  — 429/529/5xx or a network error (transient, retried first)
- *   'auth'        — 401/403, or a missing API key (key invalid/expired/forbidden)
- *   'credit'      — 400 whose body mentions credit balance (billing exhausted)
- *   'bad_request' — any other 400 (malformed request, e.g. bad model/params)
- *   'empty'       — HTTP 200 but no text content came back
- *   'error'       — any other non-OK status
+ *   'overloaded'    — 429/529/5xx or a network error (transient, retried first)
+ *   'auth'          — 401/403, or a missing API key (key invalid/expired/forbidden)
+ *   'credit'        — 400 whose body mentions credit balance or usage limits
+ *                     (billing exhausted, or the Console spend limit reached)
+ *   'model_retired' — 404 (the pinned model is gone, as on 2026-06-17)
+ *   'bad_request'   — any other 400 (malformed request, e.g. bad params)
+ *   'empty'         — HTTP 200 but no text content came back
+ *   'error'         — any other non-OK status
  */
 class ClaudeError extends Error {
   constructor(kind, status = null, detail = null) {
@@ -63,20 +85,6 @@ function buildCachedContent(staticText, dynamicText) {
   ];
 }
 
-/**
- * Call the Anthropic Claude API with automatic retry on transient failures.
- *
- * Returns the assistant's text content on success. On failure throws a
- * {@link ClaudeError} whose `kind` distinguishes a transient overload (worth a
- * retry) from a persistent key/billing/request problem (not worth retrying) —
- * so callers and observability can tell "try again in a minute" apart from
- * "something is actually broken".
- *
- * `content` is the user message: a plain string, or the block array from
- * {@link buildCachedContent} when the static prompt should be cached.
- *
- * Options (mainly for tests): `fetchImpl`, `maxRetries`, `baseDelayMs`, `sleepImpl`.
- */
 // Per-attempt cap on the Anthropic call. Opus legitimately takes tens of
 // seconds on a long menu, so this only cuts off hung connections.
 const CLAUDE_ATTEMPT_TIMEOUT_MS = 25000;
@@ -88,9 +96,128 @@ const CLAUDE_ATTEMPT_TIMEOUT_MS = 25000;
 // exceeded by one hung attempt on top of the lookup waterfall; the overall
 // per-request deadline remains a roadmap item.
 const CLAUDE_RETRY_DEADLINE_MS = 45000;
+// With a fallback configured, stop retrying Anthropic sooner so the fallback's
+// one attempt fits inside the same worst case: 20s + a hung attempt (25s) +
+// the fallback (25s) = the old 45s + 25s.
+const CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS = 20000;
 
-async function callClaude(
-  { maxTokens, content },
+/**
+ * One Messages API request. Resolves to the first text block's text; throws a
+ * {@link ClaudeError} classified by status. Both routes speak the same
+ * Messages shape, so both go through here.
+ */
+async function _requestText({ url, headers, body, fetchImpl, attemptTimeoutMs }) {
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(attemptTimeoutMs),
+    });
+  } catch (err) {
+    // Network-level failure (DNS, connection reset, fetch abort/timeout) — transient.
+    throw new ClaudeError('overloaded', null, err && err.message);
+  }
+
+  if (response.ok) {
+    const data = await response.json().catch(() => null);
+    // Find the first text block rather than assuming content[0] — resilient
+    // to any non-text blocks a future model/config might prepend.
+    const blocks = (data && Array.isArray(data.content)) ? data.content : [];
+    const textBlock = blocks.find((b) => b && b.type === 'text' && b.text);
+    const text = textBlock && textBlock.text;
+    if (!text) {
+      throw new ClaudeError('empty', response.status, 'No text content in Claude response');
+    }
+    if (data.stop_reason === 'max_tokens') {
+      // Truncated output usually fails JSON parsing downstream and degrades to
+      // the generic caution fallback as a 200 — make that visible instead of silent.
+      console.warn('Claude response truncated at max_tokens', {
+        maxTokens: body.max_tokens,
+        outputTokens: data.usage && data.usage.output_tokens,
+      });
+    }
+    return { text, provider: data.provider };
+  }
+
+  const status = response.status;
+  const detail = _truncate(await response.text().catch(() => ''));
+
+  if (CLAUDE_TRANSIENT_STATUSES.has(status)) throw new ClaudeError('overloaded', status, detail);
+  if (status === 401 || status === 403) throw new ClaudeError('auth', status, detail);
+  if (status === 404) throw new ClaudeError('model_retired', status, detail);
+  if (status === 400) {
+    const kind = /credit balance|usage limits/i.test(detail || '') ? 'credit' : 'bad_request';
+    throw new ClaudeError(kind, status, detail);
+  }
+  throw new ClaudeError('error', status, detail);
+}
+
+/**
+ * Call Claude, with automatic retry on transient failures and — when
+ * OPENROUTER_API_KEY is set — one attempt at the same model through
+ * OpenRouter if the direct call fails (decision 008).
+ *
+ * Returns `{ text, via }`: the assistant's text, and `'anthropic'` or
+ * `'openrouter'` for the route that answered. On failure throws the direct
+ * call's {@link ClaudeError} (the fallback's own failure is only logged), whose
+ * `kind` distinguishes a transient overload (worth a retry) from a persistent
+ * key/billing/request problem (not worth retrying) — so callers and
+ * observability can tell "try again in a minute" apart from "something is
+ * actually broken".
+ *
+ * `content` is the user message: a plain string, or the block array from
+ * {@link buildCachedContent} when the static prompt should be cached.
+ *
+ * Options (mainly for tests): `fetchImpl`, `maxRetries`, `baseDelayMs`, `sleepImpl`.
+ */
+async function callClaude({ maxTokens, content }, options = {}) {
+  const fallbackKey = process.env.OPENROUTER_API_KEY?.trim();
+  const messages = [{ role: 'user', content }];
+
+  let primaryError;
+  try {
+    const { text } = await _callAnthropic({ maxTokens, messages }, {
+      retryDeadlineMs: fallbackKey ? CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS : CLAUDE_RETRY_DEADLINE_MS,
+      ...options,
+    });
+    return { text, via: 'anthropic' };
+  } catch (err) {
+    if (!fallbackKey || !FALLBACK_KINDS.has(err.kind)) throw err;
+    primaryError = err;
+  }
+
+  const { fetchImpl = fetch, attemptTimeoutMs = CLAUDE_ATTEMPT_TIMEOUT_MS } = options;
+  try {
+    const { text, provider } = await _requestText({
+      url: OPENROUTER_API_URL,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${fallbackKey}`,
+      },
+      body: { model: OPENROUTER_MODEL, max_tokens: maxTokens, messages, provider: OPENROUTER_PROVIDER },
+      fetchImpl,
+      attemptTimeoutMs,
+    });
+    // Every activation is logged: a silent fallback is how you learn weeks
+    // later that the primary died on Tuesday.
+    console.warn('Claude served via OpenRouter fallback', {
+      provider,
+      primary: describeClaudeError(primaryError),
+    });
+    return { text, via: 'openrouter' };
+  } catch (fallbackError) {
+    console.error('OpenRouter fallback failed too', {
+      primary: describeClaudeError(primaryError),
+      fallback: describeClaudeError(fallbackError),
+    });
+    throw primaryError;
+  }
+}
+
+async function _callAnthropic(
+  { maxTokens, messages },
   {
     fetchImpl = fetch,
     maxRetries = 2,
@@ -112,70 +239,32 @@ async function callClaude(
     if (attempt > 0) {
       // Out of retry budget — surface the last transient failure rather than
       // launching another attempt the client has no time left to wait for.
+      // Checked before the backoff (don't sleep when no retry can follow) and
+      // after it (the sleep mustn't carry an attempt past the deadline).
       if (Date.now() - startedAt >= retryDeadlineMs) break;
       // Exponential backoff with a little jitter: 400ms, 800ms, …
       const delay = baseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 150);
       await sleepImpl(delay);
+      if (Date.now() - startedAt >= retryDeadlineMs) break;
     }
 
-    let response;
     try {
-      response = await fetchImpl(CLAUDE_API_URL, {
-        method: 'POST',
+      return await _requestText({
+        url: CLAUDE_API_URL,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({
-          model: CLAUDE_MODEL,
-          max_tokens: maxTokens,
-          messages: [{ role: 'user', content }],
-        }),
-        signal: AbortSignal.timeout(attemptTimeoutMs),
+        body: { model: CLAUDE_MODEL, max_tokens: maxTokens, messages },
+        fetchImpl,
+        attemptTimeoutMs,
       });
     } catch (err) {
-      // Network-level failure (DNS, connection reset, fetch abort/timeout) — transient.
-      lastError = new ClaudeError('overloaded', null, err && err.message);
-      continue;
+      // Only a transient failure is worth another attempt.
+      if (err.kind !== 'overloaded') throw err;
+      lastError = err;
     }
-
-    if (response.ok) {
-      const data = await response.json().catch(() => null);
-      // Find the first text block rather than assuming content[0] — resilient
-      // to any non-text blocks a future model/config might prepend.
-      const blocks = (data && Array.isArray(data.content)) ? data.content : [];
-      const textBlock = blocks.find((b) => b && b.type === 'text' && b.text);
-      const text = textBlock && textBlock.text;
-      if (!text) {
-        throw new ClaudeError('empty', response.status, 'No text content in Claude response');
-      }
-      if (data.stop_reason === 'max_tokens') {
-        // Truncated output usually fails JSON parsing downstream and degrades to
-        // the generic caution fallback as a 200 — make that visible instead of silent.
-        console.warn('Claude response truncated at max_tokens', {
-          maxTokens,
-          outputTokens: data.usage && data.usage.output_tokens,
-        });
-      }
-      return text;
-    }
-
-    const status = response.status;
-    const bodyText = await response.text().catch(() => '');
-
-    if (CLAUDE_TRANSIENT_STATUSES.has(status)) {
-      lastError = new ClaudeError('overloaded', status, _truncate(bodyText));
-      continue;
-    }
-    if (status === 401 || status === 403) {
-      throw new ClaudeError('auth', status, _truncate(bodyText));
-    }
-    if (status === 400) {
-      const kind = /credit balance/i.test(bodyText) ? 'credit' : 'bad_request';
-      throw new ClaudeError(kind, status, _truncate(bodyText));
-    }
-    throw new ClaudeError('error', status, _truncate(bodyText));
   }
 
   // Exhausted retries on a transient failure.
@@ -341,6 +430,12 @@ export {
   RATE_LIMIT,
   RATE_LIMIT_WINDOW,
   CLAUDE_MODEL,
+  OPENROUTER_MODEL,
+  OPENROUTER_API_URL,
+  OPENROUTER_PROVIDER,
+  CLAUDE_ATTEMPT_TIMEOUT_MS,
+  CLAUDE_RETRY_DEADLINE_MS,
+  CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS,
   ClaudeError,
   callClaude,
   buildCachedContent,
