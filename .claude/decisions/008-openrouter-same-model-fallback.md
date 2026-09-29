@@ -1,8 +1,8 @@
 # 008 — When the direct Claude call fails, the same model answers through OpenRouter
 
 **Date**: 2026-09-29
-**Status**: Accepted (Aaron, 2026-09-29, during the third direct-route outage: "proceed with opus through bedrock fallback PR"). Off until `OPENROUTER_API_KEY` is set in Vercel.
-**Related**: decision 002 (picking the primary model also picks the fallback model); the pickup plan `claude-channels/plans/glutenornot-openrouter-fallback-2026-06.md` (revised 2026-07-19), which this implements with the changes below
+**Status**: Accepted (Aaron, 2026-09-29, during the third direct-route outage: "proceed with opus through bedrock fallback PR"). PR #37 merged; `OPENROUTER_API_KEY` set in Vercel Production the same day and proven by disabling the Anthropic key (15:27–15:30 UTC).
+**Related**: decision 002 (picking the primary model also picks the fallback model); the pickup plan `claude-channels/plans/glutenornot-openrouter-fallback-2026-06.md` (revised 2026-07-19), which this implements with the changes below; `api/ENGINES.md` (how the fallback combines with Jev, the failure matrix, known gaps)
 
 ## Context
 
