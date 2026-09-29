@@ -38,7 +38,9 @@ different verdicts.
    `model_retired` (a new kind for 404) and `empty`. It doesn't trigger on
    `bad_request` or `error`, because our own malformed request fails on any
    pipe. A 400 "usage limits" now classifies as `credit`; it used to read as
-   `bad_request`.
+   `bad_request`. A follow-up PR the same day made every 5xx `overloaded`, so
+   Cloudflare's 520–527 in front of Anthropic retry and then fall back too;
+   `error` is now only the other 4xx.
 4. **Timing:** with a fallback key set, Anthropic retries stop at 20 s instead
    of 45 s. That way the fallback's one 25 s attempt fits inside the old worst
    case of 70 s.
