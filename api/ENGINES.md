@@ -62,13 +62,13 @@ This all happens inside `callClaude`, one scan at a time. There's no memory betw
 
 | Direct response | Kind | Retried on Anthropic? | Falls back? |
 |---|---|---|---|
-| 429, 500, 502, 503, 504, 529, a network error, or a 25 s timeout | `overloaded` | yes | yes, once the retries are spent |
+| 429, any 5xx (including Cloudflare's 520–527 in front of `api.anthropic.com`), a network error, or a 25 s timeout | `overloaded` | yes | yes, once the retries are spent |
 | 401 or 403, or no `ANTHROPIC_API_KEY` | `auth` | no | yes, at once |
 | 400 whose body says "credit balance" or "usage limits" | `credit` | no | yes, at once |
 | 404 | `model_retired` | no | yes, at once |
 | 200 with no non-empty text block | `empty` | no | yes, at once |
 | any other 400 | `bad_request` | no | **no**: our malformed request fails on any route |
-| any other status, including Cloudflare's 520–527 | `error` | no | **no** (see known gaps) |
+| any other non-OK status: the other 4xx (402, 408, 409, 413, 422, …), or a 3xx fetch didn't follow | `error` | no | **no** |
 
 - **Retries** apply to `overloaded` only:
   - at most 3 attempts;
@@ -145,9 +145,8 @@ ORDER BY scans DESC
 
 ## Known gaps (2026-09-29)
 
-1. **Cloudflare 52x errors don't fall back.** A 520–527 from Anthropic's edge classifies as `error`: no retry, no fallback. That's the same parked 522 item as in `ROADMAP.md`. The fix is to treat every 5xx as `overloaded`: one line plus a test.
-2. **There's no circuit breaker.** Every scan tries Anthropic first. A hung-connection outage costs up to about 45 s before the fallback, which is past the barcode client's 30 s budget. Build a short "direct is down" flag only if `claude_ms` on `claude_via = openrouter` scans shows long waits.
-3. **A broken fallback doesn't page.** The deep check reports `analysis_fallback.status`, but UptimeRobot watches only the status code. A keyword monitor on the deep URL, expecting `anthropic/claude-opus-4.8` with `status: ok`, would catch an expired key or drained OpenRouter credits before they're needed.
-4. **When both Claude routes are down, Jev-served verdicts go unaudited.** `claude_verdict = error` isn't an F5 trip. That only matters from Stage 1 on, and only for the outage window.
-5. **`engine_audit` doesn't record `claude_via`.** Audits are the same model on either route, so agreement reads are unaffected. Add it if audits ever need route-level accounting.
-6. **Vision has no fallback.** When OCR is down, photo scans fail, with no text to analyze.
+1. **There's no circuit breaker.** Every scan tries Anthropic first. A hung-connection outage costs up to about 45 s before the fallback, which is past the barcode client's 30 s budget. Build a short "direct is down" flag only if `claude_ms` on `claude_via = openrouter` scans shows long waits.
+2. **A broken fallback doesn't page.** The deep check reports `analysis_fallback.status`, but UptimeRobot watches only the status code. A keyword monitor on the deep URL, expecting `anthropic/claude-opus-4.8` with `status: ok`, would catch an expired key or drained OpenRouter credits before they're needed.
+3. **When both Claude routes are down, Jev-served verdicts go unaudited.** `claude_verdict = error` isn't an F5 trip. That only matters from Stage 1 on, and only for the outage window.
+4. **`engine_audit` doesn't record `claude_via`.** Audits are the same model on either route, so agreement reads are unaffected. Add it if audits ever need route-level accounting.
+5. **Vision has no fallback.** When OCR is down, photo scans fail, with no text to analyze.

@@ -26,10 +26,17 @@ const OPENROUTER_PROVIDER = {
   zdr: true,
 };
 
-// Anthropic statuses worth retrying: 429 (rate limit), 529 (overloaded), and
-// transient 5xx. Everything else (auth, credit, bad request) won't be fixed by
-// an immediate retry, so we surface it right away.
-const CLAUDE_TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
+// Anthropic statuses worth retrying: 429 (rate limit) and every 5xx — 529
+// (overloaded), 503, and Cloudflare's 520–527 in front of api.anthropic.com
+// (an unretried 522 reached a user on 2026-07-22). A transient failure also
+// takes the fallback once retries run out (decision 008). 501 and 505 are
+// in too: nothing we send can earn one, a failed request isn't billed, and
+// the fallback only bills an answer — so a stray one costs ~1 s, not money
+// (grill, PR #39). Everything else (auth, credit, bad request) won't be
+// fixed by an immediate retry, so we surface it right away.
+function _isTransientStatus(status) {
+  return status === 429 || status >= 500;
+}
 
 // Failures the fallback answers. Not bad_request or error: our own malformed
 // request fails the same way on any pipe, and masking it helps no one.
@@ -144,7 +151,7 @@ async function _requestText({ url, headers, body, fetchImpl, attemptTimeoutMs })
   const status = response.status;
   const detail = _truncate(await response.text().catch(() => ''));
 
-  if (CLAUDE_TRANSIENT_STATUSES.has(status)) throw new ClaudeError('overloaded', status, detail);
+  if (_isTransientStatus(status)) throw new ClaudeError('overloaded', status, detail);
   if (status === 401 || status === 403) throw new ClaudeError('auth', status, detail);
   if (status === 404) throw new ClaudeError('model_retired', status, detail);
   if (status === 400) {

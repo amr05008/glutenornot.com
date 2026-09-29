@@ -208,6 +208,27 @@ describe('callClaude', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3); // initial + 2 retries
   });
 
+  // 2026-07-22: a Cloudflare 522 in front of api.anthropic.com reached a user
+  // as CLAUDE_ERROR, unretried. Every 5xx is the server's side of the wire.
+  it.each([501, 505, 520, 521, 522, 523, 524, 525, 526, 527])(
+    'treats a %i as overloaded and retries it',
+    async (s) => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        makeResponse({ ok: false, status: s, text: '<html>error code: 522</html>' }),
+      );
+      await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+        .rejects.toMatchObject({ kind: 'overloaded', status: s });
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it.each([402, 408, 409, 413, 422])('keeps a %i as error, unretried', async (s) => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse({ ok: false, status: s, text: 'nope' }));
+    await expect(callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast }))
+      .rejects.toMatchObject({ kind: 'error', status: s });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('classifies 401 as auth and does not retry', async () => {
     const fetchImpl = vi
       .fn()
@@ -318,6 +339,14 @@ describe('callClaude OpenRouter fallback', () => {
     expect(result).toEqual({ text: 'via bedrock', via: 'openrouter' });
     const urls = fetchImpl.mock.calls.map(([url]) => url);
     expect(urls).toEqual([ANTHROPIC, ANTHROPIC, ANTHROPIC, OPENROUTER_API_URL]);
+  });
+
+  it('falls back on a Cloudflare 522 once the Anthropic retries are spent', async () => {
+    const fetchImpl = routedFetch(status(522, '<html>error code: 522</html>'), () => okWithText('via bedrock'));
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, ...fast });
+    expect(result).toEqual({ text: 'via bedrock', via: 'openrouter' });
+    expect(fetchImpl.mock.calls.map(([url]) => url))
+      .toEqual([ANTHROPIC, ANTHROPIC, ANTHROPIC, OPENROUTER_API_URL]);
   });
 
   it('sends the same model and message to OpenRouter, routed to Bedrock or Vertex only', async () => {
