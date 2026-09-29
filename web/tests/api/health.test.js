@@ -90,6 +90,9 @@ describe('checkFallback', () => {
     ['no body', { ok: true, status: 200, json: async () => { throw new Error('not json'); } }],
     ['an error object', { ok: true, status: 200, json: async () => ({ error: { message: 'upstream failed' } }) }],
     ['no content array', { ok: true, status: 200, json: async () => ({ type: 'message' }) }],
+    // Grill round 2: callClaude rejects a reply with no non-empty text block.
+    ['no text block', { ok: true, status: 200, json: async () => ({ type: 'message', content: [] }) }],
+    ['only an empty text block', { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: '' }] }) }],
   ])('reports a 200 with %s as an error', async (_label, response) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
     const result = await checkFallback('or-key');
@@ -315,7 +318,7 @@ describe('health handler', () => {
     process.env.OPENROUTER_API_KEY = 'or-key';
     const fetchSpy = vi.fn(async (url) => (String(url).includes('anthropic.com')
       ? { ok: false, status: 503, json: async () => { throw new Error('empty body'); } }
-      : { ok: true, status: 200, json: async () => ({ type: 'message', content: [] }) }));
+      : { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: 'P' }] }) }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = mockRes();
     await handler({ method: 'GET', query: { deep: '1' }, headers: { 'x-health-token': 'secret' } }, res);

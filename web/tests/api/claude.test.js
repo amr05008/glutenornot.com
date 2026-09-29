@@ -170,10 +170,13 @@ describe('callClaude', () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       makeResponse({ ok: false, status: 529, text: 'overloaded' }),
     );
+    const sleepImpl = vi.fn(async () => {});
     await expect(
-      callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast, retryDeadlineMs: 0 }),
+      callClaude({ maxTokens: 16, content: 'hi' }, { fetchImpl, ...fast, sleepImpl, retryDeadlineMs: 0 }),
     ).rejects.toMatchObject({ name: 'ClaudeError', kind: 'overloaded' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    // Grill round 2 (PR #37): out of budget means fail now, not after one more backoff.
+    expect(sleepImpl).not.toHaveBeenCalled();
   });
 
   it('exhausts retries when every attempt times out and throws overloaded', async () => {

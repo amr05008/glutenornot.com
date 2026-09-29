@@ -237,12 +237,14 @@ async function _callAnthropic(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
+      // Out of retry budget — surface the last transient failure rather than
+      // launching another attempt the client has no time left to wait for.
+      // Checked before the backoff (don't sleep when no retry can follow) and
+      // after it (the sleep mustn't carry an attempt past the deadline).
+      if (Date.now() - startedAt >= retryDeadlineMs) break;
       // Exponential backoff with a little jitter: 400ms, 800ms, …
       const delay = baseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 150);
       await sleepImpl(delay);
-      // Out of retry budget — surface the last transient failure rather than
-      // launching another attempt the client has no time left to wait for.
-      // Checked after the sleep, so the backoff can't carry an attempt past it.
       if (Date.now() - startedAt >= retryDeadlineMs) break;
     }
 

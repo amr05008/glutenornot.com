@@ -97,8 +97,10 @@ async function ping({ url, headers, model, extraBody = {}, requireMessage = fals
     }
 
     if (requireMessage) {
+      // The same acceptance rule as callClaude: a non-empty text block.
       const data = await response.json().catch(() => null);
-      if (data?.type !== 'message' || !Array.isArray(data.content)) {
+      const blocks = Array.isArray(data?.content) ? data.content : [];
+      if (data?.type !== 'message' || !blocks.some((b) => b && b.type === 'text' && b.text)) {
         return {
           status: 'error',
           model,
