@@ -90,9 +90,9 @@ How long a scan waits before the fallback answers:
 | What's down | Photo scan | Barcode, Jev served (`unsafe` / `full`) | Barcode, Claude served | Signals |
 |---|---|---|---|---|
 | **Jev** (timeout, error, bad key, retired pin) | unaffected | Claude serves instead | unaffected | `jev_outcome` = `error` / `timeout`, or `skipped` with `jev_via = no_key`; alert `knnH9HjY` (daily) |
-| **Anthropic direct** (fallback working) | served via OpenRouter | unaffected; the audit runs via OpenRouter, so the F5 tripwire stays armed | served via OpenRouter | UptimeRobot DOWN; `claude_via = openrouter`; log `Claude served via OpenRouter fallback`; deep check `analysis_fallback.status: ok` |
-| **Anthropic direct and OpenRouter** | error (`ANALYSIS_BUSY` / `UNAVAILABLE`) | **still served**; the audit records `claude_verdict = error`, which isn't a trip, so F5 is blind to these | error | UptimeRobot DOWN; `scan_failed` with `reason = claude_error`; deep check `analysis_fallback.status: error` |
-| **OpenRouter only** | unaffected | unaffected | unaffected | deep check `analysis_fallback.status: error` only. **Nothing pages** (see known gaps) |
+| **Anthropic direct** (fallback working) | served via OpenRouter | unaffected; the audit runs via OpenRouter, so the F5 tripwire stays armed | served via OpenRouter | direct monitor DOWN, fallback monitor UP; `claude_via = openrouter`; log `Claude served via OpenRouter fallback`; deep check `analysis_fallback.status: ok` |
+| **Anthropic direct and OpenRouter** | error (`ANALYSIS_BUSY` / `UNAVAILABLE`) | **still served**; the audit records `claude_verdict = error`, which isn't a trip, so F5 is blind to these | error | both monitors DOWN; `scan_failed` with `reason = claude_error`; deep check `analysis_fallback.status: error` |
+| **OpenRouter only** | unaffected | unaffected | unaffected | fallback monitor DOWN (`?deep=1&check=fallback`); deep check `analysis_fallback.status: error` |
 | **Google Vision** | fails: OCR has no fallback | unaffected | unaffected | `scan_failed` on OCR |
 
 ## Rules that keep this from becoming a mess
@@ -106,7 +106,7 @@ How long a scan waits before the fallback answers:
    - Never encode a route in `engine`, or a judge in `claude_via`.
    - A new judge means a new `engine` value, plus updates to `ANALYTICS.md`, the privacy policy and this page.
    - A new route means a new `claude_via` value, and the same updates.
-4. **Only the direct Claude route decides `healthy`.** Jev and the fallback are reported in `/api/health` but never flip it. So UptimeRobot pages on the one thing that makes every verdict slower or riskier.
+4. **Only the direct Claude route decides `healthy` in the deep check.** Jev and the fallback are reported there but never flip it. The fallback gets its own check, `?deep=1&check=fallback`, and its own monitor. So UptimeRobot pages on the one thing that makes every verdict slower or riskier.
 5. **Every engine outside the judge of record can be switched off without a code change,** as in the off-switch row above. Changing `JEV_MODE` or either key takes effect only after a redeploy.
 6. **Each engine's data exposure is in the privacy policy.** Jev gets ingredient text only. Claude, by either route, gets ingredient text, plus the product name for a barcode. Nothing else goes to any of them.
 7. **Bumping a model moves both Claude routes.** Change `CLAUDE_MODEL`, then `OPENROUTER_MODEL`; the pairing test fails until both match. Then check that the new slug has Bedrock or Vertex endpoints: `GET https://openrouter.ai/api/v1/models/<slug>/endpoints`. A new Jev pin needs a re-grade (decision 007).
@@ -135,6 +135,12 @@ ORDER BY scans DESC
 - **Health:**
   - Shallow `/api/health`: `services.fast_path` (`key`, `mode`) and `services.analysis_fallback` (`key`).
   - Deep `?deep=1` (needs the token): `analysis`, the direct ping, which decides `healthy`; and `analysis_fallback`, a real one-token reply through OpenRouter, for visibility only.
+  - Fallback-only `?deep=1&check=fallback` (same token): pings OpenRouter alone, answering 200 or 503 on the fallback by itself. Anthropic isn't called.
+  - **Uptime monitors** (UptimeRobot, keyword type, every 5 min; an incident starts when the keyword is missing):
+    - direct: `"analysis":{"status":"ok"` on `?deep=1`;
+    - fallback: `"analysis_fallback":{"key":"configured","status":"ok"` on `?deep=1&check=fallback`.
+
+    `web/tests/api/health.test.js` pins both strings. Change the JSON shape and you must change the monitors. The direct keyword names `analysis`, so the fallback's `"status":"ok"` can't keep the direct monitor up during an outage.
   - The deep check doesn't ping Jev; its health is read from `jev_outcome`.
 - **Proving the fallback in production:**
   1. Disable (don't archive) the production workspace's Anthropic key in the Console. It takes effect at once, and there's no redeploy or secret to restore.
@@ -146,7 +152,6 @@ ORDER BY scans DESC
 ## Known gaps (2026-09-29)
 
 1. **There's no circuit breaker.** Every scan tries Anthropic first. A hung-connection outage costs up to about 45 s before the fallback, which is past the barcode client's 30 s budget. Build a short "direct is down" flag only if `claude_ms` on `claude_via = openrouter` scans shows long waits.
-2. **A broken fallback doesn't page.** The deep check reports `analysis_fallback.status`, but UptimeRobot watches only the status code. A keyword monitor on the deep URL, expecting `anthropic/claude-opus-4.8` with `status: ok`, would catch an expired key or drained OpenRouter credits before they're needed.
-3. **When both Claude routes are down, Jev-served verdicts go unaudited.** `claude_verdict = error` isn't an F5 trip. That only matters from Stage 1 on, and only for the outage window.
-4. **`engine_audit` doesn't record `claude_via`.** Audits are the same model on either route, so agreement reads are unaffected. Add it if audits ever need route-level accounting.
-5. **Vision has no fallback.** When OCR is down, photo scans fail, with no text to analyze.
+2. **When both Claude routes are down, Jev-served verdicts go unaudited.** `claude_verdict = error` isn't an F5 trip. That only matters from Stage 1 on, and only for the outage window.
+3. **`engine_audit` doesn't record `claude_via`.** Audits are the same model on either route, so agreement reads are unaffected. Add it if audits ever need route-level accounting.
+4. **Vision has no fallback.** When OCR is down, photo scans fail, with no text to analyze.
