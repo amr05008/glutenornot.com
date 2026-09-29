@@ -402,6 +402,22 @@ describe('callClaude OpenRouter fallback', () => {
     expect(fetchImpl.mock.calls.filter(([url]) => url === ANTHROPIC)).toHaveLength(1);
   });
 
+  // Grill (PR #37): the deadline was checked before the backoff sleep, so an
+  // attempt could launch up to ~1 s past it and break the stated bound.
+  it('does not launch an Anthropic retry that the backoff pushed past the deadline', async () => {
+    let now = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const fetchImpl = vi.fn(async (url) => {
+      if (url !== ANTHROPIC) return okWithText('fallback');
+      now = CLAUDE_RETRY_DEADLINE_WITH_FALLBACK_MS - 1; // fails just inside the deadline
+      return makeResponse({ ok: false, status: 503 });
+    });
+    const sleepImpl = async (ms) => { now += ms; };
+    const result = await callClaude({ maxTokens: 8, content: 'hi' }, { fetchImpl, baseDelayMs: 400, sleepImpl });
+    expect(result.via).toBe('openrouter');
+    expect(fetchImpl.mock.calls.filter(([url]) => url === ANTHROPIC)).toHaveLength(1);
+  });
+
   it('keeps the old behavior when no OpenRouter key is set', async () => {
     delete process.env.OPENROUTER_API_KEY;
     const fetchImpl = routedFetch(status(503), () => okWithText('fallback'));

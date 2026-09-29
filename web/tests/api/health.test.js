@@ -70,8 +70,10 @@ describe('checkModel', () => {
 describe('checkFallback', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  const MESSAGE = { ok: true, status: 200, json: async () => ({ type: 'message', content: [{ type: 'text', text: 'P' }] }) };
+
   it('pings the paired model through OpenRouter, routed as callClaude routes it', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const fetchSpy = vi.fn().mockResolvedValue(MESSAGE);
     vi.stubGlobal('fetch', fetchSpy);
     const result = await checkFallback('or-key');
     expect(result).toMatchObject({ status: 'ok', model: OPENROUTER_MODEL });
@@ -80,6 +82,18 @@ describe('checkFallback', () => {
     expect(opts.headers.Authorization).toBe('Bearer or-key');
     const body = JSON.parse(opts.body);
     expect(body).toMatchObject({ model: OPENROUTER_MODEL, max_tokens: 1, provider: OPENROUTER_PROVIDER });
+  });
+
+  // Grill (PR #37): an aggregator can answer 200 with something that isn't a
+  // Messages reply; callClaude would reject it, so the canary must too.
+  it.each([
+    ['no body', { ok: true, status: 200, json: async () => { throw new Error('not json'); } }],
+    ['an error object', { ok: true, status: 200, json: async () => ({ error: { message: 'upstream failed' } }) }],
+    ['no content array', { ok: true, status: 200, json: async () => ({ type: 'message' }) }],
+  ])('reports a 200 with %s as an error', async (_label, response) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+    const result = await checkFallback('or-key');
+    expect(result).toMatchObject({ status: 'error', upstreamStatus: 200, model: OPENROUTER_MODEL });
   });
 
   it('reports drained credits (402) with the upstream status', async () => {
@@ -301,7 +315,7 @@ describe('health handler', () => {
     process.env.OPENROUTER_API_KEY = 'or-key';
     const fetchSpy = vi.fn(async (url) => (String(url).includes('anthropic.com')
       ? { ok: false, status: 503, json: async () => { throw new Error('empty body'); } }
-      : { ok: true, status: 200 }));
+      : { ok: true, status: 200, json: async () => ({ type: 'message', content: [] }) }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = mockRes();
     await handler({ method: 'GET', query: { deep: '1' }, headers: { 'x-health-token': 'secret' } }, res);

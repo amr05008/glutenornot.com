@@ -54,10 +54,14 @@ async function checkFallback(apiKey) {
     },
     model: OPENROUTER_MODEL,
     extraBody: { provider: OPENROUTER_PROVIDER },
+    // An aggregator can answer 200 with something other than a Messages
+    // reply, which callClaude would reject. The direct ping keeps its 2xx
+    // rule: it decides `healthy`, so a new rule there could page.
+    requireMessage: true,
   });
 }
 
-async function ping({ url, headers, model, extraBody = {} }) {
+async function ping({ url, headers, model, extraBody = {}, requireMessage = false }) {
   const started = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
@@ -90,6 +94,18 @@ async function ping({ url, headers, model, extraBody = {} }) {
         upstreamStatus: response.status,
         error: detail,
       };
+    }
+
+    if (requireMessage) {
+      const data = await response.json().catch(() => null);
+      if (data?.type !== 'message' || !Array.isArray(data.content)) {
+        return {
+          status: 'error',
+          model,
+          upstreamStatus: response.status,
+          error: data?.error?.message || 'response is not a Messages reply',
+        };
+      }
     }
 
     return { status: 'ok', model, latencyMs: Date.now() - started };
