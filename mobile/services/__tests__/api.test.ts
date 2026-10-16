@@ -13,6 +13,7 @@ jest.mock('expo-constants', () => ({
 
 import * as Network from 'expo-network';
 import { analyzeImage, lookupBarcode, sendFailureBeacon, sendReviewBeacon, APIError, ScanProgress } from '../api';
+import { isRetakeReason, RETAKE_REASONS } from '../../constants/verdicts';
 
 const mockedGetNetworkState = Network.getNetworkStateAsync as jest.Mock;
 
@@ -211,6 +212,13 @@ describe('analyzeImage request', () => {
     expect(xhr.headers['X-Client-Version']).toBe(APP_VERSION);
   });
 
+  it('sends retake_after in the body only when given (decision 009)', async () => {
+    await analyzeImage('base64data', undefined, undefined, 'no_heading');
+    expect(JSON.parse(lastXhr().body!)).toEqual({ image: 'base64data', retake_after: 'no_heading' });
+    await analyzeImage('base64data');
+    expect(JSON.parse(lastXhr().body!)).toEqual({ image: 'base64data' });
+  });
+
   it('maps 429 to rate_limit with retryAfter', async () => {
     xhrScript = { kind: 'respond', status: 429, body: { message: 'Slow down', retryAfter: '3h' } };
     await expect(analyzeImage('base64data')).rejects.toMatchObject({
@@ -317,6 +325,34 @@ describe('failure beacon (timeout/network/cancelled → POST /api/track)', () =>
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('carries retake_after on the ocr/timeout beacon of a retake attempt (decision 009)', async () => {
+    jest.useFakeTimers();
+    try {
+      const fetchMock = mockFetch();
+      xhrScript = { kind: 'hang' };
+
+      const pending = analyzeImage('base64data', undefined, undefined, 'no_end');
+      const rejection = expect(pending).rejects.toMatchObject({ type: 'timeout' });
+      await jest.advanceTimersByTimeAsync(60000);
+      await rejection;
+
+      expect(beaconCalls(fetchMock)).toHaveLength(1);
+      expect(beaconBody(fetchMock)).toEqual({ method: 'ocr', reason: 'timeout', elapsed_ms: 60000, retake_after: 'no_end' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('carries retake_after on the ocr/network beacon of a retake attempt (decision 009)', async () => {
+    const fetchMock = mockFetch();
+    xhrScript = { kind: 'networkError' };
+
+    await expect(analyzeImage('base64data', undefined, undefined, 'no_end')).rejects.toMatchObject({ type: 'network' });
+
+    expect(beaconCalls(fetchMock)).toHaveLength(1);
+    expect(beaconBody(fetchMock)).toMatchObject({ method: 'ocr', reason: 'network', elapsed_ms: expect.any(Number), retake_after: 'no_end' });
   });
 
   it('sends the app version on the barcode request so releases are attributable', async () => {
@@ -466,6 +502,14 @@ describe('sendFailureBeacon (used by the screen for cancelled / interrupted)', (
     expect(beaconBody(fetchMock)).toEqual({ method: 'barcode', reason: 'interrupted' });
   });
 
+  it('carries retake_after when given and omits it otherwise', () => {
+    const fetchMock = mockFetch();
+    sendFailureBeacon('ocr', 'cancelled', 1200, 'too_little_text');
+    expect(beaconBody(fetchMock)).toEqual({ method: 'ocr', reason: 'cancelled', elapsed_ms: 1200, retake_after: 'too_little_text' });
+    sendFailureBeacon('ocr', 'interrupted');
+    expect(beaconBody(fetchMock, 1)).toEqual({ method: 'ocr', reason: 'interrupted' });
+  });
+
   it('never throws, even with no fetch at all', () => {
     (global as any).fetch = undefined;
     expect(() => sendFailureBeacon('ocr', 'cancelled', 10)).not.toThrow();
@@ -496,5 +540,17 @@ describe('sendReviewBeacon (review ask stages, plans/review-prompt-visibility-20
   it('never throws, even with no fetch at all', () => {
     (global as any).fetch = undefined;
     expect(() => sendReviewBeacon('requested')).not.toThrow();
+  });
+});
+
+describe('isRetakeReason (decision 009)', () => {
+  it('accepts exactly the four server reasons and nothing else', () => {
+    expect(RETAKE_REASONS).toEqual(['no_heading', 'no_end', 'too_little_text', 'unclear']);
+    for (const r of RETAKE_REASONS) expect(isRetakeReason(r)).toBe(true);
+    expect(isRetakeReason('nope')).toBe(false);
+    expect(isRetakeReason('NO_HEADING')).toBe(false);
+    expect(isRetakeReason(undefined)).toBe(false);
+    expect(isRetakeReason(null)).toBe(false);
+    expect(isRetakeReason({ reason: 'no_end' })).toBe(false);
   });
 });
