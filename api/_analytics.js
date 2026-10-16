@@ -33,11 +33,25 @@ const REVIEW_PROMPT_EVENT = 'review_prompt';
 // table. Enums only.
 const ENGINE_AUDIT_EVENT = 'engine_audit';
 
+// Decision 009 (plans/retake-state-2026-10-11.md): why a photo response asked
+// for a retake, and the flag a retake photo carries back. One allowlist for
+// the response field, the request field and the beacon field.
+const RETAKE_REASONS = ['no_heading', 'no_end', 'too_little_text', 'unclear'];
+
+/**
+ * Validate a client-supplied `retake_after`. Untrusted input that lands in a
+ * PostHog property: anything but one of the four reasons is dropped (null),
+ * never bucketed, never echoed. Pure — no I/O.
+ */
+function normalizeRetakeAfter(raw) {
+  return typeof raw === 'string' && RETAKE_REASONS.includes(raw) ? raw : null;
+}
+
 /**
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, claudeVia, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, claudeVia, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, retakeReason, retakeAfter, listHeadingWord, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -96,6 +110,19 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // Decision 006: which of the fixed reasons a caution named (an enum, never
   // content). Its distribution is the day-28 read of plans/verdict-calibration.
   if (cautionReason != null) props.caution_reason = cautionReason;
+  // Decision 009, OCR path only. retake_reason: the response asked for a
+  // retake, and why (retakeReasonFor in analyze.js). retake_after: this photo
+  // followed a retake screen for that reason. Both from RETAKE_REASONS, never
+  // content. retake_reason is also recorded for web and pre-1.5.1 clients,
+  // which never show the screen — the day-14 read filters by platform and
+  // app_version.
+  if (retakeReason != null) props.retake_reason = retakeReason;
+  if (retakeAfter != null) props.retake_after = retakeAfter;
+  // Only when list_gate = no_heading (T5): did an ingredients-heading word in
+  // any supported language appear anywhere in the text, whatever its position
+  // or punctuation? A boolean from a server-side regex, never the text. Its
+  // share over no_heading scans says whether the gate is missing headings.
+  if (listHeadingWord != null) props.list_heading_word = listHeadingWord;
   // OCR path only (plans/weak-signal-upload-2026-08-28.md): where the server
   // leg's time went. Before this, "Vision + Opus ≈ 7–13 s" was an estimate and
   // decision 002 accepted Opus latency pending scan-duration data. Milliseconds
@@ -126,7 +153,7 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
  * request).
  * Pure — no I/O.
  */
-function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars, elapsedMs, ocrMs } = {}) {
+function buildScanFailureProperties({ method, reason, platform, appVersion, country, region, city, imageKb, ocrChars, elapsedMs, ocrMs, retakeAfter } = {}) {
   const props = { method, reason };
   if (platform != null) props.platform = platform;
   if (appVersion != null) props.app_version = appVersion;
@@ -141,6 +168,9 @@ function buildScanFailureProperties({ method, reason, platform, appVersion, coun
   // Server-side failures: how long Vision took before the failure, when known.
   if (elapsedMs != null) props.elapsed_ms = elapsedMs;
   if (ocrMs != null) props.ocr_ms = ocrMs;
+  // Decision 009: a failed attempt that followed a retake screen (server
+  // reasons from analyze.js; client reasons through track.js). An enum.
+  if (retakeAfter != null) props.retake_after = retakeAfter;
   // Deliberately NO barcode property: the privacy policy promises "no record
   // of what you scanned" and no product names in analytics, and a UPC resolves
   // to a product name. Missed barcodes are visible only in ephemeral Vercel
@@ -287,6 +317,9 @@ function anonId(ip) {
  * @param {boolean} [input.gfClaimPresent]  OCR path only: the text carried a gluten-free claim phrase
  * @param {'no_heading'|'no_end'} [input.listGate] OCR path only: why a "safe" was withheld as a cut-off list
  * @param {'oats'|'may_contain'|'conflict'|'undeclared_source'|'incomplete'|'other'} [input.cautionReason] label cautions only
+ * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeReason] OCR path only: the response asked for a retake, and why (decision 009)
+ * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeAfter]  OCR path only: this photo followed a retake screen for that reason (decision 009)
+ * @param {boolean} [input.listHeadingWord] OCR path, list_gate = no_heading only: a heading word appeared anywhere in the text (decision 009, T5)
  * @param {boolean} [input.gfLabelPresent]  Barcode path only: the record carried a gluten-free label tag
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms
  * @param {number} [input.claudeMs]         Claude round-trip in ms (incl. retries); absent on a Jev-served scan
@@ -319,6 +352,7 @@ async function trackScan({ ip, ...fields } = {}) {
  * @param {number} [input.ocrChars]         OCR path only: chars extracted (always 0 on ocr_failed by construction; omitted when failure precedes OCR)
  * @param {number} [input.elapsedMs]        client beacon only: ms the user waited before the attempt died or was cancelled
  * @param {number} [input.ocrMs]            server-side OCR failures only: Vision round-trip in ms, when known
+ * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeAfter] the attempt followed a retake screen for that reason (decision 009)
  */
 async function trackScanFailure({ ip, ...fields } = {}) {
   return captureEvent(SCAN_FAILED_EVENT, ip, buildScanFailureProperties(fields));
@@ -459,6 +493,8 @@ export {
   anonId,
   normalizeClient,
   normalizeAppVersion,
+  RETAKE_REASONS,
+  normalizeRetakeAfter,
   trackScan,
   trackScanFailure,
   trackBarcodeRecovery,
