@@ -282,8 +282,15 @@ export default function CameraScreen() {
       invalidatePhotoSelection();
       current.abort();
       abortControllerRef.current = null;
+      // Decision 009: a retake attempt says which retake screen it followed.
+      // Passed only when set, so an ordinary scan's beacon call is unchanged.
+      const retakeAfter = retakeAfterRef.current;
       if (reason === 'cancelled') {
-        sendFailureBeacon(scanMethodRef.current, 'cancelled', Date.now() - scanStartedAtRef.current);
+        const elapsedMs = Date.now() - scanStartedAtRef.current;
+        if (retakeAfter) sendFailureBeacon(scanMethodRef.current, 'cancelled', elapsedMs, retakeAfter);
+        else sendFailureBeacon(scanMethodRef.current, 'cancelled', elapsedMs);
+      } else if (retakeAfter) {
+        sendFailureBeacon(scanMethodRef.current, 'interrupted', undefined, retakeAfter);
       } else {
         sendFailureBeacon(scanMethodRef.current, 'interrupted');
       }

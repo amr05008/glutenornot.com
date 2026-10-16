@@ -2228,4 +2228,159 @@ describe('retake state (plans/retake-state-2026-10-11.md)', () => {
       expect(mockPush.mock.calls[0][0].params.scanCount).toBe('0');
     });
   });
+
+  describe('beacons and the recovery flow', () => {
+    function recoveryEvents(stage?: string) {
+      return mockSendRecoveryEvent.mock.calls.filter((c: any[]) => !stage || c[2] === stage);
+    }
+    function appStateListener() {
+      return (AppState.addEventListener as jest.Mock).mock.calls.at(-1)[1];
+    }
+    async function enterCapture() {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const utils = render(<CameraScreen />);
+      await scan(utils);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Scan ingredient label')); });
+      expect(utils.getByText('PHOTO ONLY')).toBeTruthy();
+      return utils;
+    }
+    // Retake screen → "Retake" → back on the camera with the flag pending.
+    async function retakeThenBack(utils: any, reason = 'no_heading') {
+      await showRetake(utils, reason);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+    }
+
+    it('a cancelled retake scan carries retake_after on its beacon (R1)', async () => {
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils);
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      await capture(utils);
+
+      await act(async () => { fireEvent.press(utils.getByText('Cancel')); });
+      expect(sendFailureBeacon).toHaveBeenCalledWith('ocr', 'cancelled', expect.any(Number), 'no_heading');
+    });
+
+    it('a retake scan dropped by backgrounding carries retake_after on its beacon (R1)', async () => {
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils);
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      await capture(utils);
+
+      await act(async () => { appStateListener()('background'); });
+      expect(sendFailureBeacon).toHaveBeenCalledWith('ocr', 'interrupted', undefined, 'no_heading');
+    });
+
+    it.each([
+      ['timeout', new APIError('Weak connection', 'timeout')],
+      ['network', new APIError('Connection problem', 'network')],
+    ])('a retake scan that hits a %s hands retake_after to analyzeImage, which beacons it', async (_kind, error) => {
+      jest.spyOn(Alert, 'alert').mockImplementation();
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils, 'too_little_text');
+      mockAnalyzeImage.mockRejectedValueOnce(error);
+      await capture(utils);
+      // The timeout/network beacons are sent inside analyzeImage (proved in
+      // services/__tests__/api.test.ts); the screen's job is to pass the flag.
+      expect(mockAnalyzeImage.mock.calls[1][3]).toBe('too_little_text');
+    });
+
+    it('an ordinary photo after a retake carries no retake_after on its cancel beacon (R2)', async () => {
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils);
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT); // spends the flag
+      await capture(utils);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      await act(async () => { focusControl.blur(); });
+      await act(async () => { focusControl.focus(); });
+
+      mockAnalyzeImage.mockReturnValueOnce(new Promise(() => {}));
+      await capture(utils);
+      await act(async () => { fireEvent.press(utils.getByText('Cancel')); });
+
+      expect(mockAnalyzeImage.mock.calls[2][3]).toBeUndefined();
+      expect(sendFailureBeacon).toHaveBeenLastCalledWith('ocr', 'cancelled', expect.any(Number));
+    });
+
+    it('a barcode lookup after a retake screen carries no retake_after on its cancel beacon (R2)', async () => {
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils);
+      mockLookupBarcode.mockReturnValueOnce(new Promise(() => {}));
+      await act(async () => {
+        utils.getByTestId('camera-view').props.onBarcodeScanned({ data: BARCODE, type: 'ean13' });
+      });
+      await act(async () => { fireEvent.press(utils.getByText('Cancel')); });
+
+      expect(sendFailureBeacon).toHaveBeenLastCalledWith('barcode', 'cancelled', expect.any(Number));
+    });
+
+    it('a retake stopped offline by the pre-flight check sends no beacon and spends the flag (R2)', async () => {
+      const utils = render(<CameraScreen />);
+      await retakeThenBack(utils);
+      mockAnalyzeImage.mockRejectedValueOnce(new APIError('You appear to be offline.', 'network'));
+      await capture(utils);
+
+      expect(utils.getByText("You're offline")).toBeTruthy();
+      expect(mockAnalyzeImage.mock.calls[1][3]).toBe('no_heading');
+      expect(sendFailureBeacon).not.toHaveBeenCalled();
+
+      await act(async () => { fireEvent.press(utils.getByLabelText('Try again')); });
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+      await capture(utils);
+      expect(mockAnalyzeImage.mock.calls[2][3]).toBeUndefined();
+    });
+
+    it('a recovery flow survives a retake: no exit, no result, and "Retake" returns to photo-only capture', async () => {
+      const utils = await enterCapture();
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE('no_end'));
+      await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of the ingredient label')); });
+
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(recoveryEvents('exited')).toHaveLength(0);
+      // No push, so the result screen can't have sent result_displayed
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(recoveryEvents('result_displayed')).toHaveLength(0);
+
+      await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+      expect(utils.getByText('PHOTO ONLY')).toBeTruthy();
+      expect(utils.getByTestId('camera-view').props.onBarcodeScanned).toBeUndefined();
+
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of the ingredient label')); });
+      expect(recoveryEvents('photo_started')).toHaveLength(2);
+      expect(mockAnalyzeImage.mock.calls[1][3]).toBe('no_end');
+      expect(mockPush.mock.calls[0][0].params).toMatchObject({ recoveryFlowId: 'flow-1' });
+    });
+
+    it('"See what I could read" in a flow hands the flow to the result screen and then clears it', async () => {
+      const utils = await enterCapture();
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE('no_heading'));
+      await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of the ingredient label')); });
+
+      await act(async () => { fireEvent.press(utils.getByLabelText('See what I could read')); });
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params).toMatchObject({ recoveryFlowId: 'flow-1', recoveryReason: 'not_found' });
+      expect(recoveryEvents('exited')).toHaveLength(0);
+
+      // The flow is over: barcode scanning is back after the re-arm
+      await act(async () => { jest.advanceTimersByTime(2000); });
+      mockLookupBarcode.mockResolvedValueOnce(LABEL_RESULT);
+      await scan(utils, '0012345678905');
+      expect(mockLookupBarcode).toHaveBeenCalledTimes(2);
+    });
+
+    it('opening Recents from photo-only capture after a retake exits the flow and ends the retake (T4)', async () => {
+      const utils = await enterCapture();
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE('no_heading'));
+      await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of the ingredient label')); });
+      await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+      await act(async () => { fireEvent.press(utils.getByLabelText('View recent scans')); });
+      expect(mockPush).toHaveBeenCalledWith('/recents');
+      expect(recoveryEvents('exited')).toEqual([['flow-1', 'not_found', 'exited']]);
+
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+      await capture(utils);
+      expect(mockAnalyzeImage.mock.calls[1][3]).toBeUndefined();
+    });
+  });
 });
