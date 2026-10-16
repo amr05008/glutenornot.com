@@ -253,3 +253,35 @@ describe('POST /api/track — cancelled attempts (plans/weak-signal-upload-2026-
     }
   });
 });
+
+describe('POST /api/track — retake_after (decision 009)', () => {
+  // A retake attempt that dies on the wire or is abandoned says which retake
+  // screen it followed. Same allowlist as /api/analyze; junk is dropped like a
+  // bad elapsed_ms, and the beacon itself is still recorded.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _setBeaconRateLimitMap(new Map());
+  });
+
+  it.each(['timeout', 'network', 'cancelled', 'interrupted'])('records retake_after on %s', async (reason) => {
+    const res = mockRes();
+    await handler({ method: 'POST', body: { method: 'ocr', reason, retake_after: 'no_heading' }, headers: {} }, res);
+    expect(res.statusCode).toBe(204);
+    expect(trackScanFailure).toHaveBeenCalledWith(expect.objectContaining({ reason, retakeAfter: 'no_heading' }));
+  });
+
+  it('drops junk, objects and long strings, and still records the beacon', async () => {
+    for (const junk of ['nope', { reason: 'no_end' }, 'a'.repeat(300), 7]) {
+      vi.clearAllMocks();
+      const res = mockRes();
+      await handler({ method: 'POST', body: { method: 'ocr', reason: 'cancelled', retake_after: junk }, headers: {} }, res);
+      expect(res.statusCode).toBe(204);
+      expect(trackScanFailure.mock.calls[0][0]).not.toHaveProperty('retakeAfter');
+    }
+  });
+
+  it('omits retake_after when the beacon carries none', async () => {
+    await handler({ method: 'POST', body: { method: 'ocr', reason: 'timeout' }, headers: {} }, mockRes());
+    expect(trackScanFailure.mock.calls[0][0]).not.toHaveProperty('retakeAfter');
+  });
+});
