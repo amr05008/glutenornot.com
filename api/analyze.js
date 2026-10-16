@@ -21,7 +21,7 @@ import {
   _setRateLimitMap,
   _getRateLimitMap,
 } from './_utils.js';
-import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
+import { trackScan, trackScanFailure, normalizeClient, normalizeAppVersion, normalizeRetakeAfter } from './_analytics.js';
 
 /**
  * Claude prompt for ingredient analysis
@@ -438,6 +438,38 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
 }
 
 /**
+ * Decision 009: should the app ask for a retake instead of showing this
+ * caution? Only when the response has nothing else to show (D4): a label
+ * caution whose one reason is `incomplete`, with no flagged ingredients, no
+ * allergen warnings and no menu items (a label response carrying menu_items
+ * renders as a menu in the app). In order: the gate's reason, a read under
+ * the safe floor, else Claude's own `incomplete` judgement (T1). Pure; runs
+ * after applyIngredientListGate. The barcode path never calls it — barcode
+ * `incomplete` means no data, which recovery already handles.
+ */
+function retakeReasonFor(analysis, { listGate, ocrChars } = {}) {
+  if (!analysis || analysis.mode !== 'label') return null;
+  if (analysis.verdict !== 'caution' || analysis.caution_reason !== 'incomplete') return null;
+  if (analysis.flagged_ingredients?.length || analysis.allergen_warnings?.length) return null;
+  if (Array.isArray(analysis.menu_items) && analysis.menu_items.length) return null;
+  if (listGate === 'no_heading' || listGate === 'no_end') return listGate;
+  if (ocrChars < MIN_OCR_CHARS_FOR_SAFE) return 'too_little_text';
+  return 'unclear';
+}
+
+// T5 diagnostic for `list_heading_word`: any heading term, anywhere, with any
+// punctuation. The gate's pattern needs the heading to start its line (or
+// follow a sentence), and Vision often merges the Nutrition Facts column onto
+// the same line ("…Iron 10% INGREDIENTS: …"), so this says how often a
+// no_heading block had a heading the gate couldn't accept. Same alternation
+// and i/u flags as the gate; no `g`, so .test() is safe. Text never leaves
+// this function.
+const HEADING_WORD_ANYWHERE = new RegExp(`(?:${INGREDIENT_HEADINGS})`, 'iu');
+function hasHeadingWord(ocrText) {
+  return typeof ocrText === 'string' && HEADING_WORD_ANYWHERE.test(ocrText);
+}
+
+/**
  * Presence signal for the `gf_claim_present` analytics property: does the OCR
  * text carry a gluten-free claim phrase in any supported language?
  *
@@ -479,11 +511,16 @@ export default async function handler(req, res) {
   const platform = normalizeClient(req.headers['x-client']);
   const appVersion = normalizeAppVersion(req.headers['x-client-version']);
   const geo = getClientGeo(req);
+  // Decision 009: did this photo follow a retake screen? Validated against
+  // the allowlist; anything else is dropped and never echoed. Read before the
+  // rate-limit branch so a rate-limited retake is tagged too. Analytics only —
+  // it never changes the analysis.
+  const retakeAfter = normalizeRetakeAfter(req.body?.retake_after);
   const rateLimitResult = checkRateLimit(clientIP);
 
   if (!rateLimitResult.allowed) {
     res.setHeader('Retry-After', Math.ceil(rateLimitResult.resetIn / 1000));
-    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'rate_limited', ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'rate_limited', retakeAfter, ...geo });
     return res.status(429).json({
       error: 'Rate limit exceeded',
       message: `You've reached today's scan limit (${RATE_LIMIT}). Resets in ${formatTimeRemaining(rateLimitResult.resetIn)}.`
@@ -527,7 +564,7 @@ export default async function handler(req, res) {
     ocrChars = ocrText ? ocrText.trim().length : 0;
 
     if (!ocrText || ocrText.trim().length === 0) {
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ocrMs, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars, ocrMs, retakeAfter, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -547,6 +584,11 @@ export default async function handler(req, res) {
     // Step 4: nor can a label whose ingredient list runs out of frame. After
     // the floor, whose copy is the more accurate one for a near-empty read.
     const listGate = applyIngredientListGate(analysis, ocrText, { platform });
+    // Step 5 (decision 009): say when a caution is really "retake the photo".
+    // Set only when there is nothing else on the card; the verdict,
+    // explanation, confidence and caution_reason are exactly as above.
+    const retakeReason = retakeReasonFor(analysis, { listGate, ocrChars });
+    if (retakeReason) analysis.retake_reason = retakeReason;
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);
@@ -571,6 +613,10 @@ export default async function handler(req, res) {
       listGate,
       // Which specific reason a caution named (decision 006; an enum, never content).
       cautionReason: analysis.caution_reason,
+      // Decision 009 (enums and a boolean, never content).
+      retakeReason,
+      retakeAfter,
+      listHeadingWord: listGate === 'no_heading' ? hasHeadingWord(ocrText) : undefined,
       ocrMs,
       claudeMs,
       totalMs: Date.now() - startedAt,
@@ -583,7 +629,7 @@ export default async function handler(req, res) {
     console.error('Analysis error:', error);
 
     if (error.message === 'OCR_EMPTY') {
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ocrMs, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'ocr_failed', imageKb, ocrChars: 0, ocrMs, retakeAfter, ...geo });
       return res.status(400).json({
         code: 'OCR_FAILED',
         error: 'OCR failed',
@@ -593,12 +639,12 @@ export default async function handler(req, res) {
 
     if (error.name === 'ClaudeError') {
       console.error('Claude analysis failed:', describeClaudeError(error));
-      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ocrMs, ...geo });
+      await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'claude_error', imageKb, ocrChars, ocrMs, retakeAfter, ...geo });
       const { status, body } = claudeErrorResponse(error);
       return res.status(status).json(body);
     }
 
-    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ocrMs, ...geo });
+    await trackScanFailure({ ip: clientIP, platform, appVersion, method: 'ocr', reason: 'server_error', imageKb, ocrChars, ocrMs, retakeAfter, ...geo });
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Something went wrong. Please try again.'
@@ -775,6 +821,8 @@ export {
   MIN_OCR_CHARS_FOR_SAFE,
   checkIngredientList,
   applyIngredientListGate,
+  retakeReasonFor,
+  hasHeadingWord,
   parseClaudeResponse,
   analyzeWithClaude, // real prompt + callClaude + parse path, for the live evals in tests/api/evals
   detectGlutenFreeClaim,

@@ -13,6 +13,8 @@ import handler, {
   MIN_OCR_CHARS_FOR_SAFE,
   checkIngredientList,
   applyIngredientListGate,
+  retakeReasonFor,
+  hasHeadingWord,
   parseClaudeResponse,
   analyzeWithClaude,
   detectGlutenFreeClaim,
@@ -680,6 +682,55 @@ describe('applyIngredientListGate', () => {
     const web = safeLabel();
     applyIngredientListGate(web, START_CUT, { platform: 'web' });
     expect(web.explanation).not.toContain('barcode');
+  });
+});
+
+describe('retakeReasonFor (decision 009)', () => {
+  const incomplete = (extra = {}) => ({
+    mode: 'label', verdict: 'caution', caution_reason: 'incomplete',
+    flagged_ingredients: [], allergen_warnings: [], explanation: '…', confidence: 'low', ...extra,
+  });
+
+  it('precedence: the gate over the floor, the floor alone, then Claude\'s own incomplete', () => {
+    expect(retakeReasonFor(incomplete(), { listGate: 'no_heading', ocrChars: 40 })).toBe('no_heading');
+    expect(retakeReasonFor(incomplete(), { listGate: 'no_end', ocrChars: 900 })).toBe('no_end');
+    expect(retakeReasonFor(incomplete(), { listGate: null, ocrChars: 40 })).toBe('too_little_text');
+    expect(retakeReasonFor(incomplete(), { listGate: null, ocrChars: 900 })).toBe('unclear');
+  });
+
+  it('is null for safe, unsafe, a caution that is not incomplete, and menus', () => {
+    expect(retakeReasonFor(incomplete({ verdict: 'safe', caution_reason: undefined }), { ocrChars: 900 })).toBeNull();
+    expect(retakeReasonFor(incomplete({ verdict: 'unsafe', caution_reason: undefined, flagged_ingredients: ['wheat'] }), { ocrChars: 900 })).toBeNull();
+    expect(retakeReasonFor(incomplete({ caution_reason: 'oats' }), { ocrChars: 900 })).toBeNull();
+    expect(retakeReasonFor(incomplete({ mode: 'menu', caution_reason: undefined, menu_items: [] }), { ocrChars: 900 })).toBeNull();
+  });
+
+  // R1: anything else on the card means the amber card, not the retake screen (D4).
+  it('is null when the response has anything else to show', () => {
+    expect(retakeReasonFor(incomplete({ flagged_ingredients: ['oats'] }), { listGate: 'no_heading', ocrChars: 40 })).toBeNull();
+    expect(retakeReasonFor(incomplete({ allergen_warnings: ['May contain wheat'] }), { listGate: 'no_end', ocrChars: 900 })).toBeNull();
+  });
+
+  // R2: the mixed shape applyIngredientListGate already handles — a label
+  // response carrying menu_items renders as a menu in the app.
+  it('is null for a gated label response that carries menu_items', () => {
+    const mixed = incomplete({ menu_items: [{ name: 'Pasta', verdict: 'unsafe', notes: '' }] });
+    expect(retakeReasonFor(mixed, { listGate: 'no_heading', ocrChars: 900 })).toBeNull();
+  });
+});
+
+describe('hasHeadingWord (list_heading_word diagnostic, T5)', () => {
+  it('finds a heading word mid-line, where the gate pattern deliberately does not', () => {
+    const merged = 'Calories 120 Iron 10% INGREDIENTS: brown rice, water, sea salt.';
+    expect(checkIngredientList(merged)).toBe('no_heading');
+    expect(hasHeadingWord(merged)).toBe(true);
+  });
+  it('finds a non-English term in that position', () => {
+    expect(hasHeadingWord('Eisen 10% Zutaten: Zucker, Reismehl, Salz.')).toBe(true);
+  });
+  it('is false for a read with no heading term, and for non-strings', () => {
+    expect(hasHeadingWord('brown rice, water, sea salt, cane sugar.')).toBe(false);
+    expect(hasHeadingWord(undefined)).toBe(false);
   });
 });
 
@@ -1439,6 +1490,154 @@ describe('analyze handler analytics', () => {
       await handler({ method: 'POST', body: { image: 'base64data' }, headers: {} }, res);
       expect(res.statusCode).toBe(200);
       expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ method: 'ocr', gfClaimPresent: false }));
+    });
+  });
+
+  // Decision 009 (plans/retake-state-2026-10-11.md): the response says when a
+  // caution is really "retake the photo"; the request and the failures carry
+  // the retake flag back. Enums and a boolean only.
+  describe('retake (decision 009)', () => {
+    const ocr = (description) => ({ ok: true, json: async () => ({ responses: [{ textAnnotations: [{ description }] }] }) });
+    function stubScan(analysis, ocrResponse) {
+      process.env.ANTHROPIC_API_KEY = 'test-key';
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url) => {
+        if (String(url).includes('anthropic')) {
+          return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify(analysis) }] }) };
+        }
+        return ocrResponse;
+      }));
+    }
+    async function post(body = { image: 'base64data' }, headers = { 'x-client': 'ios' }) {
+      const res = mockRes();
+      await handler({ method: 'POST', body, headers }, res);
+      return res;
+    }
+
+    const claudeSafe = { mode: 'label', verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: 'Good news! No gluten ingredients here.', confidence: 'high' };
+    const claudeIncomplete = { mode: 'label', verdict: 'caution', caution_reason: 'incomplete', flagged_ingredients: [], allergen_warnings: [], explanation: 'The text is garbled.', confidence: 'low' };
+    const claudeIncompleteWithOats = { ...claudeIncomplete, flagged_ingredients: ['oats'] };
+    const claudeMenu = { mode: 'menu', verdict: 'caution', flagged_ingredients: [], allergen_warnings: [], explanation: 'Ask the server.', confidence: 'medium', menu_items: [{ name: 'Risotto', verdict: 'caution', notes: 'ask' }] };
+    // >100 chars, no heading, ends in a full stop: the gate fires no_heading.
+    const NO_HEADING_TEXT = 'Brown rice, water, sunflower oil, sea salt, cane sugar, apple cider vinegar, garlic powder, onion powder, black pepper, paprika, rosemary extract.';
+    // Same list with the heading merged into the nutrition column.
+    const MERGED_HEADING_TEXT = 'Calories 120 Iron 10% INGREDIENTS: ' + NO_HEADING_TEXT;
+
+    it('returns retake_reason no_heading when the gate withholds safe, and records it', async () => {
+      stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
+      const res = await post();
+      expect(res.statusCode).toBe(200);
+      expect(res.body.retake_reason).toBe('no_heading');
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.caution_reason).toBe('incomplete');
+      expect(trackScan).toHaveBeenCalledWith(
+        expect.objectContaining({ listGate: 'no_heading', retakeReason: 'no_heading', listHeadingWord: false })
+      );
+    });
+
+    it('records list_heading_word true when a heading word sits mid-line', async () => {
+      stubScan(claudeSafe, ocr(MERGED_HEADING_TEXT));
+      const res = await post();
+      expect(res.body.retake_reason).toBe('no_heading');
+      expect(trackScan).toHaveBeenCalledWith(
+        expect.objectContaining({ listGate: 'no_heading', retakeReason: 'no_heading', listHeadingWord: true })
+      );
+    });
+
+    it('returns no_end when the list has a heading but no line-ending full stop, without list_heading_word', async () => {
+      stubScan(claudeSafe, ocr('INGREDIENTS: ' + NO_HEADING_TEXT.slice(0, -1) + ', and'));
+      const res = await post();
+      expect(res.body.retake_reason).toBe('no_end');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBe('no_end');
+      expect(trackScan.mock.calls[0][0].listHeadingWord).toBeUndefined();
+    });
+
+    it('returns too_little_text when the read is under the safe floor', async () => {
+      stubScan(claudeSafe, ocr('GF!'));
+      const res = await post();
+      expect(res.body.retake_reason).toBe('too_little_text');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBe('too_little_text');
+    });
+
+    it("returns unclear for Claude's own incomplete judgement on a complete read", async () => {
+      stubScan(claudeIncomplete, OCR_TEXT_FULL_LABEL);
+      const res = await post();
+      expect(res.body.retake_reason).toBe('unclear');
+      expect(res.body.explanation).toBe('The text is garbled.');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBe('unclear');
+    });
+
+    it('holds back retake_reason when the incomplete caution carries a flagged ingredient (D4)', async () => {
+      stubScan(claudeIncompleteWithOats, OCR_TEXT_FULL_LABEL);
+      const res = await post();
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body).not.toHaveProperty('retake_reason');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBeNull();
+      expect(trackScan.mock.calls[0][0].listHeadingWord).toBeUndefined();
+    });
+
+    it('never sets retake_reason on a menu', async () => {
+      stubScan(claudeMenu, OCR_TEXT_FULL_LABEL);
+      const res = await post();
+      expect(res.body.mode).toBe('menu');
+      expect(res.body).not.toHaveProperty('retake_reason');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBeNull();
+    });
+
+    it('never sets retake_reason on an ungated safe', async () => {
+      stubScan(claudeSafe, OCR_TEXT_FULL_LABEL);
+      const res = await post();
+      expect(res.body.verdict).toBe('safe');
+      expect(res.body).not.toHaveProperty('retake_reason');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBeNull();
+      expect(trackScan.mock.calls[0][0].listHeadingWord).toBeUndefined();
+    });
+
+    it.each(['no_heading', 'no_end', 'too_little_text', 'unclear'])('records retake_after %s on scan', async (value) => {
+      stubScan(claudeSafe, OCR_TEXT_FULL_LABEL);
+      const res = await post({ image: 'base64data', retake_after: value });
+      expect(res.statusCode).toBe(200);
+      expect(trackScan).toHaveBeenCalledWith(expect.objectContaining({ retakeAfter: value }));
+      expect(res.body).not.toHaveProperty('retake_after');
+    });
+
+    it('records retake_after on a rate_limited failure (read before the rate-limit branch)', async () => {
+      _getRateLimitMap().set('unknown', { count: 50, windowStart: Date.now() });
+      const res = await post({ image: 'base64data', retake_after: 'no_end' });
+      expect(res.statusCode).toBe(429);
+      expect(trackScanFailure).toHaveBeenCalledWith(expect.objectContaining({ reason: 'rate_limited', retakeAfter: 'no_end' }));
+    });
+
+    it('records retake_after on an ocr_failed failure', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_EMPTY));
+      const res = await post({ image: 'base64data', retake_after: 'no_end' });
+      expect(res.statusCode).toBe(400);
+      expect(trackScanFailure).toHaveBeenCalledWith(expect.objectContaining({ reason: 'ocr_failed', retakeAfter: 'no_end' }));
+    });
+
+    it('records retake_after on a claude_error failure', async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(OCR_TEXT));
+      const res = await post({ image: 'base64data', retake_after: 'no_end' });
+      expect(res.statusCode).toBe(503);
+      expect(trackScanFailure).toHaveBeenCalledWith(expect.objectContaining({ reason: 'claude_error', retakeAfter: 'no_end' }));
+    });
+
+    it('records retake_after on a server_error failure', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+      const res = await post({ image: 'base64data', retake_after: 'no_end' });
+      expect(res.statusCode).toBe(500);
+      expect(trackScanFailure).toHaveBeenCalledWith(expect.objectContaining({ reason: 'server_error', retakeAfter: 'no_end' }));
+    });
+
+    it('drops junk, objects and long strings: never recorded, never echoed', async () => {
+      for (const junk of ['nope', { reason: 'no_end' }, 'a'.repeat(300)]) {
+        vi.clearAllMocks();
+        stubScan(claudeSafe, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: junk });
+        expect(res.statusCode).toBe(200);
+        expect(trackScan.mock.calls[0][0].retakeAfter).toBeNull();
+        expect(res.body).not.toHaveProperty('retake_after');
+      }
     });
   });
 });
