@@ -1,6 +1,6 @@
 # Retake state: a photo we can't read fully is a retake, not a verdict
 
-**Status:** SPEC grilled to **SHIP** (round 7, 2026-10-11). **Implementation plan written 2026-10-16** — see "Implementation plan" at the end of this file. Nothing is built yet.
+**Status:** SPEC grilled to **SHIP** (round 7, 2026-10-11). **Implementation plan written 2026-10-16** — see "Implementation plan" at the end of this file. **Tasks 1–9 implemented 2026-10-16** on branch `retake-state-2026-10-11` (see Execution notes); the PR, review, merge, production check, iOS 1.5.1 and the day-14 read are still to do.
 
 **Review history** (Pi on gpt-6-sol, Herdr tab "grill retake spec"):
 - **Round 1: DON'T SHIP**, with 3 🔴 and 5 🟡. All eight are folded in and marked "(R1)".
@@ -1359,6 +1359,23 @@ Then the query above (and its `scan_failed` twin) must show `retake_after: no_he
 ## Execution notes
 
 _Filled in while executing: deviations from the tasks above, the production verification result (Task 11), the merge time, the 1.5.1 release time._
+
+**Tasks 1–9, 2026-10-16.** Task 0 was already done (branch and baseline: root vitest 940, jest 173, tsc clean; `main` still at `1d31a08`, `CACHE_NAME` still `glutenornot-v13`). Every task was test-first: the new tests were run red, then green, then both suites and `tsc` before each commit. No live evals were run. Deviations and judgement calls:
+
+- **Task 2:** added a `server_error` handler case for `retake_after` alongside the plan's `rate_limited` / `ocr_failed` / `claude_error` ones (the implementation step names all five calls; the spec's testing list names three).
+- **Task 4:** the privacy policy's effective date is `&lt;merge date&gt;` in the HTML (renders as "<merge date>") and the "API half live since" lines in `CLAUDE.md`, `mobile/RELEASE.md`, `ROADMAP.md` say `<merge date>`; fill them in at merge. Decision 009 and the calibration plan say `PR #<n>`.
+- **Task 5:** the plan's `sendFailureBeacon` test read the second beacon with `beaconBody(fetchMock)`, which is index 0 (the first beacon); it uses `beaconBody(fetchMock, 1)`.
+- **Tasks 6–7, stale handlers:** React Native Testing Library 13 returns the host `View`, which has no `onPress` prop, so `getByLabelText(…).props.onPress` is undefined. The tests use an `onPressOf()` helper that walks up to the composite touchable and returns the `onPress` it rendered with (the same closure, so R3's same-tick case is still what is tested).
+- **Task 6 case 11:** "shutter disabled" is asserted as `StyleSheet.flatten(shutter.props.style).opacity === 0.4` (`captureButtonDisabled`); no existing torch test checked the style. The test also asserts the torch button still reads "Turn off flashlight" (the user's choice is kept while the prop waits for the settle).
+- **Task 6, extra checks:** case 4 also asserts nothing was stashed (the next photo carries no `retake_after`); one extra test covers a picker-only user (camera permission denied) getting the retake screen with "Choose another photo", which is why the screen renders before the permission gate.
+- **Task 7 case 4:** `mockTakePictureAsync` is asserted called once (the original photo), not "not called".
+- **Task 7, extra test:** a rejected count write on the normal path is reported and still pushes with `scanCount: '0'` (spec App §3: `navigateToResult` gets the same error path).
+- **Task 8, the plan's `abandonScan` code changed:** as written it always passes a fourth argument (`undefined` on an ordinary scan). Jest's `toHaveBeenCalledWith` compares argument counts, so five existing tests failed ("Cancel during analysis returns to photo-only capture…", "backgrounding mid-photo…", both "a cancelled barcode 200/404 cannot clear a newer photo request", "a barcode response that lands after Cancel…"). Per "fix the screen, not the test", `abandonScan` passes `retake_after` only when the in-flight request carried one, so an ordinary scan's beacon call is byte-for-byte what it was. Case 3's expectations are therefore `toHaveBeenLastCalledWith('ocr' | 'barcode', 'cancelled', expect.any(Number))` (three arguments, which proves no `retake_after`) instead of a trailing `undefined`.
+- **Task 8, extra checks:** case 2 covers both a timeout and a network rejection; case 7 also asserts that the next photo after Recents carries no flag (T4).
+- **Task 9, the engineering diagram:** the plan's single line `iOS: “Retake the photo”` at y=556 ran across the dashed API-boundary line in the render, so it is two lines: "iOS: asks for" (y=556) and "a retake instead" (y=572). The simple diagram's line is as planned.
+- **Task 9, the PNGs:** rendered on Linux with Playwright's headless Chromium (Playwright installed in a scratch directory, not the repo) from `python3 -m http.server`, an `<img>` at 3200 px wide, same sizes as before (3200×1220, 3200×1080). Re-rendering the *unchanged* SVGs this way matched the committed PNGs' size and background with about 1% of pixels differing (glyph anti-aliasing between platforms), so the new PNGs differ slightly in rasterization everywhere, not only on the new lines.
+- **Task 9, `mobile/RELEASE.md`:** the rest of the old "No next iOS release is scheduled" bullet (barcode recovery step 2, weak-signal T2) is kept under "After 1.5.1". Jest count updated to 219.
+- **Kept as written, noted for review:** `handleSeeResult` clears the pending flag before `commitResult`'s focus check, so a tap that lands while unfocused (which does nothing) also spends the flag. Harmless in practice (the screen can't be tapped from under another route), and it is the plan's code.
 
 ## Day-14 read
 

@@ -1090,6 +1090,6 @@ SQL="SELECT properties.method, properties.verdict, properties.caution_reason, co
 - **Split the barcode read by `data_source`** (T9 holds no-allergen-data sources at `incomplete`). **`other` with `confidence: low` may be parse failures** (the parsers' fallback records `other`).
 - **Any false-safe report from a user:** that one outweighs the numbers.
 
-- [ ] **Step 3: Write Part B's plan** (`plans/retake-state-<date>.md`)
+- [x] **Step 3: Write Part B's plan** → `plans/retake-state-2026-10-11.md` (spec SHIP 2026-10-11, implemented in PR #<n>; decision 009). Note: the spec keys the retake screen on a server-set `retake_reason`, not on `caution_reason` in the app (D2).
 
 Unreadable becomes a neutral retake screen, keyed on `caution_reason === 'incomplete'` on the photo path. On the barcode path `incomplete` also covers the no-data branch and T9's no-allergen-data hold, which are not "unreadable", so Part B must not key the retake screen on it there. It ships in the parked iOS 1.5.1.
