@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
 
 // --- Mocks ---
 
@@ -1670,5 +1670,253 @@ describe('barcode recovery (plans/barcode-recovery-2026-09-05.md)', () => {
       });
       expect(getByTestId('camera-view').props.onBarcodeScanned).toBeDefined();
     });
+  });
+});
+
+describe('retake state (plans/retake-state-2026-10-11.md)', () => {
+  // Decision 009: a photo the server couldn't read fully comes back with a
+  // known retake_reason. The app shows a retake screen instead of a verdict:
+  // nothing counted, saved or pushed until the user asks to see the result,
+  // and the next photo carries the reason back as retake_after, once.
+  const RETAKE = (reason: string, extra: Partial<AnalysisResult> = {}) => ({
+    mode: 'label', verdict: 'caution', caution_reason: 'incomplete', retake_reason: reason,
+    flagged_ingredients: [], allergen_warnings: [],
+    explanation: `SENTINEL explanation for ${reason}`, confidence: 'low', ...extra,
+  }) as AnalysisResult;
+  const HELD_BACK = { ...RETAKE('no_heading'), retake_reason: undefined, flagged_ingredients: ['oats'] } as AnalysisResult;
+  const LABEL_RESULT = {
+    mode: 'label',
+    verdict: 'unsafe',
+    flagged_ingredients: ['wheat flour'],
+    allergen_warnings: [],
+    explanation: 'Contains wheat.',
+    confidence: 'high',
+  } satisfies AnalysisResult;
+  const BARCODE = '7311041088219';
+
+  beforeEach(() => {
+    (AppState as any).currentState = 'active';
+  });
+
+  async function capture(utils: any) {
+    await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of ingredients')); });
+  }
+  async function pick(utils: any, uri = 'file://picked.jpg') {
+    mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri }] } as any);
+    await act(async () => { fireEvent.press(utils.getByLabelText('Upload photo from library')); });
+  }
+  async function scan(utils: any, code = BARCODE) {
+    await act(async () => {
+      await utils.getByTestId('camera-view').props.onBarcodeScanned({ data: code, type: 'ean13' });
+    });
+  }
+  // Puts the retake screen up from a camera capture or a library pick.
+  async function showRetake(utils: any, reason = 'no_heading', via: 'camera' | 'picker' = 'camera') {
+    mockAnalyzeImage.mockResolvedValueOnce(RETAKE(reason));
+    if (via === 'camera') await capture(utils);
+    else await pick(utils);
+    expect(utils.getByText('Retake the photo')).toBeTruthy();
+  }
+
+  it.each(['no_heading', 'no_end', 'too_little_text', 'unclear'])(
+    'a %s retake_reason shows the retake screen — nothing counted, saved or pushed',
+    async (reason) => {
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE(reason));
+      const utils = render(<CameraScreen />);
+      await capture(utils);
+
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(utils.getByText(`SENTINEL explanation for ${reason}`)).toBeTruthy();
+      expect(utils.getByLabelText('Retake')).toBeTruthy();
+      expect(utils.getByLabelText('See what I could read')).toBeTruthy();
+      // Not a verdict (D3)
+      expect(utils.queryByText('Caution')).toBeNull();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(incrementLifetimeScanCount).not.toHaveBeenCalled();
+      expect(addRecentScan).not.toHaveBeenCalled();
+      // The camera is unmounted under the screen (R1)
+      expect(utils.queryByTestId('camera-view')).toBeNull();
+    },
+  );
+
+  it('an unknown retake_reason gets the normal result — the app branches only on a known value', async () => {
+    mockAnalyzeImage.mockResolvedValueOnce(RETAKE('later_reason'));
+    const utils = render(<CameraScreen />);
+    await capture(utils);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+    expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('an incomplete caution the server held back for its warnings gets the amber card with its rows (R1)', async () => {
+    mockAnalyzeImage.mockResolvedValueOnce(HELD_BACK);
+    const utils = render(<CameraScreen />);
+    await capture(utils);
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(mockPush.mock.calls[0][0].params.result).flagged_ingredients).toEqual(['oats']);
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+  });
+
+  it('a retake response that lands after the screen lost focus is dropped — nothing surfaces on return (R1)', async () => {
+    let resolveScan!: (r: AnalysisResult) => void;
+    mockAnalyzeImage.mockReturnValueOnce(new Promise((r) => { resolveScan = r; }));
+    const utils = render(<CameraScreen />);
+    await capture(utils);
+
+    await act(async () => { focusControl.blur(); });
+    await act(async () => { resolveScan(RETAKE('no_end')); });
+    await act(async () => { focusControl.focus(); });
+
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(incrementLifetimeScanCount).not.toHaveBeenCalled();
+    expect(utils.getByTestId('camera-view')).toBeTruthy();
+    // Nothing was stashed either: the next photo is not a retake
+    mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+    await capture(utils);
+    expect(mockAnalyzeImage.mock.calls[1][3]).toBeUndefined();
+  });
+
+  it('"Retake" after a camera photo returns to the camera — no spinner, no beacon', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'no_heading', 'camera');
+    expect(utils.queryByLabelText('Choose another photo')).toBeNull();
+
+    await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+    expect(utils.getByTestId('camera-view')).toBeTruthy();
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+    expect(utils.queryByText('Uploading photo…')).toBeNull();
+    expect(utils.queryByText('Reading ingredients…')).toBeNull();
+    expect(sendFailureBeacon).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('"Choose another photo" after a library pick opens the picker; cancelling it keeps the screen and its way out (R5)', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'unclear', 'picker');
+    expect(utils.queryByLabelText('Retake')).toBeNull();
+
+    mockLaunchLibrary.mockResolvedValueOnce({ canceled: true } as any);
+    await act(async () => { fireEvent.press(utils.getByLabelText('Choose another photo')); });
+
+    expect(mockLaunchLibrary).toHaveBeenCalledTimes(2);
+    expect(utils.getByText('Retake the photo')).toBeTruthy();
+    expect(utils.getByLabelText('See what I could read')).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('the retake flag rides on the next photo only', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'no_heading', 'camera');
+    await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+    mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+    await capture(utils);
+    expect(mockAnalyzeImage.mock.calls[1][3]).toBe('no_heading');
+    expect(mockPush).toHaveBeenCalledTimes(1);
+
+    mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+    await capture(utils);
+    expect(mockAnalyzeImage.mock.calls[2][3]).toBeUndefined();
+  });
+
+  it('picking a photo from the retake screen sends the flag and clears the state (R5)', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'unclear', 'picker');
+
+    let resolveScan!: (r: AnalysisResult) => void;
+    mockAnalyzeImage.mockReturnValueOnce(new Promise((r) => { resolveScan = r; }));
+    mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://second.jpg' }] } as any);
+    await act(async () => { fireEvent.press(utils.getByLabelText('Choose another photo')); });
+
+    expect(mockAnalyzeImage).toHaveBeenCalledTimes(2);
+    expect(mockAnalyzeImage.mock.calls[1][3]).toBe('unclear');
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+    expect(utils.getByText('Uploading photo…')).toBeTruthy();
+
+    await act(async () => { resolveScan(LABEL_RESULT); });
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(utils.queryByText('Retake the photo')).toBeNull();
+  });
+
+  it('the retake flag expires after 5 minutes', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'no_heading', 'camera');
+    await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+    await act(async () => { jest.advanceTimersByTime(5 * 60 * 1000 + 1); });
+    mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+    await capture(utils);
+    expect(mockAnalyzeImage.mock.calls[1][3]).toBeUndefined();
+  });
+
+  it('a barcode lookup clears the retake flag', async () => {
+    const utils = render(<CameraScreen />);
+    await showRetake(utils, 'no_heading', 'camera');
+    await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+    mockLookupBarcode.mockResolvedValueOnce(LABEL_RESULT);
+    await scan(utils);
+    expect(mockLookupBarcode).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+
+    mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+    await capture(utils);
+    expect(mockAnalyzeImage).toHaveBeenCalledTimes(2);
+    expect(mockAnalyzeImage.mock.calls[1][3]).toBeUndefined();
+  });
+
+  it('the camera unmounts under the retake screen and remounts through the ready gate — the torch comes back by the settle effect (R1)', async () => {
+    const utils = render(<CameraScreen />);
+    // Torch on, on a settled camera, before the scan
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+      fireEvent.press(utils.getByLabelText('Turn on flashlight'));
+    });
+    expect(utils.getByTestId('camera-view').props.enableTorch).toBe(true);
+
+    await showRetake(utils, 'no_end', 'camera');
+    expect(utils.queryByTestId('camera-view')).toBeNull();
+
+    cameraReadyControl.auto = false;
+    await act(async () => { fireEvent.press(utils.getByLabelText('Retake')); });
+
+    // Remounted, not yet ready: torch prop off, shutter shown disabled
+    expect(utils.getByTestId('camera-view').props.enableTorch).toBe(false);
+    expect(utils.getByLabelText('Turn off flashlight')).toBeTruthy(); // the user's choice is kept
+    const shutter = utils.getByLabelText('Capture photo of ingredients');
+    expect(StyleSheet.flatten(shutter.props.style).opacity).toBe(0.4);
+
+    await act(async () => { cameraReadyControl.fire(); });
+    expect(utils.getByTestId('camera-view').props.enableTorch).toBe(false);
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(utils.getByTestId('camera-view').props.enableTorch).toBe(true);
+  });
+
+  it('a queued barcode callback under the retake screen starts no lookup (R4)', async () => {
+    const utils = render(<CameraScreen />);
+    const stale = utils.getByTestId('camera-view').props.onBarcodeScanned;
+    await showRetake(utils, 'no_heading', 'camera');
+
+    await act(async () => {
+      await stale({ data: BARCODE, type: 'ean13' });
+    });
+    expect(mockLookupBarcode).not.toHaveBeenCalled();
+    expect(utils.getByText('Retake the photo')).toBeTruthy();
+  });
+
+  it('with camera permission denied, a picked photo still gets the retake screen, offering another photo', async () => {
+    permissionControl.granted = false;
+    const utils = render(<CameraScreen />);
+    mockAnalyzeImage.mockResolvedValueOnce(RETAKE('too_little_text'));
+    mockLaunchLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file://picked.jpg' }] } as any);
+    await act(async () => { fireEvent.press(utils.getByLabelText('Choose a photo instead')); });
+
+    expect(utils.getByText('Retake the photo')).toBeTruthy();
+    expect(utils.getByLabelText('Choose another photo')).toBeTruthy();
+    expect(utils.queryByText('Camera access')).toBeNull();
   });
 });
