@@ -124,6 +124,7 @@ import type { AnalysisResult } from '../../constants/verdicts';
 import { analyzeImage, lookupBarcode, sendFailureBeacon, APIError } from '../../services/api';
 import { addRecentScan, incrementLifetimeScanCount } from '../../services/storage';
 import { sendRecoveryEvent } from '../../services/recovery';
+import { reportError } from '../../services/errorReporting';
 import * as ImagePicker from 'expo-image-picker';
 
 const mockAnalyzeImage = analyzeImage as jest.MockedFunction<typeof analyzeImage>;
@@ -1918,5 +1919,313 @@ describe('retake state (plans/retake-state-2026-10-11.md)', () => {
     expect(utils.getByText('Retake the photo')).toBeTruthy();
     expect(utils.getByLabelText('Choose another photo')).toBeTruthy();
     expect(utils.queryByText('Camera access')).toBeNull();
+  });
+
+  describe('"See what I could read"', () => {
+    // The press handler a touchable rendered with, from that render — RNTL
+    // queries return the host View, whose composite parent owns onPress.
+    function onPressOf(el: any): () => void {
+      let node = el;
+      while (node && typeof node.props?.onPress !== 'function') node = node.parent;
+      if (!node) throw new Error('no onPress found');
+      return node.props.onPress;
+    }
+    function holdCount() {
+      let resolveCount!: (n: number) => void;
+      (incrementLifetimeScanCount as jest.Mock).mockReturnValueOnce(new Promise((r) => { resolveCount = r; }));
+      return (n: number) => resolveCount(n);
+    }
+    async function seeResult(utils: any) {
+      await act(async () => { fireEvent.press(utils.getByLabelText('See what I could read')); });
+    }
+    function recoveryEvents(stage?: string) {
+      return mockSendRecoveryEvent.mock.calls.filter((c: any[]) => !stage || c[2] === stage);
+    }
+    async function enterCapture() {
+      mockLookupBarcode.mockRejectedValueOnce(new APIError('Product not found', 'not_found'));
+      const utils = render(<CameraScreen />);
+      await scan(utils);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Scan ingredient label')); });
+      expect(utils.getByText('PHOTO ONLY')).toBeTruthy();
+      return utils;
+    }
+
+    it('commits once: count, history and push, then the camera is back under the result', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils, 'no_heading');
+
+      await seeResult(utils);
+
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledWith(RETAKE('no_heading'));
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.result).toBe(JSON.stringify(RETAKE('no_heading')));
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('1');
+      expect(utils.queryByText('Retake the photo')).toBeNull();
+      expect(utils.getByTestId('camera-view')).toBeTruthy();
+    });
+
+    it('a double tap commits once (R1)', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+
+      await act(async () => {
+        const link = utils.getByLabelText('See what I could read');
+        fireEvent.press(link);
+        fireEvent.press(link);
+      });
+
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('after the push, and after Back from the result, there is no link left to tap (R2)', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      const staleSee = onPressOf(utils.getByLabelText('See what I could read'));
+      await seeResult(utils);
+      expect(utils.queryByLabelText('See what I could read')).toBeNull();
+
+      // A second tap queued from the old render finds the state gone
+      await act(async () => { staleSee(); });
+      await act(async () => { focusControl.blur(); });
+      await act(async () => { focusControl.focus(); });
+
+      expect(utils.queryByLabelText('See what I could read')).toBeNull();
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('nothing re-enters while the count write is pending — including closures captured before the commit began (R3, R4)', async () => {
+      const utils = render(<CameraScreen />);
+      // Handlers from the camera render, before any scan
+      const staleBarcode = utils.getByTestId('camera-view').props.onBarcodeScanned;
+      const staleCapture = onPressOf(utils.getByLabelText('Capture photo of ingredients'));
+      const staleLibrary = onPressOf(utils.getByLabelText('Upload photo from library'));
+      const staleRecents = onPressOf(utils.getByLabelText('View recent scans'));
+      await showRetake(utils, 'no_end');
+      // Handlers from the retake screen's render, before the commit began
+      const staleRetake = onPressOf(utils.getByLabelText('Retake'));
+      const staleSee = onPressOf(utils.getByLabelText('See what I could read'));
+
+      const resolveCount = holdCount();
+      await seeResult(utils);
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        fireEvent.press(utils.getByLabelText('Retake'));
+        fireEvent.press(utils.getByLabelText('See what I could read'));
+        staleRetake();
+        staleSee();
+        await staleBarcode({ data: BARCODE, type: 'ean13' });
+        await staleCapture();
+        await staleLibrary();
+        staleRecents();
+      });
+
+      expect(mockLookupBarcode).not.toHaveBeenCalled();
+      expect(mockTakePictureAsync).toHaveBeenCalledTimes(1); // the original photo only
+      expect(mockAnalyzeImage).toHaveBeenCalledTimes(1);
+      expect(mockLaunchLibrary).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalledWith('/recents');
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+
+      await act(async () => { resolveCount(4); });
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('4');
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(utils.queryByText('Retake the photo')).toBeNull();
+    });
+
+    // Case 5 of the plan (handleBarcodeScanned under a retake screen that is
+    // not committing) is 'a queued barcode callback under the retake screen
+    // starts no lookup (R4)' above.
+
+    it('a throwing push is reported and leaves the screen interactive; the retry pushes without a second write (R5)', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      mockPush.mockImplementationOnce(() => { throw new Error('nav'); });
+
+      await seeResult(utils);
+
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'nav' }), { context: 'result_push' });
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(utils.getByLabelText('See what I could read')).toBeTruthy();
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+
+      await seeResult(utils);
+
+      expect(mockPush).toHaveBeenCalledTimes(2);
+      expect(mockPush.mock.calls[1][0].params.scanCount).toBe(mockPush.mock.calls[0][0].params.scanCount);
+      expect(mockPush.mock.calls[1][0].params.result).toBe(JSON.stringify(RETAKE('no_heading')));
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(utils.queryByText('Retake the photo')).toBeNull();
+    });
+
+    it('a throwing push inside a recovery flow keeps the flow open until a push succeeds (R5)', async () => {
+      const utils = await enterCapture();
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE('no_heading'));
+      await act(async () => { fireEvent.press(utils.getByLabelText('Capture photo of the ingredient label')); });
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      mockPush.mockImplementationOnce(() => { throw new Error('nav'); });
+
+      await seeResult(utils);
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'nav' }), { context: 'result_push' });
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(recoveryEvents('exited')).toHaveLength(0);
+
+      await seeResult(utils);
+      expect(mockPush).toHaveBeenCalledTimes(2);
+      expect(mockPush.mock.calls[1][0].params).toMatchObject({ recoveryFlowId: 'flow-1', recoveryReason: 'not_found' });
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(recoveryEvents('exited')).toHaveLength(0);
+      // Handed off: back on normal capture, not photo-only
+      expect(utils.queryByText('PHOTO ONLY')).toBeNull();
+      expect(utils.getByText('Point at a label, menu, or barcode')).toBeTruthy();
+    });
+
+    it('cancelling "Choose another photo" inside a recovery flow keeps the way out, which completes the flow (R5)', async () => {
+      const utils = await enterCapture();
+      mockAnalyzeImage.mockResolvedValueOnce(RETAKE('unclear'));
+      await pick(utils);
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+
+      mockLaunchLibrary.mockResolvedValueOnce({ canceled: true } as any);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Choose another photo')); });
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(utils.getByLabelText('See what I could read')).toBeTruthy();
+      expect(recoveryEvents('exited')).toHaveLength(0);
+
+      await seeResult(utils);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params).toMatchObject({ recoveryFlowId: 'flow-1', recoveryReason: 'not_found' });
+    });
+
+    it('a picker result released while the commit is pending is discarded (R6)', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils, 'unclear', 'picker');
+      let resolvePick!: (r: any) => void;
+      mockLaunchLibrary.mockReturnValueOnce(new Promise((r) => { resolvePick = r; }) as any);
+      await act(async () => { fireEvent.press(utils.getByLabelText('Choose another photo')); });
+      expect(mockLaunchLibrary).toHaveBeenCalledTimes(2);
+
+      const resolveCount = holdCount();
+      await seeResult(utils);
+      await act(async () => { resolvePick({ canceled: false, assets: [{ uri: 'file://late.jpg' }] }); });
+
+      expect(mockAnalyzeImage).toHaveBeenCalledTimes(1);
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async () => { resolveCount(2); });
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockAnalyzeImage).toHaveBeenCalledTimes(1);
+      expect(utils.queryByText('Retake the photo')).toBeNull();
+    });
+
+    it('the push-only retry carries the first write\'s scanCount (R6)', async () => {
+      (incrementLifetimeScanCount as jest.Mock).mockResolvedValueOnce(7);
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      mockPush.mockImplementationOnce(() => { throw new Error('nav'); });
+
+      await seeResult(utils);
+      await seeResult(utils);
+
+      expect(mockPush.mock.calls.map((c) => c[0].params.scanCount)).toEqual(['7', '7']);
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+    });
+
+    it('after a failed count write, the push-only retry carries 0 and storage is not read again (R6)', async () => {
+      (incrementLifetimeScanCount as jest.Mock).mockRejectedValueOnce(new Error('disk'));
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      mockPush.mockImplementationOnce(() => { throw new Error('nav'); });
+
+      await seeResult(utils);
+      await seeResult(utils);
+
+      expect(mockPush.mock.calls.map((c) => c[0].params.scanCount)).toEqual(['0', '0']);
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'disk' }), { context: 'scan_count_write' });
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'nav' }), { context: 'result_push' });
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('a blur after the commit began still completes the push', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      const resolveCount = holdCount();
+      await seeResult(utils);
+
+      await act(async () => { focusControl.blur(); });
+      await act(async () => { resolveCount(3); });
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('3');
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+    });
+
+    it('a tap while the screen is unfocused does nothing', async () => {
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+      const staleSee = onPressOf(utils.getByLabelText('See what I could read'));
+
+      await act(async () => { focusControl.blur(); });
+      await act(async () => { staleSee(); });
+
+      expect(incrementLifetimeScanCount).not.toHaveBeenCalled();
+      expect(addRecentScan).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(utils.getByText('Retake the photo')).toBeTruthy();
+    });
+
+    it('a rejected count write is reported and still pushes the result, with scan count 0 (R2)', async () => {
+      (incrementLifetimeScanCount as jest.Mock).mockRejectedValueOnce(new Error('disk'));
+      const utils = render(<CameraScreen />);
+      await showRetake(utils);
+
+      await seeResult(utils);
+
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'disk' }), { context: 'scan_count_write' });
+      expect(addRecentScan).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('0');
+      expect(utils.queryByText('Retake the photo')).toBeNull();
+    });
+
+    it('on the normal path, a throwing push is reported and leaves the user on the camera — no alert, count spent once', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation();
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+      mockPush.mockImplementationOnce(() => { throw new Error('nav'); });
+      const utils = render(<CameraScreen />);
+
+      await capture(utils);
+
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'nav' }), { context: 'result_push' });
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(incrementLifetimeScanCount).toHaveBeenCalledTimes(1);
+      expect(utils.getByTestId('camera-view')).toBeTruthy();
+    });
+
+    it('a rejected count write on the normal path is reported and still pushes with scan count 0 (R2)', async () => {
+      (incrementLifetimeScanCount as jest.Mock).mockRejectedValueOnce(new Error('disk'));
+      mockAnalyzeImage.mockResolvedValueOnce(LABEL_RESULT);
+      const utils = render(<CameraScreen />);
+
+      await capture(utils);
+
+      expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: 'disk' }), { context: 'scan_count_write' });
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush.mock.calls[0][0].params.scanCount).toBe('0');
+    });
   });
 });

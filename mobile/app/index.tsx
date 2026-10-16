@@ -430,14 +430,81 @@ export default function CameraScreen() {
     if (promptVisible && recovery) sendRecoveryEvent(recovery.id, recovery.reason, 'shown');
   }, [promptVisible, recovery]);
 
+  // Commit a result: count, history, push — the one place a response becomes
+  // a verdict the user saw. Shared by navigateToResult (the normal path, which
+  // adds its controller/settled checks) and the retake screen's "See what I
+  // could read" (decision 009). Rules, from the spec's grill (R1–R6):
+  // - focus first; nothing happens from under another route;
+  // - the writes run at most once per result object (committedResultRef is
+  //   never released for it); a later call with the same object only pushes;
+  // - under a retake screen, the lock, `committing` and the picker
+  //   invalidation are set in one synchronous step before the first await,
+  //   so a handler closure from the previous render sees them;
+  // - once the count write has begun it completes count → history → push,
+  //   even if a blur lands during the awaits;
+  // - a failed count write is reported and the result still pushes with a
+  //   count of 0, so no rating prompt fires; addRecentScan never throws;
+  // - a failed push is reported and leaves the retake screen interactive with
+  //   `written: true`, so the next tap pushes without a second write;
+  // - an open recovery flow is handed off only after a push succeeds, so
+  //   result_displayed still fires on the retry that reaches the result.
+  const commitResult = useCallback(async (result: AnalysisResult, flow: RecoveryFlow | null) => {
+    if (!focusedRef.current) return;
+    const state = retakeRef.current;
+    if (state && state.committing) return;
+    const alreadyWritten = committedResultRef.current === result;
+    committedResultRef.current = result;
+    let scanCount = state?.scanCount ?? 0;
+    if (state) {
+      setRetakeState({ ...state, committing: true });
+      // A "Choose another photo" pick still pending fails its own token check
+      // and is discarded (R6) — the same mechanism as Cancel, exit and blur.
+      invalidatePhotoSelection();
+    }
+    if (!alreadyWritten) {
+      try {
+        scanCount = await incrementLifetimeScanCount();
+      } catch (error) {
+        reportError(error, { context: 'scan_count_write' });
+        scanCount = 0;
+      }
+      await addRecentScan(result); // never throws — history can't break a scan
+      if (retakeRef.current?.result === result) {
+        setRetakeState({ ...retakeRef.current, written: true, scanCount });
+      }
+    }
+    try {
+      router.push({
+        pathname: '/result',
+        params: {
+          result: JSON.stringify(result),
+          scanCount: String(scanCount),
+          ...(flow ? { recoveryFlowId: flow.id, recoveryReason: flow.reason } : {}),
+        },
+      });
+    } catch (error) {
+      reportError(error, { context: 'result_push' });
+      if (retakeRef.current?.result === result) {
+        setRetakeState({ ...retakeRef.current, committing: false, written: true, scanCount });
+      }
+      return;
+    }
+    // The push went through: a result completes any open recovery flow (the
+    // result screen beacons `result_displayed` once it's actually on screen)
+    // and the retake screen is done. Clearing the flow here means Back lands
+    // on normal capture and the next product can't inherit this flow's
+    // telemetry. The answered product is still in the user's hand — suppress
+    // its code like a dismissal, or Back would re-open the prompt (and, for
+    // missing_context, re-run the lookup) for a question the photo answered.
+    if (flow) {
+      suppressCode(flow.barcode);
+      setRecoveryFlow(null);
+    }
+    resumedFromBackground.current = false;
+    if (retakeRef.current?.result === result) setRetakeState(null);
+  }, [router, setRecoveryFlow, suppressCode, setRetakeState, invalidatePhotoSelection]);
+
   const navigateToResult = useCallback(async (result: AnalysisResult, controller: AbortController) => {
-    // A result completes any open recovery flow: hand its ID to the result
-    // screen (which beacons `result_displayed` once it's actually on screen)
-    // and clear it here, so Back lands on normal capture and the next
-    // product can't inherit this flow's telemetry. The answered product is
-    // still in the user's hand — suppress its code like a dismissal, or Back
-    // would re-open the prompt (and, for missing_context, re-run the lookup)
-    // for a question the photo just answered.
     const flow = recoveryRef.current;
     if (abortControllerRef.current !== controller || controller.signal.aborted || !focusedRef.current) return;
     // From here the result is committed as one unit: count, history, push.
@@ -445,22 +512,8 @@ export default function CameraScreen() {
     // background landing during the storage writes can't strand a spent
     // count or a history entry with no result shown.
     settledRef.current = controller;
-    const scanCount = await incrementLifetimeScanCount();
-    await addRecentScan(result); // never throws — history can't break a scan
-    if (flow) {
-      suppressCode(flow.barcode);
-      setRecoveryFlow(null);
-    }
-    resumedFromBackground.current = false;
-    router.push({
-      pathname: '/result',
-      params: {
-        result: JSON.stringify(result),
-        scanCount: String(scanCount),
-        ...(flow ? { recoveryFlowId: flow.id, recoveryReason: flow.reason } : {}),
-      },
-    });
-  }, [router, setRecoveryFlow, suppressCode]);
+    await commitResult(result, flow);
+  }, [commitResult]);
 
   const handleToastHide = useCallback(() => setOcrError(null), []);
 
@@ -746,7 +799,10 @@ export default function CameraScreen() {
     void handlePickImage();
   };
   const handleSeeResult = () => {
-    // Task 7 wires the commit.
+    const state = retakeRef.current;
+    if (!state || state.committing) return;
+    pendingRetakeRef.current = null; // T4: the user took this result; the next photo is not a retake
+    void commitResult(state.result, recoveryRef.current);
   };
 
   const handleOpenSettings = async () => {
