@@ -457,7 +457,9 @@ export default function CameraScreen() {
   //   result_displayed still fires on the retry that reaches the result.
   const commitResult = useCallback(async (result: AnalysisResult, flow: RecoveryFlow | null) => {
     if (!focusedRef.current) return;
-    const state = retakeRef.current;
+    // Only a retake screen for this very result is "the state": a commit of
+    // another result must never mark the screen committing (grill of PR #43).
+    const state = retakeRef.current?.result === result ? retakeRef.current : null;
     if (state && state.committing) return;
     const alreadyWritten = committedResultRef.current === result;
     committedResultRef.current = result;

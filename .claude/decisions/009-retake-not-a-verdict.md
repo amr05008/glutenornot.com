@@ -1,7 +1,7 @@
 # 009 — A photo we can't read fully is a retake, not a verdict
 
 **Date**: 2026-10-11 (spec), implemented 2026-10-16
-**Status**: Accepted (Aaron, 2026-10-11, approach B). Spec grilled to SHIP in round 7. PR #<n>.
+**Status**: Accepted (Aaron, 2026-10-11, approach B). Spec grilled to SHIP in round 7. PR #43.
 **Related**: decision 005 (the cut-off-list gate), decision 006 (`caution_reason`); `plans/retake-state-2026-10-11.md` (the spec and implementation plan); `plans/barcode-recovery-2026-09-05.md` (the model for a screen that isn't a verdict); Part B of `plans/verdict-calibration-2026-09-23.md`
 
 ## Context
