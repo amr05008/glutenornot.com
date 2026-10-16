@@ -14,7 +14,7 @@ import { Toast } from '../components/Toast';
 import { StateScreen } from '../components/StateScreen';
 import { BarcodeRecoveryState } from '../components/BarcodeRecoveryState';
 import { Icon, Reticle } from '../components/Icon';
-import { AnalysisResult, FOOD_BARCODE_TYPES } from '../constants/verdicts';
+import { AnalysisResult, FOOD_BARCODE_TYPES, isRetakeReason, RetakeReason } from '../constants/verdicts';
 import { theme } from '../constants/theme';
 import { sans, mono } from '../constants/fonts';
 
@@ -33,6 +33,22 @@ interface RecoveryFlow {
   barcode: string;
   productName: string | null;
   phase: 'prompt' | 'capture';
+}
+
+// Retake state (plans/retake-state-2026-10-11.md, decision 009). The server
+// said this photo can't be read fully (`retake_reason`), so the screen offers
+// a retake instead of a verdict. Nothing is counted or saved unless the user
+// asks to see the result (commitResult). Mirrored in a ref like `recovery`:
+// every entry point guards on the ref, synchronously. `committing`, `written`
+// and `scanCount` track the one-shot commit (R3–R6): the writes run once per
+// result; a failed push can be retried without a second write.
+interface RetakeState {
+  result: AnalysisResult;
+  reason: RetakeReason;
+  source: 'camera' | 'picker';
+  committing: boolean;
+  written: boolean;
+  scanCount: number;
 }
 
 // When a flow ends — explicit exit, or a photo result — the same barcode is
@@ -61,6 +77,18 @@ const RECOVERY_CAPTURE_COPY = {
 // How long the native camera session gets to settle before a torch transition
 // is trusted to reach the LED (see the torch-application effect).
 const TORCH_SETTLE_MS = 750;
+
+// Retake flag lifetime (decision 009, T4): the flag rides on the next photo
+// scan only, and not after five minutes.
+const RETAKE_FLAG_TTL_MS = 5 * 60 * 1000;
+// Retake-screen copy (T7). The body is the server's explanation, which is
+// specific to the reason and already carries the barcode hint on iOS.
+const RETAKE_COPY = {
+  title: 'Retake the photo',
+  retake: 'Retake',
+  chooseAnother: 'Choose another photo',
+  seeResult: 'See what I could read',
+};
 
 // Slow copy, by scan phase (plans/weak-signal-upload-2026-08-28.md). On a weak
 // uplink the upload itself is the wait, and restarting it has the same odds —
@@ -145,6 +173,23 @@ export default function CameraScreen() {
     recoveryRef.current = flow;
     setRecovery(flow);
   }, []);
+  const [retake, setRetake] = useState<RetakeState | null>(null);
+  const retakeRef = useRef<RetakeState | null>(null);
+  const setRetakeState = useCallback((state: RetakeState | null) => {
+    retakeRef.current = state;
+    setRetake(state);
+  }, []);
+  // The flag the next photo carries as `retake_after`: set when the screen is
+  // shown, used once, within RETAKE_FLAG_TTL_MS. Cleared by a barcode lookup,
+  // "See what I could read" and opening Recents (T4).
+  const pendingRetakeRef = useRef<{ reason: RetakeReason; at: number } | null>(null);
+  // What the in-flight request carried, so abandonScan's beacon says the same
+  // thing. Written at the start of every request (null for an ordinary photo
+  // and for every barcode lookup), cleared by the owner's finally (R2).
+  const retakeAfterRef = useRef<RetakeReason | null>(null);
+  // The result object whose count/history writes have begun (R5). Never
+  // released for that object: a second "See what I could read" pushes only.
+  const committedResultRef = useRef<AnalysisResult | null>(null);
   // Suppressed codes (dismissed or just answered) → their expiry timer.
   const dismissedCodes = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // The post-lookup scanner re-arm, so an exit can replace it with its own.
@@ -237,8 +282,15 @@ export default function CameraScreen() {
       invalidatePhotoSelection();
       current.abort();
       abortControllerRef.current = null;
+      // Decision 009: a retake attempt says which retake screen it followed.
+      // Passed only when set, so an ordinary scan's beacon call is unchanged.
+      const retakeAfter = retakeAfterRef.current;
       if (reason === 'cancelled') {
-        sendFailureBeacon(scanMethodRef.current, 'cancelled', Date.now() - scanStartedAtRef.current);
+        const elapsedMs = Date.now() - scanStartedAtRef.current;
+        if (retakeAfter) sendFailureBeacon(scanMethodRef.current, 'cancelled', elapsedMs, retakeAfter);
+        else sendFailureBeacon(scanMethodRef.current, 'cancelled', elapsedMs);
+      } else if (retakeAfter) {
+        sendFailureBeacon(scanMethodRef.current, 'interrupted', undefined, retakeAfter);
       } else {
         sendFailureBeacon(scanMethodRef.current, 'interrupted');
       }
@@ -284,9 +336,9 @@ export default function CameraScreen() {
     return () => sub.remove();
   }, [abandonScan, getPermission]);
 
-  const cameraMounted = !!permission?.granted && !isAnalyzing && !systemState && recovery?.phase !== 'prompt';
+  const cameraMounted = !!permission?.granted && !isAnalyzing && !systemState && !retake && recovery?.phase !== 'prompt';
 
-  // The camera unmounts whenever the spinner, recovery prompt, or a system state replaces it —
+  // The camera unmounts whenever the spinner, recovery prompt, retake screen, or a system state replaces it —
   // reset the ready gate so the torch is re-applied as a false→true prop
   // transition on the remounted live camera (the manual-toggle path) instead
   // of being pre-set at mount, which expo-camera has fumbled on iOS.
@@ -372,25 +424,96 @@ export default function CameraScreen() {
   }, [suppressCode, rearmScannerAfter, setRecoveryFlow, invalidatePhotoSelection]);
 
   const openRecents = useCallback(() => {
+    if (retakeRef.current?.committing) return;
+    pendingRetakeRef.current = null; // T4: leaving for Recents ends the retake
     exitRecovery(); // no-op outside a flow
     router.push('/recents');
   }, [exitRecovery, router]);
 
   // `shown` fires when the prompt is actually on screen — not when the
   // response arrived — once per flow (the service dedupes remounts).
-  const promptVisible = isFocused && !isAnalyzing && !systemState && recovery?.phase === 'prompt';
+  const promptVisible = isFocused && !isAnalyzing && !systemState && !retake && recovery?.phase === 'prompt';
   useEffect(() => {
     if (promptVisible && recovery) sendRecoveryEvent(recovery.id, recovery.reason, 'shown');
   }, [promptVisible, recovery]);
 
+  // Commit a result: count, history, push — the one place a response becomes
+  // a verdict the user saw. Shared by navigateToResult (the normal path, which
+  // adds its controller/settled checks) and the retake screen's "See what I
+  // could read" (decision 009). Rules, from the spec's grill (R1–R6):
+  // - focus first; nothing happens from under another route;
+  // - the writes run at most once per result object (committedResultRef is
+  //   never released for it); a later call with the same object only pushes;
+  // - under a retake screen, the lock, `committing` and the picker
+  //   invalidation are set in one synchronous step before the first await,
+  //   so a handler closure from the previous render sees them;
+  // - once the count write has begun it completes count → history → push,
+  //   even if a blur lands during the awaits;
+  // - a failed count write is reported and the result still pushes with a
+  //   count of 0, so no rating prompt fires; addRecentScan never throws;
+  // - a failed push is reported and leaves the retake screen interactive with
+  //   `written: true`, so the next tap pushes without a second write;
+  // - an open recovery flow is handed off only after a push succeeds, so
+  //   result_displayed still fires on the retry that reaches the result.
+  const commitResult = useCallback(async (result: AnalysisResult, flow: RecoveryFlow | null) => {
+    if (!focusedRef.current) return;
+    // Only a retake screen for this very result is "the state": a commit of
+    // another result must never mark the screen committing (grill of PR #43).
+    const state = retakeRef.current?.result === result ? retakeRef.current : null;
+    if (state && state.committing) return;
+    const alreadyWritten = committedResultRef.current === result;
+    committedResultRef.current = result;
+    let scanCount = state?.scanCount ?? 0;
+    if (state) {
+      setRetakeState({ ...state, committing: true });
+      // A "Choose another photo" pick still pending fails its own token check
+      // and is discarded (R6) — the same mechanism as Cancel, exit and blur.
+      invalidatePhotoSelection();
+    }
+    if (!alreadyWritten) {
+      try {
+        scanCount = await incrementLifetimeScanCount();
+      } catch (error) {
+        reportError(error, { context: 'scan_count_write' });
+        scanCount = 0;
+      }
+      await addRecentScan(result); // never throws — history can't break a scan
+      if (retakeRef.current?.result === result) {
+        setRetakeState({ ...retakeRef.current, written: true, scanCount });
+      }
+    }
+    try {
+      router.push({
+        pathname: '/result',
+        params: {
+          result: JSON.stringify(result),
+          scanCount: String(scanCount),
+          ...(flow ? { recoveryFlowId: flow.id, recoveryReason: flow.reason } : {}),
+        },
+      });
+    } catch (error) {
+      reportError(error, { context: 'result_push' });
+      if (retakeRef.current?.result === result) {
+        setRetakeState({ ...retakeRef.current, committing: false, written: true, scanCount });
+      }
+      return;
+    }
+    // The push went through: a result completes any open recovery flow (the
+    // result screen beacons `result_displayed` once it's actually on screen)
+    // and the retake screen is done. Clearing the flow here means Back lands
+    // on normal capture and the next product can't inherit this flow's
+    // telemetry. The answered product is still in the user's hand — suppress
+    // its code like a dismissal, or Back would re-open the prompt (and, for
+    // missing_context, re-run the lookup) for a question the photo answered.
+    if (flow) {
+      suppressCode(flow.barcode);
+      setRecoveryFlow(null);
+    }
+    resumedFromBackground.current = false;
+    if (retakeRef.current?.result === result) setRetakeState(null);
+  }, [router, setRecoveryFlow, suppressCode, setRetakeState, invalidatePhotoSelection]);
+
   const navigateToResult = useCallback(async (result: AnalysisResult, controller: AbortController) => {
-    // A result completes any open recovery flow: hand its ID to the result
-    // screen (which beacons `result_displayed` once it's actually on screen)
-    // and clear it here, so Back lands on normal capture and the next
-    // product can't inherit this flow's telemetry. The answered product is
-    // still in the user's hand — suppress its code like a dismissal, or Back
-    // would re-open the prompt (and, for missing_context, re-run the lookup)
-    // for a question the photo just answered.
     const flow = recoveryRef.current;
     if (abortControllerRef.current !== controller || controller.signal.aborted || !focusedRef.current) return;
     // From here the result is committed as one unit: count, history, push.
@@ -398,22 +521,8 @@ export default function CameraScreen() {
     // background landing during the storage writes can't strand a spent
     // count or a history entry with no result shown.
     settledRef.current = controller;
-    const scanCount = await incrementLifetimeScanCount();
-    await addRecentScan(result); // never throws — history can't break a scan
-    if (flow) {
-      suppressCode(flow.barcode);
-      setRecoveryFlow(null);
-    }
-    resumedFromBackground.current = false;
-    router.push({
-      pathname: '/result',
-      params: {
-        result: JSON.stringify(result),
-        scanCount: String(scanCount),
-        ...(flow ? { recoveryFlowId: flow.id, recoveryReason: flow.reason } : {}),
-      },
-    });
-  }, [router, setRecoveryFlow, suppressCode]);
+    await commitResult(result, flow);
+  }, [commitResult]);
 
   const handleToastHide = useCallback(() => setOcrError(null), []);
 
@@ -456,6 +565,13 @@ export default function CameraScreen() {
     setOcrError(null);
     setSystemState(null);
     setScanSource(source);
+    // A new photo leaves the retake screen (the picker path arrives here with
+    // it still set, R5) and spends the pending flag — even if the attempt is
+    // then stopped offline before it is sent (R2, a known gap).
+    if (retakeRef.current) setRetakeState(null);
+    const pending = pendingRetakeRef.current;
+    pendingRetakeRef.current = null;
+    const retakeAfter = pending && Date.now() - pending.at < RETAKE_FLAG_TTL_MS ? pending.reason : null;
 
     // The user committed a photo to analysis — the funnel's second step. A
     // retry after couldn't-read fires again; the read counts unique flows.
@@ -476,6 +592,7 @@ export default function CameraScreen() {
       // then the result pushed itself over the camera. Check ownership after
       // the resize as well as after analysis; stale work never reaches the API.
       abortControllerRef.current = controller;
+      retakeAfterRef.current = retakeAfter;
       scanMethodRef.current = 'ocr';
       scanStartedAtRef.current = Date.now();
 
@@ -509,9 +626,19 @@ export default function CameraScreen() {
           setScanPhase('reading');
           setLoadingMessage('Reading ingredients…');
         }
-      });
+      }, retakeAfter ?? undefined);
       if (!ownsRequest()) return;
       if (__DEV__) console.log('API result:', result);
+
+      // Decision 009: a known retake_reason is a retake, not a verdict. No
+      // count, no history, no push (D3). Unfocused: drop it, exactly as
+      // navigateToResult does (R1) — nothing is stashed to surface later.
+      if (isRetakeReason(result.retake_reason)) {
+        if (!focusedRef.current) return;
+        pendingRetakeRef.current = { reason: result.retake_reason, at: Date.now() };
+        setRetakeState({ result, reason: result.retake_reason, source, committing: false, written: false, scanCount: 0 });
+        return;
+      }
 
       await navigateToResult(result, controller);
     } catch (error) {
@@ -522,6 +649,7 @@ export default function CameraScreen() {
       if (ownsRequest()) {
         abortControllerRef.current = null;
         settledRef.current = null;
+        retakeAfterRef.current = null;
         setIsAnalyzing(false);
       }
     }
@@ -531,8 +659,9 @@ export default function CameraScreen() {
     // Refs, not state: a native callback queued before the last render can
     // arrive after the prop was unset. No lookups inside a recovery flow
     // (photo-only means photo-only, including retries), and none from under
-    // a Results/Recents route.
-    if (recoveryRef.current || !focusedRef.current) return;
+    // a Results/Recents route. None under a retake screen either, committing
+    // or not: a callback queued before the camera unmounted must not start one.
+    if (retakeRef.current || recoveryRef.current || !focusedRef.current) return;
     // Synchronous ref check prevents duplicate calls before state updates
     if (scanningRef.current || capturingRef.current || abortControllerRef.current) return;
 
@@ -553,6 +682,7 @@ export default function CameraScreen() {
 
     // Immediately block further scans (synchronous)
     scanningRef.current = true;
+    pendingRetakeRef.current = null; // T4: a barcode lookup ends the retake
 
     if (__DEV__) console.log('Barcode detected:', barcodeData);
     setBarcodeScanned(true);
@@ -565,6 +695,7 @@ export default function CameraScreen() {
       setLoadingMessage(`Looking up barcode ${barcodeData}…`);
 
       abortControllerRef.current = controller;
+      retakeAfterRef.current = null; // a barcode lookup is never a retake
       scanMethodRef.current = 'barcode';
       scanStartedAtRef.current = Date.now();
       const result = await lookupBarcode(barcodeData, controller.signal);
@@ -599,6 +730,7 @@ export default function CameraScreen() {
       if (abortControllerRef.current === controller && !controller.signal.aborted) {
         abortControllerRef.current = null;
         settledRef.current = null;
+        retakeAfterRef.current = null;
         setIsAnalyzing(false);
         // Only the owner may reset the scanner or replace its re-arm timer.
         rearmScannerAfter(SCANNER_REARM_MS);
@@ -607,7 +739,7 @@ export default function CameraScreen() {
   };
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current) return;
+    if (!cameraRef.current || isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current || retakeRef.current?.committing) return;
 
     const selection = {};
     photoSelectionRef.current = selection;
@@ -634,7 +766,7 @@ export default function CameraScreen() {
   };
 
   const handlePickImage = async () => {
-    if (isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current) return;
+    if (isAnalyzing || capturingRef.current || abortControllerRef.current || !focusedRef.current || retakeRef.current?.committing) return;
 
     const selection = {};
     photoSelectionRef.current = selection;
@@ -659,6 +791,27 @@ export default function CameraScreen() {
     } finally {
       if (photoSelectionRef.current === selection) invalidatePhotoSelection();
     }
+  };
+
+  // Retake-screen actions. Both return while a commit runs (R3); the screen
+  // stays up, inert, until it finishes.
+  const handleRetake = () => {
+    if (!retakeRef.current || retakeRef.current.committing) return;
+    // An explicit choice to leave: back to the camera, torch as the user set it.
+    setRetakeState(null);
+  };
+  const handleChooseAnotherPhoto = () => {
+    if (!retakeRef.current || retakeRef.current.committing) return;
+    // The retake state stays set (R5): a cancelled picker lands back on this
+    // screen with its way out intact; a picked photo clears it in
+    // processAndAnalyze.
+    void handlePickImage();
+  };
+  const handleSeeResult = () => {
+    const state = retakeRef.current;
+    if (!state || state.committing) return;
+    pendingRetakeRef.current = null; // T4: the user took this result; the next photo is not a retake
+    void commitResult(state.result, recoveryRef.current);
   };
 
   const handleOpenSettings = async () => {
@@ -732,6 +885,26 @@ export default function CameraScreen() {
           setSystemState(null);
           handlePickImage();
         }}
+      />
+    );
+  }
+
+  // A photo the server couldn't read fully is a retake, not a verdict
+  // (decision 009). The body is the server's reason-specific copy. Deliberately
+  // not amber (T7). Stays up, inert, while "See what I could read" commits.
+  // Before the permission gate on purpose: a picker-only user can get a
+  // retake too, and their primary is "Choose another photo".
+  if (retake) {
+    const fromPicker = retake.source === 'picker';
+    return (
+      <StateScreen
+        icon="camera"
+        title={RETAKE_COPY.title}
+        body={retake.result.explanation}
+        primary={fromPicker ? RETAKE_COPY.chooseAnother : RETAKE_COPY.retake}
+        onPrimary={fromPicker ? handleChooseAnotherPhoto : handleRetake}
+        secondary={RETAKE_COPY.seeResult}
+        onSecondary={handleSeeResult}
       />
     );
   }

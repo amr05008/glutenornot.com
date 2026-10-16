@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 90 1600 610" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict. For an Open Food Facts barcode, TypeSafe's Jev runs alongside as a fast path on the ingredient text only: a sure unsafe or safe goes straight to the verdict without waiting for Claude (Jev answers in about 0.2 seconds), and anything else is answered by Claude, which always runs and audits Jev's answer (if Anthropic's API is down, the same Claude model answers through OpenRouter on Amazon Bedrock or Google Vertex); a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 90 1600 610" role="img" aria-label="A scan starts on the phone as a barcode or a photo. A barcode goes to the API's product-database lookup, which tries Open Food Facts, USDA, Nutritionix, then UPCitemdb and falls back to a photo if nothing is found. A photo goes through Google Cloud Vision OCR. Both feed Claude, which applies celiac-safety rules and returns a verdict. For an Open Food Facts barcode, TypeSafe's Jev runs alongside as a fast path on the ingredient text only: a sure unsafe or safe goes straight to the verdict without waiting for Claude (Jev answers in about 0.2 seconds), and anything else is answered by Claude, which always runs and audits Jev's answer (if Anthropic's API is down, the same Claude model answers through OpenRouter on Amazon Bedrock or Google Vertex); a safe floor blocks a Safe verdict when too little text was read or a photographed ingredient list looks cut off; on iOS, a caution with nothing else to show asks for a retake instead. The phone shows Safe, Caution, or Unsafe with translated flagged ingredients and a plain-English reason, saved to Recents on the phone only.">
   <defs><style>
 
 @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400 800;
@@ -164,6 +164,8 @@ svg { color: #F4F4F3; font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sa
   <text class="t-sub" x="1230" y="508" text-anchor="middle">too little text, or</text>
   <text class="t-sub" x="1230" y="524" text-anchor="middle">a cut-off list</text>
   <text class="t-sub" x="1230" y="540" text-anchor="middle">→ never “Safe”</text>
+  <text class="t-sub" x="1230" y="556" text-anchor="middle">iOS: asks for</text>
+  <text class="t-sub" x="1230" y="572" text-anchor="middle">a retake instead</text>
 
   <!-- 5 · Verdict -->
   <rect class="box" x="1300" y="232" width="220" height="428" rx="16"/>

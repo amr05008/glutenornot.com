@@ -16,9 +16,13 @@
  * analytics through an open endpoint. This endpoint must never emit `scan` —
  * that event is success-only by contract and every existing dashboard insight
  * counts on it.
+ *
+ * Optional `retake_after` (decision 009, plans/retake-state-2026-10-11.md):
+ * which retake screen the failed attempt followed, validated against the same
+ * four-value allowlist as /api/analyze and dropped if invalid.
  */
 import { getClientIP, getClientGeo } from './_utils.js';
-import { trackScanFailure, normalizeClient, normalizeAppVersion } from './_analytics.js';
+import { trackScanFailure, normalizeClient, normalizeAppVersion, normalizeRetakeAfter } from './_analytics.js';
 
 const CLIENT_REASONS = new Set(['timeout', 'network', 'cancelled', 'interrupted']);
 const METHODS = new Set(['ocr', 'barcode']);
@@ -62,7 +66,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { method, reason, elapsed_ms } = req.body || {};
+  const { method, reason, elapsed_ms, retake_after } = req.body || {};
   if (!CLIENT_REASONS.has(reason) || !METHODS.has(method)) {
     return res.status(400).json({ error: 'Invalid beacon' });
   }
@@ -72,6 +76,9 @@ export default async function handler(req, res) {
   }
 
   const elapsedMs = normalizeElapsedMs(elapsed_ms);
+  // Decision 009: which retake screen this attempt followed. Same allowlist
+  // as the analyze endpoint; invalid values are dropped like a bad elapsed_ms.
+  const retakeAfter = normalizeRetakeAfter(retake_after);
 
   await trackScanFailure({
     ip: getClientIP(req),
@@ -80,6 +87,7 @@ export default async function handler(req, res) {
     method,
     reason,
     ...(elapsedMs != null ? { elapsedMs } : {}),
+    ...(retakeAfter ? { retakeAfter } : {}),
     ...getClientGeo(req),
   });
 

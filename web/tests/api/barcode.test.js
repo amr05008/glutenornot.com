@@ -1163,6 +1163,9 @@ describe('barcode handler analytics', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.verdict).toBe('caution');
     expect(res.body.caution_reason).toBe('incomplete');
+    // Decision 009: barcode `incomplete` means no data, which recovery
+    // handles — the barcode path never asks for a retake.
+    expect(res.body).not.toHaveProperty('retake_reason');
     expect(trackScan).toHaveBeenCalledWith(
       expect.objectContaining({ confidence: 'low', hadIngredientData: false, gfLabelPresent: true, cautionReason: 'incomplete' })
     );

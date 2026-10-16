@@ -1,6 +1,6 @@
 import * as Network from 'expo-network';
 import Constants from 'expo-constants';
-import { API_URL, BARCODE_API_URL, TRACK_API_URL, REVIEW_API_URL, AnalysisResult } from '../constants/verdicts';
+import { API_URL, BARCODE_API_URL, TRACK_API_URL, REVIEW_API_URL, AnalysisResult, RetakeReason } from '../constants/verdicts';
 
 // Analytics ships server-side, so every event carries $lib_version =
 // posthog-node — the SDK's version, not the app's. Without this header a
@@ -63,15 +63,21 @@ async function ensureConnected(): Promise<void> {
 // (plans/weak-signal-upload-2026-08-28.md). timeout/network are sent from
 // here; `cancelled` (user) and `interrupted` (iOS resume dropped the request)
 // are sent by the screen, which is the only place that knows which one an
-// abort was.
+// abort was. A retake attempt says which retake screen it followed
+// (`retakeAfter`, decision 009) — an enum, never content.
 export type BeaconReason = 'timeout' | 'network' | 'cancelled' | 'interrupted';
-export function sendFailureBeacon(method: 'ocr' | 'barcode', reason: BeaconReason, elapsedMs?: number): void {
+export function sendFailureBeacon(
+  method: 'ocr' | 'barcode',
+  reason: BeaconReason,
+  elapsedMs?: number,
+  retakeAfter?: RetakeReason,
+): void {
   try {
     const elapsed = Number.isFinite(elapsedMs) ? { elapsed_ms: Math.round(elapsedMs as number) } : {};
     fetch(TRACK_API_URL, {
       method: 'POST',
       headers: clientHeaders(),
-      body: JSON.stringify({ method, reason, ...elapsed }),
+      body: JSON.stringify({ method, reason, ...elapsed, ...(retakeAfter ? { retake_after: retakeAfter } : {}) }),
     }).catch(() => {});
   } catch {
     // Telemetry can never break a scan.
@@ -211,6 +217,9 @@ export async function analyzeImage(
   base64Image: string,
   externalSignal?: AbortSignal,
   onProgress?: ProgressCallback,
+  // Decision 009: this photo follows a retake screen for that reason. Rides
+  // on the request and on this attempt's own timeout/network beacons.
+  retakeAfter?: RetakeReason,
 ): Promise<AnalysisResult> {
   await ensureConnected();
   // A cancel that landed during the (async) probe must not send the request
@@ -236,7 +245,7 @@ export async function analyzeImage(
   try {
     const response = await postJsonWithProgress(
       API_URL,
-      JSON.stringify({ image: base64Image }),
+      JSON.stringify({ image: base64Image, ...(retakeAfter ? { retake_after: retakeAfter } : {}) }),
       clientHeaders(),
       controller.signal,
       onProgress,
@@ -286,7 +295,7 @@ export async function analyzeImage(
           // preserve the AbortError for the caller.
           throw error;
         }
-        sendFailureBeacon('ocr', 'timeout', Date.now() - startTime);
+        sendFailureBeacon('ocr', 'timeout', Date.now() - startTime, retakeAfter);
         throw new APIError(
           TIMEOUT_MESSAGE,
           'timeout'
@@ -294,7 +303,7 @@ export async function analyzeImage(
       }
 
       if (error.message.includes('Network') || error.message.includes('fetch')) {
-        sendFailureBeacon('ocr', 'network', Date.now() - startTime);
+        sendFailureBeacon('ocr', 'network', Date.now() - startTime, retakeAfter);
         throw new APIError(
           NETWORK_MESSAGE,
           'network'

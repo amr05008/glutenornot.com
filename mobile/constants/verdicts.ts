@@ -8,6 +8,21 @@ import type { Verdict } from './theme';
 export type Confidence = 'high' | 'medium' | 'low';
 export type AnalysisMode = 'label' | 'menu';
 
+// Decision 006's reasons. The server always sets one on a label caution; the
+// app shows the card the same way whatever it is.
+export type CautionReason = 'oats' | 'may_contain' | 'conflict' | 'undeclared_source' | 'incomplete' | 'other';
+
+// Decision 009 (plans/retake-state-2026-10-11.md): the server says a photo
+// couldn't be read fully and why. The app shows the retake screen only on a
+// known value (isRetakeReason) and never decides from caution_reason or the
+// explanation — the server can change which cases ask for a retake without
+// an app release. The same enum rides back on the next photo as retake_after.
+export const RETAKE_REASONS = ['no_heading', 'no_end', 'too_little_text', 'unclear'] as const;
+export type RetakeReason = (typeof RETAKE_REASONS)[number];
+export function isRetakeReason(value: unknown): value is RetakeReason {
+  return typeof value === 'string' && (RETAKE_REASONS as readonly string[]).includes(value);
+}
+
 export interface MenuItem {
   name: string;
   verdict: Verdict;
@@ -32,6 +47,12 @@ export interface AnalysisResult {
   // evidence-backed result; a new client branches only on this known value
   // and treats anything else as a normal result.
   result_reason?: 'missing_context';
+  // Decision 006: which specific reason a caution named. Display-neutral.
+  caution_reason?: CautionReason;
+  // Decision 009: set when the app should ask for a retake instead of showing
+  // this caution. A parsed response may carry any string here, which is why
+  // isRetakeReason, not this type, decides.
+  retake_reason?: RetakeReason;
 }
 
 // Verdict display metadata. Colors come from verdictColors (theme.ts); `glyph`

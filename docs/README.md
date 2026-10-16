@@ -6,5 +6,5 @@ Reference material that is not shipped with any deployable.
 
 Two versions of the same pipeline, each as a self-contained SVG (fonts embedded, so GitHub renders it as-is) plus a 2x PNG for video editing. Light and `-dark` variants of each.
 
-- `how-it-works-simple.svg` / `.png` — **the video version.** Four steps (scan → read → check → answer), the two roads in, the no-match-take-a-photo loop, the three verdicts. About 40 words; the narration carries the detail.
-- `how-it-works.svg` / `.png` — **the engineering version.** Same flow with the barcode lookup waterfall, the Jev fast path on Open Food Facts barcodes (decision 007), the API boundary, the Claude prompt rules with its OpenRouter backup route (decision 008), and the safe-verdict floor (too little text, or a cut-off ingredient list).
+- `how-it-works-simple.svg` / `.png` — **the video version.** Four steps (scan → read → check → answer), the two roads in, the no-match-take-a-photo loop, the three verdicts, and the retake request for a photo that can't be read fully (decision 009). About 40 words; the narration carries the detail.
+- `how-it-works.svg` / `.png` — **the engineering version.** Same flow with the barcode lookup waterfall, the Jev fast path on Open Food Facts barcodes (decision 007), the API boundary, the Claude prompt rules with its OpenRouter backup route (decision 008), and the safe-verdict floor (too little text, or a cut-off ingredient list), where on iOS a caution with nothing else to show asks for a retake instead (decision 009).

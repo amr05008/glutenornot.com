@@ -34,6 +34,8 @@ import {
   SCAN_FAILED_EVENT,
   BARCODE_RECOVERY_EVENT,
   REVIEW_PROMPT_EVENT,
+  RETAKE_REASONS,
+  normalizeRetakeAfter,
 } from '../../../api/_analytics.js';
 
 describe('SCAN_EVENT', () => {
@@ -193,6 +195,38 @@ describe('buildScanProperties (caution_reason)', () => {
 
   it('omits caution_reason when there is none', () => {
     expect(buildScanProperties({ method: 'ocr', verdict: 'safe' })).not.toHaveProperty('caution_reason');
+  });
+});
+
+describe('normalizeRetakeAfter (decision 009)', () => {
+  it('accepts exactly the four retake reasons', () => {
+    expect(RETAKE_REASONS).toEqual(['no_heading', 'no_end', 'too_little_text', 'unclear']);
+    for (const r of RETAKE_REASONS) expect(normalizeRetakeAfter(r)).toBe(r);
+  });
+  it('drops anything else: junk, objects, a long string, casing', () => {
+    for (const v of ['x', '', 'NO_HEADING', 'a'.repeat(300), {}, [], 1, null, undefined, { reason: 'no_end' }]) {
+      expect(normalizeRetakeAfter(v)).toBeNull();
+    }
+  });
+});
+
+describe('buildScanProperties (retake — decision 009)', () => {
+  it('records retake_reason, retake_after and list_heading_word when given', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'caution', retakeReason: 'no_heading', retakeAfter: 'no_end', listHeadingWord: false });
+    expect(props).toMatchObject({ retake_reason: 'no_heading', retake_after: 'no_end', list_heading_word: false });
+  });
+  it('omits all three when not provided or null', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'safe', retakeReason: null, retakeAfter: undefined });
+    expect(props).not.toHaveProperty('retake_reason');
+    expect(props).not.toHaveProperty('retake_after');
+    expect(props).not.toHaveProperty('list_heading_word');
+  });
+});
+
+describe('buildScanFailureProperties (retake_after — decision 009)', () => {
+  it('records retake_after when given and omits it otherwise', () => {
+    expect(buildScanFailureProperties({ method: 'ocr', reason: 'cancelled', retakeAfter: 'unclear' })).toMatchObject({ retake_after: 'unclear' });
+    expect(buildScanFailureProperties({ method: 'ocr', reason: 'cancelled' })).not.toHaveProperty('retake_after');
   });
 });
 

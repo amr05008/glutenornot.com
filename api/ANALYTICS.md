@@ -38,6 +38,24 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
   `api/analyze.js`, added 2026-09-22 after the jev-sandbox truncation test. Its
   count over OCR label scans is the gate's cost in withheld `safe` verdicts; the
   `verdict` on the event is the delivered one. A reason, never the text.
+- `retake_reason` (OCR only, present only when set) — the response asked for a
+  retake: `no_heading` | `no_end` | `too_little_text` | `unclear`
+  (`retakeReasonFor`, `api/analyze.js`; decision 009,
+  `plans/retake-state-2026-10-11.md`). Set only on a label caution whose
+  reason is `incomplete` with nothing else on the card (no flagged
+  ingredients, no allergen warnings, no menu items). Recorded for every
+  client; only iOS ≥ 1.5.1 shows the screen, so the day-14 read filters by
+  `platform` and `app_version`. An enum, never content.
+- `retake_after` (OCR only, present only when sent) — the client said this
+  photo followed a retake screen for that reason. Validated against the same
+  four values (`normalizeRetakeAfter`, `api/_analytics.js`), dropped
+  otherwise and never echoed. The flag rides on the next photo scan only and
+  expires after 5 minutes on the client (spec T4).
+- `list_heading_word` (OCR only, only when `list_gate = no_heading`) —
+  boolean: a heading term in any supported language appeared somewhere in the
+  text, whatever its position or punctuation (`hasHeadingWord`, the gate's
+  own heading alternation; spec T5). Half or more `true` → open a gate
+  investigation with tester photos. A flag, never the text.
 - `caution_reason` (both paths, label cautions only) — which specific reason a
   caution named (decision 006): `oats`, `may_contain`, `conflict`,
   `undeclared_source`, `incomplete` (unreadable, cut off, no list, no database
@@ -109,6 +127,14 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
   predicts ~half for Open Food Facts records.
 - `app_version` — client build, from the `X-Client-Version` header.
 
+**Request and response fields (decision 009).** `POST /api/analyze` accepts
+an optional `retake_after` in the JSON body (`{ image, retake_after }`),
+validated as above and analytics-only — it never changes the analysis. The
+response carries `retake_reason` when the app should show the retake screen
+instead of a verdict; the app branches only on a known value, like
+`result_reason`. Nothing else in the response changes. Web ignores both
+(spec T3); the barcode path never sets `retake_reason`.
+
 **`app_version` (both events).** Analytics is server-side, so `$lib_version` is
 always `posthog-node` — the SDK, not the app. Without this header a release is
 unattributable. The value is whitelisted server-side to a short dotted-numeric
@@ -123,6 +149,7 @@ version to send — a stale web build is already visible as `platform: unknown`)
 - Client-beacon-only: `timeout` | `network` | `cancelled` | `interrupted` — these never reach the server as a request, so the iOS client reports them via `POST /api/track` (web doesn't beacon). The first two die on the wire. `cancelled` is the user tapping Cancel on a slow attempt — before 2026-08-28 that left no trace anywhere (user-cancel is an `AbortError` the client dropped before Sentry or the beacon fired). `interrupted` is the app going to the background mid-scan (`mobile/app/index.tsx` drops the in-flight request on the transition to `background` — deterministic, and before iOS suspends the process and kills the socket) — kept separate so switching apps during a long wait can't masquerade as giving up. The beacon allowlist rejects every other reason so server-side reasons can't be spoofed.
 - `elapsed_ms` (`timeout` / `network` / `cancelled` only) — how long the user waited before the attempt died or they cancelled. Untrusted input: whitelisted to a finite number and clamped to `[0, 120000]`, dropped otherwise. This is the only measurement of the upload leg. `interrupted` deliberately carries none — it fires on the transition to the background, and would otherwise include time asleep. For `cancelled` the clock starts with the spinner (before the photo resize and the connectivity probe), so it matches what the user experienced; for `timeout` / `network` it starts after the probe, ~1–2 s later.
 - `ocr_ms` (server-side OCR-path failures, when known) — Vision round-trip before the failure.
+- `retake_after` (OCR only, present only when sent; decision 009) — the failed attempt followed a retake screen for that reason. Server-side on `rate_limited`, `ocr_failed`, `claude_error` and `server_error` (read before the rate-limit branch); client-side on `timeout`, `network`, `cancelled` and `interrupted`, through `/api/track`, whose body accepts an optional `retake_after` validated against the same four values and dropped otherwise. Known gap (R2): an attempt the app's offline pre-flight stops sends no beacon, and the flag is still spent, so the retry after "You're offline" isn't tagged.
 
 **`engine_audit`** — the Jev fast path's audit (decision 007,
 `plans/jev-fast-path-2026-09-24.md`). One per barcode scan where Jev settled a
@@ -341,6 +368,60 @@ the loss is downstream of the request; it does not say which of the two. What
 code can still change is the ask's timing and the write-review link's
 placement — not Apple's presentation logic.
 
+**Retake: the day-14 read** (decision 009, `plans/retake-state-2026-10-11.md`).
+Counted from the *public* 1.5.1 release, day 28 if fewer than 20 retake
+responses were delivered. Every number is a server-event proxy, not a measure
+of what a user saw.
+
+Filters for every query (except 4): `properties.platform = 'ios'`;
+`app_version >= '1.5.1'` (a string comparison, fine until a 1.10); no `-rc`
+builds, no Cupertino; `timestamp >=` the 1.5.1 public release time, read from
+`currentVersionReleaseDate` in
+`https://itunes.apple.com/lookup?bundleId=com.glutenornot.scanner`.
+
+1. **Retake responses delivered** (the proxy for screens shown, T9): `scan`
+   events with `retake_reason IS NOT NULL`, by `retake_reason`.
+2. **Retake outcomes, as two separate tables** — never summed into one ratio
+   (the same attempt can produce a server `scan` and a client `scan_failed`):
+   - 2a: retake `scan` events (`retake_after IS NOT NULL`), by `retake_after`
+     × verdict × `caution_reason` × whether `retake_reason` is set again;
+   - 2b: retake `scan_failed` events, by `retake_after` × reason.
+   - Retake rate = 2a's total ÷ query 1. Reported; no target.
+3. **Held back by D4** (T8): `scan` events with `caution_reason =
+   'incomplete'` and no `retake_reason`, method `ocr`, mode `label`.
+4. **The diagnostic:** `list_heading_word` among `no_heading` scans from the
+   API merge onward, all clients.
+
+```bash
+KEY=$(grep -m1 '^POSTHOG_PERSONAL_API_KEY=' .env | cut -d= -f2-)
+# 1. retake responses delivered (proxy for screens shown)
+SQL="SELECT properties.retake_reason AS r, count() FROM events WHERE event='scan' AND properties.platform='ios' AND properties.app_version >= '1.5.1' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.\$geoip_city_name,'') != 'Cupertino' AND timestamp >= '<1.5.1 public release time>' AND properties.retake_reason IS NOT NULL GROUP BY 1"
+curl -sS -X POST "https://us.posthog.com/api/projects/457245/query/" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg q "$SQL" '{query:{kind:"HogQLQuery",query:$q},refresh:"force_blocking"}')" | jq -c '.results'
+# 2a. retake scans (never summed with 2b) — same curl
+SQL="SELECT properties.retake_after, properties.verdict, properties.caution_reason, properties.retake_reason IS NOT NULL AS again, count() FROM events WHERE event='scan' AND properties.platform='ios' AND properties.app_version >= '1.5.1' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.\$geoip_city_name,'') != 'Cupertino' AND timestamp >= '<1.5.1 public release time>' AND properties.retake_after IS NOT NULL GROUP BY 1,2,3,4"
+```
+
+```sql
+-- 2b. retake failures
+SELECT properties.retake_after, properties.reason, count() FROM events WHERE event='scan_failed' AND <same filters> AND properties.retake_after IS NOT NULL GROUP BY 1,2
+-- 3. held back by D4 (T8)
+SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL
+-- 4. the diagnostic, all clients, from the API merge onward
+SELECT properties.list_heading_word, count() FROM events WHERE event='scan' AND properties.list_gate='no_heading' AND timestamp >= '<merge time>' GROUP BY 1
+```
+
+What to do with the results:
+- **The loop alarm** (in 2a, with at least 10 events, those with
+  `retake_reason` set again outnumber those without): the screen is likely
+  looping people. Make "See what I could read" the primary button, or flip T1
+  to send `unclear` back to the amber card.
+- **2b is mostly `cancelled`:** retakes are being abandoned mid-upload — the
+  weak-signal problem, not this screen. Note it for the weak-signal plan.
+- **`list_heading_word` true on half or more:** open the gate investigation.
+- **Query 3 large next to query 1:** revisit T8.
+- Then close the plan.
+
 ## Privacy invariant
 
 **Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. The fast-path fields follow the same rule: `jev_via` names a code branch, and the templated explanation (which names the grain) never goes into an event. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
@@ -357,5 +438,7 @@ changes per submission.
 ## Metric caveats
 
 On a client timeout the server may still complete and emit `scan` — one attempt can then appear in both `scan` and `scan_failed`. Don't compute failure rate as `scan_failed / (scan + scan_failed)` without noting the overlap (reconcile item on the ROADMAP). The same overlap applies to `cancelled` when the body had already arrived before the user gave up.
+
+For the same reason the retake read's 2a (retake `scan` events) and 2b (retake `scan_failed` events) are never one ratio: a retake attempt can appear in both (decision 009, R2).
 
 `cancelled` **lowers the success-rate tile by design.** A user who gave up after 30 s on a weak-signal upload had a failed attempt from their seat; a three-attempts-one-verdict session *was* a 33% experience, and the weekly review should see it. (If that ever proves the wrong call, the alternative was a separate `scan_cancelled` event — toggle T3 in the plan.)

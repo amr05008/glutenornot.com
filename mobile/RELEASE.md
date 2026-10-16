@@ -129,13 +129,24 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- Nothing — main is fully shipped as of v1.5.0 build 3 (2026-09-06).
+- **iOS 1.5.1 is the next release** (version already bumped in `app.json`,
+  PR #27). It ships: the result-footer write-review link
+  (`plans/review-prompt-visibility-2026-09-15.md`) and the retake screen
+  (`plans/retake-state-2026-10-11.md`, decision 009; the API half is live
+  with PR #43; date it at plan Task 11).
 - **Rejection playbook (learned 1.5.0):** same version string, next build
   number; in App Store Connect hover the Build row → red minus → Add Build →
   Save → Submit for Review on the *same* version. Resubmitting closes the
   rejection's message thread, so reply *before* submitting if you want the
   reviewer to read it. Move the git tag to the resubmitted commit.
-- **No next iOS release is scheduled.** Barcode recovery step 2 (bounded
+- **1.5.1 TestFlight checks, besides the usual smoke** (spec rollout step 3):
+  photograph a label with its top cut off → the retake screen ("Retake the
+  photo") shows instead of a Caution card; turn the torch on, get a retake,
+  tap "Retake" → the light comes back on the remounted camera; the retake's
+  `scan` event carries `retake_after` (query with
+  `app_version = '1.5.1-rc.smoke'`). Also check the write-review link from
+  PR #27, which ships in the same build.
+- **After 1.5.1:** barcode recovery step 2 (bounded
   enrichment of data-empty Open Food Facts hits) is gated on the day-14 funnel
   read and its own feasibility table (plan §8); the weak-signal lever remains
   plan toggle T2 (multipart upload) — an api-contract change, its own PR, and a
@@ -208,7 +219,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (173 tests as of the 1.5.1 review-visibility change)
+npm test             # jest — all green (219 tests as of the 1.5.1 retake screen)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
