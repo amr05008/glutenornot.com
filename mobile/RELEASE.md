@@ -133,7 +133,7 @@ Context still worth knowing:
   PR #27). It ships: the result-footer write-review link
   (`plans/review-prompt-visibility-2026-09-15.md`) and the retake screen
   (`plans/retake-state-2026-10-11.md`, decision 009; the API half is live
-  with PR #43; date it at plan Task 11).
+  since 2026-10-16 16:29 UTC, PR #43).
 - **Rejection playbook (learned 1.5.0):** same version string, next build
   number; in App Store Connect hover the Build row → red minus → Add Build →
   Save → Submit for Review on the *same* version. Resubmitting closes the
