@@ -6,68 +6,56 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ✅ Last shipped: v1.5.0 — Barcode recovery (2026-09-05)
+## ✅ Last shipped: v1.5.1 — Retake screen + write-review link (submitted 2026-10-18)
 
-**⚠️ Build 2 was REJECTED on 2026-09-07 — guideline 5.1.1(iv)** (submission
-`bb74b8bd-ff99-41ab-a1ea-47e4bf673110`, reviewed on iPad Air 11" M3 + iPhone 17
-Pro Max): the camera pre-permission screen's "Enable camera" button "encourages
-or directs" the user to grant. Apple's rule: the button before a system
-permission prompt must be neutral — "Continue" or "Next". Fix (branch
-`app-review-camera-button`): primary is now **"Continue"**, and when iOS will
-no longer show the prompt (`canAskAgain=false`) the gate explains and offers
-**"Open Settings"** (`Linking.openSettings()`), which the same review note
-recommends. Same version string, **build 3**; Reply to the rejection in App
-Store Connect noting the change, then resubmit. **Lesson for every future
-pre-permission screen: never put the verb of the permission on the button.**
+**Submitted to App Store review 2026-10-18 ~07:01 ET (11:01 UTC) as build 2**,
+from `main` at `35d9be2`; tag `v1.5.1`. Build 1 (uploaded 2026-10-16) was the
+TestFlight smoke build: same source, but its bundled `app.config` said
+`1.5.1-rc.smoke` so its events are excludable — **never submit an rc build**.
+What changed on the phone: a label photo the server can't read fully
+(`retake_reason`, decision 009, `plans/retake-state-2026-10-11.md`) shows a
+neutral "Retake the photo" screen instead of an amber Caution card, with a "See
+what I could read" way out; the next photo carries `retake_after`. Plus PR #27's
+result-footer write-review link. The API half has been live since the PR #43
+merge (2026-10-16 16:29 UTC). First archive on **Xcode 27** (see the lessons below).
 
-**Build 3 RESUBMITTED 2026-09-06 22:37 ET** (PR #26 merged `ba916ed`; tag
-`v1.5.0` moved there). The rejected submission shows as *Removed*; the new
-one is *Waiting for Review*. Resubmitting closed the old message thread, so
-no reply went to the reviewer — the change speaks for itself. **The TestFlight
-permission round-trip below was NOT run on build 3** (Aaron's call: low
-stakes; the Settings-return path is covered by jest with Expo's real hook and
-the simulator Release build launched with `app.config` 1.5.0). If a Sentry
-event ever lands with `context: camera_permission_refresh` or
-`camera_settings`, that unproven native path is the first suspect.
+**TestFlight evidence (2026-10-18, build 1, Aaron's phone, 06:17–06:37 ET,
+`app_version 1.5.1-rc.smoke` — exclude it from every read):** five retake
+responses (`retake_reason: no_heading`); "See what I could read" inside a
+barcode-recovery flow (`result_displayed` 10.5 s after the scan, against ~0.3 s
+for a plain card); Retake → full photo came back Safe carrying `retake_after:
+no_heading` (06:35:46); the torch came back on after Retake (Aaron); three
+`review_prompt store_opened` and the App Store compose sheet on screen; barcode
+auto-detect and three barcode-recovery flows end to end. Not exercised:
+couldn't-read → "Turn on flashlight & retry".
 
-Submitted to App Store review on 2026-09-05 as **build 2** (build 1 was the
-TestFlight smoke build; identical source — the second archive was a re-upload
-of the same tree). Plan: `plans/barcode-recovery-2026-09-05.md` (local), PR #25
-(grilled twice — mine, then a fresh reviewer after a second agent's
-race-hardening commit, which had regressed two normal-path windows; fixed
-before merge). What changed on the phone: a barcode dead end — 404, or a 200 the
-server marks `result_reason: "missing_context"` — lands on a persistent neutral
-"Product not found" / "Not enough information" state instead of a toast or an
-amber Caution; "Scan ingredient label" opens a **photo-only** camera (barcode
-detection off for the whole flow, labelled exit top-left, torch / library /
-shutter / Recents in the shipped positions); those states never touch history,
-the scan count, or the rating prompt; explicit exit silently ignores the same
-code for 60 s. The api half (marker + `POST /api/recovery`) went live at the PR
-#25 merge, verified against production before the build.
+**Post-release checks that matter for this one:** (1) once public, record
+`currentVersionReleaseDate` from
+`https://itunes.apple.com/lookup?bundleId=com.glutenornot.scanner` in the plan's
+Execution notes — the day-14 read (plan Task 13, queries in `api/ANALYTICS.md`)
+counts from it; (2) a production scan from an updated install reports
+`app_version 1.5.1` (the build-2 archive's `app.config` was checked: `1.5.1`);
+(3) `review_prompt requested` from a fresh App Store install (it never fires on
+TestFlight); (4) Sentry `glutenornot-mobile` for anything from `index.tsx`'s
+retake state (`commitResult`).
 
-**TestFlight evidence (2026-09-05, build 1, Aaron's phone, 21:36–21:46 local):**
-four `barcode_recovery` flows under `app_version 1.5.0`, each with exactly one
-event per stage — three completions (`shown → photo_started → result_displayed`,
-two `missing_context`, one `not_found` preceded by a server `scan_failed
-not_found`) and one explicit exit (`shown → exited`, 10 s apart). The
-`result_displayed` beacon landed 0.26 s after the server's `scan` event, i.e.
-the focus effect on the modal fires as designed, and no barcode lookup ran
-while a result was up — the one property no test could prove. Couldn't-read
-(`ocr_failed` ×2), library route, camera-denied, Cancel/background, largest
-Dynamic Type and VoiceOver were all exercised by hand. **Exclude that window
-from the day-14 read.**
+**Runbook lessons (1.5.1):** Xcode 27 ships no Simulator.app, so the agent smoke
+build goes through `xcodebuild` + `simctl` (step 2); the rc tag lands in
+`Info.plist` and must be patched before an archive (step 2); Xcode 27 makes pod
+deployment targets below 15 a hard error (step 4b); a second archive of one
+version needs its build number set in two places (step 4c); close-range blur is
+the main lens's focus distance, not a bug (Notes).
 
-**Post-release checks that matter for this one:** (1) day-14 funnel read from
-the *public release date* (day 28 if under 20 started flows) — query and target
-under `barcode_recovery` in `api/ANALYTICS.md`; (2) Sentry `glutenornot-mobile`
-for anything from `index.tsx` (the ownership model is new) or an unexpected
-rating-prompt path; (3) App Store privacy labels were updated at submission
-(Product Interaction, Coarse Location already declared; Crash Data + Performance
-Data recommended — see `APP_STORE_SUBMISSION.md`); (4) the listing description
-was rewritten to drop "photos never leave your device".
-
-**Runbook lesson (1.5.0):** `ios/sentry.properties` must be *appended to*, not
-overwritten — see step 0.
+Previous: v1.5.0 (2026-09-05; build 3 live 2026-09-07) — barcode recovery. Build
+2 was rejected under guideline 5.1.1(iv) for an "Enable camera" pre-permission
+button; build 3 ("Continue", plus "Open Settings" when iOS won't ask again)
+passed. **Lesson for every future pre-permission screen: never put the verb of
+the permission on the button.** Build 3's Settings-return path was never run on
+TestFlight: a Sentry event with `context: camera_permission_refresh` or
+`camera_settings` points there first. Its runbook lesson: `ios/sentry.properties`
+is appended to, never overwritten (step 0). History in
+`.claude/sessions/2026-09-05-add-barcode-recovery.md` and
+`2026-09-06-fix-app-review-camera-button.md`.
 
 Previous: v1.4.3 (2026-08-28, build 1) — weak-signal upload. Submitted to App Store review on 2026-08-28 (**build 1**), the day it was scoped
 — `plans/weak-signal-upload-2026-08-28.md`, from a field incident on 2-bar LTE.
@@ -129,39 +117,16 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-- **iOS 1.5.1 is the next release** (version already bumped in `app.json`,
-  PR #27). It ships: the result-footer write-review link
-  (`plans/review-prompt-visibility-2026-09-15.md`) and the retake screen
-  (`plans/retake-state-2026-10-11.md`, decision 009; the API half is live
-  since 2026-10-16 16:29 UTC, PR #43).
-- **Rejection playbook (learned 1.5.0):** same version string, next build
-  number; in App Store Connect hover the Build row → red minus → Add Build →
-  Save → Submit for Review on the *same* version. Resubmitting closes the
-  rejection's message thread, so reply *before* submitting if you want the
-  reviewer to read it. Move the git tag to the resubmitted commit.
-- **1.5.1 TestFlight checks, besides the usual smoke** (spec rollout step 3):
-  photograph a label with its top cut off → the retake screen ("Retake the
-  photo") shows instead of a Caution card; turn the torch on, get a retake,
-  tap "Retake" → the light comes back on the remounted camera; the retake's
-  `scan` event carries `retake_after` (query with
-  `app_version = '1.5.1-rc.smoke'`). Also check the write-review link from
-  PR #27, which ships in the same build.
-- **After 1.5.1:** barcode recovery step 2 (bounded
-  enrichment of data-empty Open Food Facts hits) is gated on the day-14 funnel
-  read and its own feasibility table (plan §8); the weak-signal lever remains
-  plan toggle T2 (multipart upload) — an api-contract change, its own PR, and a
-  client build when it lands. Auto-retry-with-backoff stays on the ROADMAP.
-- Post-1.4.1 watch item: the torch fallback-race fix (#8) is unit-tested but
-  its on-device confirmation rides the 1.4.1 TestFlight/production build —
-  if "Turn on flashlight & retry" ever leaves the LED dark again, see the
-  `readySignal` effect in `app/index.tsx` before raising `TORCH_SETTLE_MS`.
+Nothing: `main` matches 1.5.1 (`35d9be2`). Candidates for the next build
+(barcode-recovery enrichment, weak-signal multipart upload, auto-retry) are in
+`ROADMAP.md`.
 
 **Agent-driven release notes (learned 2026-08-28, 1.4.3):**
 - Use `npm ci` (not `npm install`) in step 1 — `npm install` prunes ~22 stale
   optional entries from the lockfile and dirties the tree for no reason.
-- `npx expo run:ios --configuration Release --no-bundler` is the right smoke
-  build when an agent drives it; `xcrun simctl io booted screenshot <png>`
-  proves the launch. Check the generated version with
+- `npx expo run:ios --configuration Release --no-bundler` was the agent's smoke
+  build through Xcode 26; on Xcode 27 use step 2's `xcodebuild` + `simctl`
+  path. `xcrun simctl io booted screenshot <png>` proves the launch. Check the generated version with
   `find ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator -name app.config`.
 - Verifying the Vercel deploy: the Vercel MCP's deployment list can be blocked
   by the permission classifier — a real scan against production (the plan's A5
@@ -211,8 +176,7 @@ Context still worth knowing:
 ```bash
 git checkout main && git pull
 cd mobile
-npm install          # pulls new deps: react-native-svg, expo-font, expo-asset,
-                     # @expo-google-fonts/{hanken-grotesk,jetbrains-mono}
+npm ci               # not `npm install`: that prunes stale lockfile entries and dirties the tree
 ```
 
 Sanity check the JS before building:
@@ -231,12 +195,36 @@ whitelists `-[a-z0-9.]{1,10}` suffixes, so every event the smoke build sends
 (`scan`, `barcode_recovery`, `review_prompt` — dev builds *do* emit `requested`)
 is excludable by `app_version NOT LIKE '%-rc%'`. Step 3 sets the real version.
 
+**When the smoke runs on TestFlight, that's two archives (1.5.1).** Build 1 is
+archived with the rc string and goes to TestFlight only. Build 2 is archived
+after the plain version is restored (fresh prebuild + step 4's patches + step
+4c), and is the one you submit. ⚠️ Prebuild writes `app.json`'s version into
+`ios/GlutenOrNot/Info.plist` as a **literal** `CFBundleShortVersionString`, and
+App Store Connect rejects `1.5.1-rc.smoke`. Before archiving an rc build, set
+the plist to the numeric version:
+`/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.5.1' ios/GlutenOrNot/Info.plist`.
+The JS reads its version from the bundled `app.config`, which is generated from
+`app.json` at build time, so the rc string survives there and tags the events.
+
 ```bash
 npx expo run:ios            # builds + runs a dev build in the iOS simulator
 # npx expo run:ios --device # use a physical device for the live camera + barcode
 # npx expo run:ios --configuration Release   # self-contained JS bundle, no Metro —
 #   closest to what ships, and the right variant when an agent drives the build
 #   (the plain dev build needs Metro attached to load JS)
+```
+
+**Xcode 27 ships no Simulator.app**, so `expo run:ios` fails with "Can't
+determine id of Simulator app". After step 4 (prebuild + patches), build and
+run the Release app headless instead:
+
+```bash
+xcrun simctl boot <udid>                     # from `xcrun simctl list devices available`
+xcodebuild -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot \
+  -configuration Release -sdk iphonesimulator -destination 'id=<udid>' build
+xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator/GlutenOrNot.app
+xcrun simctl launch booted com.glutenornot.scanner
+xcrun simctl io booted screenshot launch.png # proves the launch
 ```
 
 Verify in the **simulator**:
@@ -274,6 +262,14 @@ Verify on a **physical device** (camera doesn't exist in the simulator):
       smoke builds DO send it, which is why they carry an `-rc` app_version.
       Verify `requested` from a fresh App Store install after release
       (`api/ANALYTICS.md` → `review_prompt`).
+- [ ] **Retake screen** (1.5.1+): a label shot with the "Ingredients" heading
+      out of frame shows "Retake the photo"; with the torch on, Retake brings
+      the LED back; the next photo's `scan` event carries `retake_after`; "See
+      what I could read" opens the result once and saves it to Recents once.
+      Use a product that reads **Safe** from a full photo and frame it so no
+      "Contains:" or "Free from…" line is in shot: any allergen row keeps the
+      amber card (decision 009, T8), and so does a product that cautions for a
+      real reason.
 - [ ] **Barcode** auto-detection.
 - [ ] **Torch** (1.4.0+): overlay toggle actually lights the LED; torch stays on
       across a retake; and — the path jest can't prove — after the **Couldn't
@@ -296,6 +292,11 @@ In the **same commit**, bump the matching `"version"` in `package.json` and
 so `app.json`, both `package.json`s, the lockfiles, and the step-7 git tag all
 agree. They were a single source of truth as of 1.2.0 — keep them in lockstep.
 
+Already bumped on `main` (1.5.1 was bumped by PR #27)? Then this step is a
+lockstep check, not a bump:
+`grep -n '"version"' mobile/app.json package.json mobile/package.json` plus the
+root entries in both lockfiles must all show the same version.
+
 ## 4. Prebuild (regenerates the gitignored native project)
 
 ```bash
@@ -313,6 +314,42 @@ configs:
 sed -i '' 's/MARKETING_VERSION = 1.0;/MARKETING_VERSION = 1.2.0;/g' ios/GlutenOrNot.xcodeproj/project.pbxproj
 grep -n "MARKETING_VERSION" ios/GlutenOrNot.xcodeproj/project.pbxproj   # confirm both now read 1.2.0
 ```
+
+### ⚠️ 4b. Patch the Podfile (Xcode 27+, every prebuild)
+
+Xcode 27 makes a pod target whose deployment target is below 15.0 a hard
+**error** (Sentry, SDWebImage, RNSVG, RNCAsyncStorage and ReachabilitySwift
+resource bundles; older Xcodes only warned). Lift them to the app's own 15.1.
+In `ios/Podfile`, inside `post_install`, after the `react_native_post_install(…)`
+call:
+
+```ruby
+    # Xcode 27: pod targets below 15.0 are a hard error; lift them to the app's 15.1.
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |c|
+        if c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.1
+          c.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        end
+      end
+    end
+```
+
+Then `cd ios && pod install`, and check:
+`grep -o 'IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*' ios/Pods/Pods.xcodeproj/project.pbxproj | sort | uniq -c`
+(all 15.1). A config plugin would make this permanent; until then it's a
+post-prebuild patch like 4a.
+
+### 4c. A second archive of the same version (build 2+)
+
+`Info.plist` carries a **literal** `CFBundleVersion` of `1`, so set the build
+number in both places:
+`perl -pi -e 's/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = 2;/' ios/GlutenOrNot.xcodeproj/project.pbxproj`
+and `/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 2' ios/GlutenOrNot/Info.plist`.
+
+**Before Distribute, check the archive itself** (1.5.1): Info.plist's version
+and build, and that the bundled `app.config` has no `-rc`:
+`A=$(ls -dt ~/Library/Developer/Xcode/Archives/*/*.xcarchive | head -1); find "$A" -name app.config -exec grep -o '"version":"[^"]*"' {} \;`
+(take the path from `ls`/`find`: the folder name has a narrow no-break space before "AM"/"PM").
 
 ## 5. Archive in Xcode
 
@@ -414,6 +451,18 @@ gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New tex
   settle window (`TORCH_SETTLE_MS` in `app/index.tsx`) — if a future device
   still drops it, raise that constant before reaching for bigger refactors.
 - The `MARKETING_VERSION = 1.0` reset (step 4a) bites on **every** prebuild — don't skip it.
+- **Close-up blur is the lens, not a regression** (1.5.1 TestFlight). With no
+  `selectedLens`, expo-camera uses the physical wide-angle lens
+  (`DeviceDiscovery.swift` → `defaultBackCamera`), which can't focus much closer
+  than ~20 cm. The stock Camera app escapes this by switching to the ultra-wide
+  for macro, but our app can't switch. Test at 25–30 cm. Choosing the virtual
+  multi-lens camera would add automatic macro switching; that's a product
+  change, not a release fix.
+- **Rejection playbook (learned 1.5.0):** same version string, next build
+  number (step 4c); in App Store Connect hover the Build row → red minus → Add
+  Build → Save → Submit for Review on the *same* version. Resubmitting closes the
+  rejection's message thread, so reply *before* submitting if you want the
+  reviewer to read it. Move the git tag to the resubmitted commit.
 - `eas.json` has build profiles, but the proven release path is the local Xcode
   archive above. (EAS production builds are an alternative, not required.)
 
@@ -440,6 +489,12 @@ clean throughout):
   them mismatched. Fix: `npx expo prebuild --platform ios --clean` +
   `rm -rf ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*`, then rebuild.
   (The `SwiftUICore.tbd` "not an allowed client" line above it is just a warning.)
+- **`The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to
+  9.0, but the range of supported deployment target versions is 15.0 to 27.0.x`**
+  (Xcode 27, first seen 1.5.1) — five `error:` lines in the Pods project, then
+  `BUILD FAILED`. Step 4b's Podfile patch fixes it; it is lost on every prebuild.
+- **`Can't determine id of Simulator app`** from `expo run:ios` (Xcode 27) —
+  there is no Simulator.app; use step 2's `xcodebuild` + `simctl` path.
 - **"Upload completed with warnings → Upload Symbols Failed" (step 5, benign).**
   Xcode can't find dSYMs for the prebuilt `React`, `ReactNativeDependencies`, and
   `hermes` frameworks. Expected for RN prebuilt — the upload still succeeds, click

@@ -1,6 +1,6 @@
 # Retake state: a photo we can't read fully is a retake, not a verdict
 
-**Status:** SPEC grilled to **SHIP** (round 7, 2026-10-11). **Implementation plan written 2026-10-16** — see "Implementation plan" at the end of this file. **Tasks 1–9 implemented 2026-10-16** on branch `retake-state-2026-10-11` (see Execution notes); the PR, review, merge, production check, iOS 1.5.1 and the day-14 read are still to do.
+**Status:** SPEC grilled to **SHIP** (round 7, 2026-10-11). **Implementation plan written 2026-10-16** — see "Implementation plan" at the end of this file. **Tasks 1–12 done:** implemented 2026-10-16, PR #43 merged and the API half verified on production the same day, and iOS 1.5.1 submitted to App Store review 2026-10-18 (build 2, tag `v1.5.1`). See Execution notes. **Left:** record the public release time once 1.5.1 is live, then the day-14 read (Task 13).
 
 **Review history** (Pi on gpt-6-sol, Herdr tab "grill retake spec"):
 - **Round 1: DON'T SHIP**, with 3 🔴 and 5 🟡. All eight are folded in and marked "(R1)".
@@ -1343,10 +1343,10 @@ Then the query above (and its `scan_failed` twin) must show `retake_after: no_he
 
 ### Task 12: iOS 1.5.1
 
-- [ ] **Step 1:** Invoke the `glutenornot-release` skill (`mobile/RELEASE.md`). `app.json` is already at `1.5.1`; the smoke build is tagged `1.5.1-rc.smoke`.
-- [ ] **Step 2: TestFlight checks** (spec rollout step 3): a label photographed with its top cut off shows the retake screen (this is the positive verification of the response path if Task 11 was negative); retake with the torch on and the light comes back; the retake's `scan` event carries `retake_after` (query with `app_version = '1.5.1-rc.smoke'`). Also: the write-review link from PR #27 works, since it ships here too.
-- [ ] **Step 3:** Submit, tag, close out per the runbook. After the public release, read `currentVersionReleaseDate` from `https://itunes.apple.com/lookup?bundleId=com.glutenornot.scanner` and write it under Execution notes: it's the `timestamp >=` for the day-14 read.
-- [ ] **Step 4:** `mobile/RELEASE.md` "Pending on main" → "Nothing"; `CLAUDE.md` Quick Reference → 1.5.1 shipped; session log + index row.
+- [x] **Step 1:** Invoke the `glutenornot-release` skill (`mobile/RELEASE.md`). `app.json` is already at `1.5.1`; the smoke build is tagged `1.5.1-rc.smoke`.
+- [x] **Step 2: TestFlight checks** (spec rollout step 3): a label photographed with its top cut off shows the retake screen (this is the positive verification of the response path if Task 11 was negative); retake with the torch on and the light comes back; the retake's `scan` event carries `retake_after` (query with `app_version = '1.5.1-rc.smoke'`). Also: the write-review link from PR #27 works, since it ships here too.
+- [x] **Step 3:** Submit, tag, close out per the runbook. *(Release time still to record once public.)* After the public release, read `currentVersionReleaseDate` from `https://itunes.apple.com/lookup?bundleId=com.glutenornot.scanner` and write it under Execution notes: it's the `timestamp >=` for the day-14 read.
+- [x] **Step 4:** `mobile/RELEASE.md` "Pending on main" → "Nothing"; `CLAUDE.md` Quick Reference → 1.5.1 shipped; session log + index row.
 
 ---
 
@@ -1384,7 +1384,18 @@ _Filled in while executing: deviations from the tasks above, the production veri
   - Request 2 (`retake_after: "no_heading"` in the body): same response, `retake_after` not echoed; its `scan` event carries `retake_after: no_heading`.
   - The beacon (`POST /api/track`, `cancelled`, `elapsed_ms: 1200`, `retake_after: no_heading`): 204; its `scan_failed` event carries `retake_after: no_heading` and `elapsed_ms: 1200`.
   - Both UptimeRobot monitors are unaffected (the health JSON is unchanged). The "API half live since" placeholders in `CLAUDE.md`, `mobile/RELEASE.md` and `ROADMAP.md` now carry the merge time.
-- **Left:** Task 12 (iOS 1.5.1, via the `glutenornot-release` skill; the TestFlight checks are in `mobile/RELEASE.md`) and Task 13 (the day-14 read, counted from the public release time).
+- **Task 12, iOS 1.5.1 (done 2026-10-18).** Built from `main` at `35d9be2` (jest 219, tsc clean, the four version files already in lockstep at 1.5.1). Two archives: **build 1** (uploaded 2026-10-16) bundled `app.config` `1.5.1-rc.smoke` and went to TestFlight only; **build 2** bundled `1.5.1` (checked inside the archive before upload, along with the retake strings in the Hermes bundle) and was **submitted to App Store review 2026-10-18 ~11:01 UTC**. Tag `v1.5.1` at `35d9be2`. It was the first archive on Xcode 27, which needed two post-prebuild patches (the rc string in `Info.plist`, and pod deployment targets), now in `mobile/RELEASE.md` steps 2 and 4b.
+  - **TestFlight evidence** (Aaron's phone, 2026-10-18 06:17–06:37 ET, `app_version 1.5.1-rc.smoke`, so already excluded from the day-14 read):
+    - five retake responses, all `retake_reason: no_heading`, with `list_heading_word: false`;
+    - "See what I could read" inside a barcode-recovery flow: `result_displayed` landed 10.5 s after the scan, against ~0.3 s for a plain card, so the screen was up and the link committed once;
+    - Retake → full photo at 06:35:46 came back `safe` carrying **`retake_after: no_heading`**, and the next retake (06:36:00) carried no flag, so the flag is used once;
+    - a barcode lookup straight after a Retake cleared the flag (T4);
+    - Aaron confirmed the torch came back on after Retake, and the review link opened the App Store compose sheet (three `review_prompt store_opened`).
+    - **Not certain:** that Recents listed the "See what I could read" result exactly once. Aaron thinks so and judged it not blocking. The unit tests cover the one-shot write lock.
+    - The response path was already verified positively in Task 11. This confirms it on a device.
+  - **Finding, for the day-14 read (T8): "free from" lines block the retake screen.** The first heading-cut photos (06:23:33, 06:24:13) hit the gate (`list_gate: no_heading`) but stayed on the amber card. Claude had put the package's "Free from 8 major allergens (includes wheat)" into `allergen_warnings`, and any warning row keeps the amber card (`retakeReasonFor`). Gluten-free products often carry such lines, so query 3 (held back by D4) will include these. The card also shows the line under "ALLERGEN WARNINGS" with a ⚠, which reads like a warning ("…includes wheat"), and that predates 1.5.1. Fixing it is server-only (Vercel, no iOS build) but touches the prompt, so it needs the eval gate and its own PR. Size it with the day-14 read.
+  - **Not a bug: close-up blur.** expo-camera uses the physical wide-angle lens, which can't focus much closer than about 20 cm, and it has no macro switching (runbook Notes).
+- **Left:** record `currentVersionReleaseDate` here once 1.5.1 is public, and add the day-14 date to `ROADMAP.md`. Then Task 13 (the day-14 read, counted from that time).
 
 ## Day-14 read
 
