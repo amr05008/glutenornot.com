@@ -51,8 +51,30 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
   response is the database lookup (~0.3 s) plus Jev, still well under
   Claude's ~3 s.
 
-**Status: SHADOW LIVE since 2026-09-25 ~02:00 UTC.**
-- **Rollout steps 1–2 are done:**
+**Status: STAGE 1 (`JEV_MODE=unsafe`) LIVE since 2026-10-18 11:28 UTC.**
+- **Rollout step 3 is done:**
+  - Aaron set `JEV_MODE=unsafe` (Preview + Production) and redeployed `fd55a3e`
+    as `dpl_8TsvUPnyRR67WvSwd2Bs4r4gb1Yk`. `/api/health` showed
+    `fast_path {configured, unsafe}`.
+  - **Aaron's device check, 11:45–11:47 UTC** (app `1.5.1-rc.smoke`, so the
+    `-rc` filter already drops these from every read):
+    - 11:47:09: a barcode served by Jev (`engine: jev`, `unsafe`, `jev_ms`
+      80, `total_ms` 361). Its `engine_audit` landed 2.4 s later with
+      `served: jev`, Claude `unsafe`, `agree: true`.
+    - Three gluten-free-labeled barcodes went to Claude via `skipped/gf_label`
+      (2.3–3.1 s).
+  - **The shadow read behind the switch** (2026-09-25 02:09 UTC to 2026-10-18,
+    excluding Cupertino and `-rc`):
+    - Jev and Claude disagreed 0 times. Jev's 23 settled unsafes and 50 settled
+      safes all matched Claude.
+    - Jev had 0 errors and 0 timeouts in 134 calls. `jev_ms` p50 was ~180 and
+      p95 ~265.
+    - Every settled scan got an audit (73 = 73).
+    - Coverage was 46% of barcode scans (73 of 157).
+  - **The F4 data gate cleared.** The 50 shadowed safes came from 24 devices,
+    09-27 to 10-17, with no barcode `claude_error` hiding unaudited settles.
+    **Stage 2 now waits only on the meat-name PR.**
+- **Rollout steps 1–2 (shadow, 2026-09-25):**
   - PR #35 merged as `db196c8`.
   - The prod key is in Vercel Production and `JEV_MODE=shadow` is set, applied
     by a redeploy.
@@ -62,7 +84,7 @@ env, the PostHog tripwire alert and the rollout are Aaron's.
     `waitUntil` works on Vercel.
 - **Monitoring:** both F5 alerts are live, and the PostHog dashboard (id
   2133661) sends a weekly email. See `api/ANALYTICS.md`.
-- **Next:** Stage 1, then Stage 2 behind the F4 gate and the meat-name PR.
+- **Next:** Stage 2, behind the meat-name PR (the F4 data half has cleared).
   The local checklist is `plans/jev-remaining-2026-09-25.md`.
 
 **Original status:** proposal (2026-09-24). Replaces the bake-off's proposed v3 re-grade

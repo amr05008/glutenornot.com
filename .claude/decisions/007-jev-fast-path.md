@@ -1,7 +1,7 @@
 # 007 — Jev answers first on Open Food Facts barcodes, in stages, with Claude auditing every verdict
 
 **Date**: 2026-09-24
-**Status**: Accepted (Aaron approved the plan, 2026-09-24: "ive read nothing here that gives me pause about jev + opus"). Built in PR #35 (branch `jev-fast-path-2026-09-24`); ships with `JEV_MODE=off`.
+**Status**: Accepted (Aaron approved the plan, 2026-09-24: "ive read nothing here that gives me pause about jev + opus"). Built in PR #35 (branch `jev-fast-path-2026-09-24`); ships with `JEV_MODE=off`. Shadow from 2026-09-25; Stage 1 (`unsafe`) live since 2026-10-18.
 **Related**: `plans/jev-fast-path-2026-09-24.md` (F1–F7, T1–T5), `plans/barcode-bakeoff-2026-09-24.md` (the evidence), `plans/barcode-speed-2026-09-24.md` (why speed), decisions 004 and 006 (the policy Jev is held to); `api/ENGINES.md` (how Jev combines with Claude and decision 008's fallback)
 
 ## Context

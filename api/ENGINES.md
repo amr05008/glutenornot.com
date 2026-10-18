@@ -52,8 +52,8 @@ What each `JEV_MODE` serves when Jev settles:
 | `JEV_MODE` | Jev settles `unsafe` | Jev settles `safe` | Jev falls through, times out or errors |
 |---|---|---|---|
 | `off` (default) | Jev is never asked | Jev is never asked | Claude |
-| `shadow` (live since 2026-09-25) | Claude serves; audited | Claude serves; audited | Claude |
-| `unsafe` (Stage 1) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
+| `shadow` (2026-09-25 to 2026-10-18) | Claude serves; audited | Claude serves; audited | Claude |
+| `unsafe` (Stage 1, live since 2026-10-18) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
 | `full` (Stage 2, gated) | **Jev serves**; Claude audits | **Jev serves**; Claude audits | Claude |
 
 ## What triggers the fallback
