@@ -9,7 +9,8 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 ## ✅ Last shipped: v1.5.1 — Retake screen + write-review link (submitted 2026-10-18)
 
 **Submitted to App Store review 2026-10-18 ~07:01 ET (11:01 UTC) as build 2**,
-from `main` at `35d9be2`; tag `v1.5.1`. Build 1 (uploaded 2026-10-16) was the
+from `main` at `35d9be2`; tag `v1.5.1` + GitHub release; the App Store
+live-check routine fires 2026-10-21 14:00 UTC (step 8). Build 1 (uploaded 2026-10-16) was the
 TestFlight smoke build: same source, but its bundled `app.config` said
 `1.5.1-rc.smoke` so its events are excludable — **never submit an rc build**.
 What changed on the phone: a label photo the server can't read fully
@@ -423,8 +424,12 @@ gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New tex
 - **Re-arm the App Store live-check routine** (proven 1.4.0 + 1.4.1): a one-shot
   cloud routine ("Check iOS x.y.z live on App Store", visible at
   claude.ai/code/routines) curls the iTunes lookup API ~3 days after submission
-  and reports LIVE/NOT-LIVE. Reuse it via `/schedule` — update its prompt to the
-  new version + a fresh `run_once_at`; don't create a duplicate.
+  and reports LIVE/NOT-LIVE plus `currentVersionReleaseDate`. Reuse it via
+  `/schedule`: update its prompt to the new version and a fresh `run_once_at`,
+  and don't create a duplicate. Current ID: `trig_01QLDUo2pVzNABgYGaALLDpq`
+  (1.5.1; curl only, no connectors). `get` it first: the 1.4.x–1.5.0 routine
+  (`trig_01MMyYwpjSn3QUdtUUxfbCPP`) had disappeared by 1.5.1 (404), so if it's
+  gone, create a new one-shot and record its ID here.
 
 - Confirm the live web app shows the redesign (hard-refresh; the service worker
   updates on the next visit). Spot-check a real scan.

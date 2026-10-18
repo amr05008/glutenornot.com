@@ -31,6 +31,7 @@ Aaron archived build 1 and uploaded it to TestFlight that evening. `app.json` wa
 
 ## Left
 
+- **The live-check routine `trig_01QLDUo2pVzNABgYGaALLDpq`** fires 2026-10-21 14:00 UTC and reports LIVE/NOT-LIVE plus `currentVersionReleaseDate`. The old routine `trig_01MMy…` was gone (404), so this one is new. It runs curl only, with no connectors.
 - **When 1.5.1 goes public:** record `currentVersionReleaseDate` from `https://itunes.apple.com/lookup?bundleId=com.glutenornot.scanner` in the plan's Execution notes, and add the day-14 date to `ROADMAP.md`. The day-14 read (plan Task 13) counts from it.
 - **Post-release:** a production scan reports `app_version 1.5.1`; `review_prompt requested` from a fresh App Store install; Sentry for `index.tsx`'s retake state.
 - **The "free from" → `allergen_warnings` leak** (ROADMAP): size it with the day-14 read's query 3. The fix is server-only but touches the prompt, so it needs the eval gate.
@@ -42,4 +43,4 @@ Aaron archived build 1 and uploaded it to TestFlight that evening. `app.json` wa
 - `mobile/RELEASE.md` — Last shipped → v1.5.1; Pending → nothing. Lessons: the two-archive rc flow and the `Info.plist` patch (step 2), the Xcode 27 sim build (step 2), the retake device check, the lockstep-check note (step 3), the Podfile patch (4b), build 2+ and the archive check (4c), close-up blur and the rejection playbook (Notes), and two Xcode 27 troubleshooting entries.
 - `plans/retake-state-2026-10-11.md` — status header, Task 12 checked, the evidence and findings under Execution notes.
 - `CLAUDE.md`, `ROADMAP.md`, `README.md` — 1.5.1 marked shipped (retake + write-review); the "free from" item; a README feature line.
-- Tag `v1.5.1` at `35d9be2` (the submitted source).
+- Tag `v1.5.1` at `35d9be2` (the submitted source) and its GitHub release. Close-out commit `1f19eab`.
