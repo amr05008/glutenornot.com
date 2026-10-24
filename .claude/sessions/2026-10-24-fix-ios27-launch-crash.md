@@ -53,10 +53,13 @@ tags: [release, ios, mobile, app-review, rejection, xcode-27, ios-27, uiscene, e
 - **One archive:** the TestFlight binary is the submitted binary; its events predate the public release date.
 - **Resubmission:** Aaron swapped build 2 for 3 on the version, replied in the rejection thread (root cause, the fix, iOS 27 iPhone/iPad sims, iOS 26, TestFlight), and pressed **Resubmit to App Review**. It went to *Waiting for Review* on 2026-10-24 ~07:01 ET (11:01 UTC), submission `2e8fc8d5-49ec-4e16-b443-ecffa80cdcb3`.
 
+**After the resubmission (on Aaron's OK).**
+- **The tag:** `v1.5.1` was force-moved from `35d9be2` to `e92def9`, the build-3 commit; the annotated tag object is `a7a8f0b`. The GitHub release's submission line now describes build 3.
+- **The live-check routine:** `trig_01QLDUo2pVzNABgYGaALLDpq` had fired on 10-21 while 1.5.1 was rejected. It's re-armed for **2026-10-27 14:00 UTC**, with its NOT-LIVE context changed to build 3.
+
 ## Left
 
-- **Move the `v1.5.1` tag** from `35d9be2` to the build-3 commit (`e92def9`). It's a force-push of a published tag, so it needs Aaron's OK.
-- **Re-arm the App Store live-check routine.** The 10-21 one-shot (`trig_01QLDUo2pVzNABgYGaALLDpq`) ran while 1.5.1 was rejected.
+- **2026-10-27 14:00 UTC:** read the live-check routine's report.
 - **When 1.5.1 goes public:** record `currentVersionReleaseDate` in the retake plan, then set the day-14 read date in `ROADMAP.md` (unchanged from the 10-18 log).
 - **Watch:** Sentry `glutenornot-mobile` for anything in launch or scene code on 1.5.1 (3), especially iPad. The reconnect path can't be forced, so production is the only place it runs.
 - **Seen but out of scope:** on launch, expo-updates' background update check fails with a 400 ("channel-name required") because the locally built app sends no EAS channel header, so OTA updates have likely never worked. It's harmless (the embedded bundle runs) but worth a look.

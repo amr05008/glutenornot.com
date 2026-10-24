@@ -47,7 +47,7 @@ npx expo run:ios            # builds + runs a dev build in the iOS Simulator
 # npx expo run:ios --device # run on a physical device (needed for the live camera)
 ```
 
-Requires Xcode. For producing a release build + App Store submission, see [`mobile/RELEASE.md`](./mobile/RELEASE.md).
+Requires Xcode. Xcode 27 ships no Simulator.app, so `npx expo run:ios` fails there. Build and run headless with `xcodebuild` + `xcrun simctl` instead ([`mobile/RELEASE.md`](./mobile/RELEASE.md) step 2), on the newest iOS runtime. For producing a release build + App Store submission, see [`mobile/RELEASE.md`](./mobile/RELEASE.md).
 
 Scanning requires:
 - `GOOGLE_CLOUD_VISION_API_KEY`
@@ -72,6 +72,7 @@ glutenornot.com/
 │   ├── app/                # Expo Router screens
 │   ├── components/         # Reusable components
 │   ├── services/           # API client
+│   ├── plugins/            # Local Expo config plugins (UIScene life cycle for iOS 27 builds)
 │   └── constants/          # Shared constants
 ├── api/                    # Shared Vercel serverless functions
 │   ├── _utils.js           # Shared rate limiting, verdict normalization, constants

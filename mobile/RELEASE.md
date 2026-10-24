@@ -23,8 +23,9 @@ proven on iOS 27.0 iPhone and iPad Air 11" (M3) simulators. Build 3 = the 1.5.1
 source + that plugin, archived from `main` at `143e521` (4c: build number 3). It's
 one archive: TestFlight-smoke build 3, then submit that same binary. Its TestFlight
 events carry `app_version 1.5.1` but predate the public release date that every
-read counts from. After submitting, move the `v1.5.1` tag to the submitted commit
-(step 7).
+read counts from. The `v1.5.1` tag now points at `e92def9`, the build-3 commit
+(moved 2026-10-24, step 7). The App Store live-check routine is re-armed for
+2026-10-27 14:00 UTC.
 
 ## ✅ Last shipped: v1.5.1 — Retake screen + write-review link (submitted 2026-10-18)
 
