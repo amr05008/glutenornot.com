@@ -6,7 +6,11 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ⚠️ v1.5.1 build 2 REJECTED (2026-10-19), build 3 pending
+## ⏳ v1.5.1 build 3 RESUBMITTED (2026-10-24), after build 2's rejection (2026-10-19)
+
+**Build 3 went to App Review 2026-10-24 ~07:01 ET (11:01 UTC)** from `main` at
+`e92def9`, submission `2e8fc8d5-49ec-4e16-b443-ecffa80cdcb3`, with a reply in
+the rejection thread. Session log: `.claude/sessions/2026-10-24-fix-ios27-launch-crash.md`.
 
 App Review (iPhone 17 Pro Max + iPad Air 11-inch (M3), iOS/iPadOS 27.0) rejected
 build 2 under **2.1(a)**: it crashed on launch. It was the first archive on
