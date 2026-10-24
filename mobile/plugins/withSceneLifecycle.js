@@ -35,19 +35,31 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       return
     }
 
+    // The scene can reconnect in a process that already runs React Native: an
+    // iPad window closed and reopened, or a scene iOS discarded in the
+    // background. Starting React Native again would start expo-updates'
+    // AppController a second time, which traps, so the running root moves over.
+    let runningRootViewController = appDelegate.window?.rootViewController
+    appDelegate.window?.rootViewController = nil
+
     let window = UIWindow(windowScene: windowScene)
     self.window = window
     appDelegate.window = window
 
-    // Linking.getInitialURL() reads the launch link from these options.
-    var launchOptions: [UIApplication.LaunchOptionsKey: Any] = [:]
-    if let urlContext = connectionOptions.urlContexts.first {
-      launchOptions[.url] = urlContext.url
+    if let rootViewController = runningRootViewController {
+      window.rootViewController = rootViewController
+      window.makeKeyAndVisible()
+    } else {
+      // Linking.getInitialURL() reads the launch link from these options.
+      var launchOptions: [UIApplication.LaunchOptionsKey: Any] = [:]
+      if let urlContext = connectionOptions.urlContexts.first {
+        launchOptions[.url] = urlContext.url
+      }
+      factory.startReactNative(
+        withModuleName: "main",
+        in: window,
+        launchOptions: launchOptions)
     }
-    factory.startReactNative(
-      withModuleName: "main",
-      in: window,
-      launchOptions: launchOptions)
 
     if !connectionOptions.urlContexts.isEmpty {
       self.scene(scene, openURLContexts: connectionOptions.urlContexts)
@@ -98,12 +110,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 `;
 
 function patchAppDelegate(contents) {
+  const hasStartupBlock = STARTUP_BLOCK.test(contents);
   if (contents.includes('class SceneDelegate: UIResponder, UIWindowSceneDelegate')) {
+    if (hasStartupBlock) {
+      throw new Error('withSceneLifecycle: AppDelegate has a SceneDelegate but still makes its own window.');
+    }
     return contents;
   }
   // Throw rather than skip: a template we don't recognize would ship an app
   // that can't launch on iOS 27, and prebuild is the place to find that out.
-  if (!STARTUP_BLOCK.test(contents)) {
+  if (!hasStartupBlock) {
     throw new Error('withSceneLifecycle: could not find the AppDelegate startup block (window + startReactNative).');
   }
   if (!contents.includes(SCENE_DELEGATE_ANCHOR)) {

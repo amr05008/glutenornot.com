@@ -243,9 +243,15 @@ xcrun simctl boot <udid>                     # newest runtime, from `xcrun simct
 xcodebuild -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot \
   -configuration Release -sdk iphonesimulator -destination 'id=<udid>' build
 xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator/GlutenOrNot.app
-xcrun simctl launch booted com.glutenornot.scanner
-xcrun simctl io booted screenshot launch.png # proves the launch
+xcrun simctl launch booted com.glutenornot.scanner   # prints the PID
+sleep 10
+xcrun simctl spawn booted launchctl list | grep glutenornot   # same PID: still running
+xcrun simctl spawn booted log show --last 1m --predicate 'process == "GlutenOrNot"' | grep -i "life cycle"   # must print nothing
+xcrun simctl io booted screenshot launch.png # then open it: the app's UI, not the home screen
 ```
+
+A screenshot alone proves nothing. A trap at launch leaves the splash or the
+home screen on screen, so the PID and log checks are the proof.
 
 Verify in the **simulator**:
 - [ ] Type renders as **Hanken Grotesk** (geometric sans), not the system font.
@@ -381,7 +387,10 @@ adds the scene manifest and a `SceneDelegate` on every prebuild. Nothing to patc
 by hand, but confirm it ran:
 `grep -c 'class SceneDelegate' ios/GlutenOrNot/AppDelegate.swift` (1) and
 `plutil -extract UIApplicationSceneManifest json -o - ios/GlutenOrNot/Info.plist`.
-The plugin throws during prebuild if the template changes shape. Delete it at the
+The plugin throws during prebuild if the template changes shape. Its
+`SceneDelegate` moves the running root view to a reconnected scene, for example
+an iPad window closed and reopened. It must never call `startReactNative` twice,
+because expo-updates' `AppController.start()` traps on a second call. Delete it at the
 Expo upgrade: SDK 57 has `ios.enableSceneSupport` in expo-build-properties, and
 SDK 58's template adopts scenes itself.
 

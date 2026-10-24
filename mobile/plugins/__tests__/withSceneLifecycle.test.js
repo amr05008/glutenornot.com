@@ -24,6 +24,17 @@ describe('patchAppDelegate', () => {
     expect(patched).toContain('appDelegate.window = window');
   });
 
+  it('moves the running root to a reconnected scene instead of starting React Native again', () => {
+    // A second startReactNative restarts expo-updates' AppController, whose
+    // start() is precondition(!isStarted): a closed-and-reopened iPad window traps.
+    const reconnect = patched.indexOf('if let rootViewController = runningRootViewController {');
+    const start = patched.indexOf('startReactNative(');
+    expect(patched).toContain('let runningRootViewController = appDelegate.window?.rootViewController');
+    expect(reconnect).toBeGreaterThan(-1);
+    expect(patched.slice(reconnect, start)).toContain('window.rootViewController = rootViewController');
+    expect(patched.slice(reconnect, start)).toMatch(/\} else \{/);
+  });
+
   it('hands a launch link to React Native and forwards links to the AppDelegate', () => {
     expect(patched).toContain('launchOptions[.url] = urlContext.url');
     expect(patched).toContain('openURLContexts');
@@ -54,6 +65,11 @@ describe('patchAppDelegate', () => {
     expect(() => patchAppDelegate(TEMPLATE.replace('class ReactNativeDelegate', 'class Other'))).toThrow(
       /ReactNativeDelegate/,
     );
+  });
+
+  it('fails when a SceneDelegate exists but the AppDelegate still makes its own window', () => {
+    const half = `${TEMPLATE}\nclass SceneDelegate: UIResponder, UIWindowSceneDelegate {}\n`;
+    expect(() => patchAppDelegate(half)).toThrow(/still makes its own window/);
   });
 });
 
