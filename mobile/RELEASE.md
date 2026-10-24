@@ -6,6 +6,17 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
+## ⚠️ v1.5.1 build 2 REJECTED (2026-10-19), build 3 pending
+
+App Review (iPhone 17 Pro Max + iPad Air 11-inch (M3), iOS/iPadOS 27.0) rejected
+build 2 under **2.1(a)**: it crashed on launch. It was the first archive on
+Xcode 27, and iOS 27 traps any app built with its SDK that hasn't adopted the
+UIScene life cycle (step 4d). Nothing in the smoke ran on iOS 27, so nothing
+caught it (step 2 now says to). The fix is `mobile/plugins/withSceneLifecycle.js`
+(branch `fix/ios27-scene-lifecycle`), proven on iOS 27.0 iPhone and iPad Air 11"
+(M3) simulators. Build 3 = same 1.5.1 source + that plugin: archive it from `main`
+after the merge (4c for the build number), smoke it on TestFlight, then resubmit.
+
 ## ✅ Last shipped: v1.5.1 — Retake screen + write-review link (submitted 2026-10-18)
 
 **Submitted to App Store review 2026-10-18 ~07:01 ET (11:01 UTC) as build 2**,
@@ -219,14 +230,34 @@ npx expo run:ios            # builds + runs a dev build in the iOS simulator
 determine id of Simulator app". After step 4 (prebuild + patches), build and
 run the Release app headless instead:
 
+**Boot a simulator on the newest iOS runtime Xcode has** (the highest
+`xcrun simctl list runtimes` entry). iOS enforces new launch requirements only
+on its own OS. 1.5.1 build 2 launched on an iOS 26 simulator and on Aaron's
+iOS 26 phone, then crashed on launch on App Review's iOS 27 devices: an app
+built with the iOS 27 SDK without the UIScene life cycle traps before its first
+frame (2026-10-19, see 4d). A TestFlight phone on an older iOS proves the
+hardware paths, not the launch.
+
 ```bash
-xcrun simctl boot <udid>                     # from `xcrun simctl list devices available`
+xcrun simctl boot <udid>                     # newest runtime, from `xcrun simctl list devices available`
 xcodebuild -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot \
   -configuration Release -sdk iphonesimulator -destination 'id=<udid>' build
 xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator/GlutenOrNot.app
-xcrun simctl launch booted com.glutenornot.scanner
-xcrun simctl io booted screenshot launch.png # proves the launch
+PID=$(xcrun simctl launch booted com.glutenornot.scanner | awk '{print $NF}')
+sleep 10
+xcrun simctl spawn booted launchctl list | awk -v p="$PID" '$1 == p && /glutenornot/ { ok = 1 } END { print (ok ? "OK: still running as " p : "FAIL: not running") }'
+if LOG=$(xcrun simctl spawn booted log show --last 1m --predicate "processIdentifier == $PID"); then
+  echo "$LOG" | grep -qi "life cycle is required" && echo "FAIL: life-cycle trap logged" || echo "OK: no life-cycle trap"
+else
+  echo "FAIL: log show failed"
+fi
+xcrun simctl io booted screenshot launch.png # then open it: the app's UI, not the home screen
 ```
+
+Both lines must say OK. A screenshot alone proves nothing, because a trap at
+launch leaves the splash or the home screen showing. The log check is scoped to
+this launch's PID, so a crash from an earlier launch can't leak in. (A
+`getpwuid_r` line from `log show` is harmless.)
 
 Verify in the **simulator**:
 - [ ] Type renders as **Hanken Grotesk** (geometric sans), not the system font.
@@ -351,6 +382,23 @@ and `/usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 2' ios/GlutenOrNot/Info.pl
 and build, and that the bundled `app.config` has no `-rc`:
 `A=$(ls -dt ~/Library/Developer/Xcode/Archives/*/*.xcarchive | head -1); find "$A" -name app.config -exec grep -o '"version":"[^"]*"' {} \;`
 (take the path from `ls`/`find`: the folder name has a narrow no-break space before "AM"/"PM").
+
+### 4d. Check the scene life cycle (Xcode 27+, automatic)
+
+iOS 27 refuses to launch an app built with the iOS 27 SDK unless it uses the
+UIScene life cycle (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`,
+"UIScene life cycle is required for apps built with this SDK"). Expo SDK 54's
+template doesn't, so the local config plugin `mobile/plugins/withSceneLifecycle.js`
+adds the scene manifest and a `SceneDelegate` on every prebuild. Nothing to patch
+by hand, but confirm it ran:
+`grep -c 'class SceneDelegate' ios/GlutenOrNot/AppDelegate.swift` (1) and
+`plutil -extract UIApplicationSceneManifest json -o - ios/GlutenOrNot/Info.plist`.
+The plugin throws during prebuild if the template changes shape. Its
+`SceneDelegate` moves the running root view to a reconnected scene, for example
+an iPad window closed and reopened. It must never call `startReactNative` twice,
+because expo-updates' `AppController.start()` traps on a second call. Delete it at the
+Expo upgrade: SDK 57 has `ios.enableSceneSupport` in expo-build-properties, and
+SDK 58's template adopts scenes itself.
 
 ## 5. Archive in Xcode
 
