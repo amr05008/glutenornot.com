@@ -39,9 +39,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // iPad window closed and reopened, or a scene iOS discarded in the
     // background. Starting React Native again would start expo-updates'
     // AppController a second time, which traps, so the running root moves over.
-    // Known edge: a sheet presented from the old root at disconnect isn't
-    // carried across. iOS won't drop a single-scene app's scene on demand, so
-    // this path can't be forced on a simulator or a device to test it.
+    // Known edge, untested: a sheet presented from the old root at disconnect
+    // may not survive the move. iOS won't drop a single-scene app's scene on
+    // demand, so this path can't be forced on a simulator or a device.
     let runningRootViewController = appDelegate.window?.rootViewController
     appDelegate.window?.rootViewController = nil
 

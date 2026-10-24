@@ -246,7 +246,7 @@ xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/
 PID=$(xcrun simctl launch booted com.glutenornot.scanner | awk '{print $NF}')
 sleep 10
 xcrun simctl spawn booted launchctl list | awk -v p="$PID" '$1 == p && /glutenornot/ { ok = 1 } END { print (ok ? "OK: still running as " p : "FAIL: not running") }'
-if LOG=$(xcrun simctl spawn booted log show --last 1m --predicate 'process == "GlutenOrNot"'); then
+if LOG=$(xcrun simctl spawn booted log show --last 1m --predicate "processIdentifier == $PID"); then
   echo "$LOG" | grep -qi "life cycle is required" && echo "FAIL: life-cycle trap logged" || echo "OK: no life-cycle trap"
 else
   echo "FAIL: log show failed"
@@ -255,8 +255,9 @@ xcrun simctl io booted screenshot launch.png # then open it: the app's UI, not t
 ```
 
 Both lines must say OK. A screenshot alone proves nothing, because a trap at
-launch leaves the splash or the home screen showing. (A `getpwuid_r` line from
-`log show` is harmless.)
+launch leaves the splash or the home screen showing. The log check is scoped to
+this launch's PID, so a crash from an earlier launch can't leak in. (A
+`getpwuid_r` line from `log show` is harmless.)
 
 Verify in the **simulator**:
 - [ ] Type renders as **Hanken Grotesk** (geometric sans), not the system font.
