@@ -243,15 +243,20 @@ xcrun simctl boot <udid>                     # newest runtime, from `xcrun simct
 xcodebuild -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot \
   -configuration Release -sdk iphonesimulator -destination 'id=<udid>' build
 xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/GlutenOrNot-*/Build/Products/Release-iphonesimulator/GlutenOrNot.app
-xcrun simctl launch booted com.glutenornot.scanner   # prints the PID
+PID=$(xcrun simctl launch booted com.glutenornot.scanner | awk '{print $NF}')
 sleep 10
-xcrun simctl spawn booted launchctl list | grep glutenornot   # same PID: still running
-xcrun simctl spawn booted log show --last 1m --predicate 'process == "GlutenOrNot"' | grep -i "life cycle"   # must print nothing
+xcrun simctl spawn booted launchctl list | awk -v p="$PID" '$1 == p && /glutenornot/ { ok = 1 } END { print (ok ? "OK: still running as " p : "FAIL: not running") }'
+if LOG=$(xcrun simctl spawn booted log show --last 1m --predicate 'process == "GlutenOrNot"'); then
+  echo "$LOG" | grep -qi "life cycle is required" && echo "FAIL: life-cycle trap logged" || echo "OK: no life-cycle trap"
+else
+  echo "FAIL: log show failed"
+fi
 xcrun simctl io booted screenshot launch.png # then open it: the app's UI, not the home screen
 ```
 
-A screenshot alone proves nothing. A trap at launch leaves the splash or the
-home screen on screen, so the PID and log checks are the proof.
+Both lines must say OK. A screenshot alone proves nothing, because a trap at
+launch leaves the splash or the home screen showing. (A `getpwuid_r` line from
+`log show` is harmless.)
 
 Verify in the **simulator**:
 - [ ] Type renders as **Hanken Grotesk** (geometric sans), not the system font.
