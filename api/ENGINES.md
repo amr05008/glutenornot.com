@@ -53,10 +53,10 @@ What each `JEV_MODE` serves when Jev settles:
 |---|---|---|---|
 | `off` (default) | Jev is never asked | Jev is never asked | Claude |
 | `shadow` (2026-09-25 to 2026-10-18) | Claude serves; audited | Claude serves; audited | Claude |
-| `unsafe` (Stage 1, live since 2026-10-18) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
-| `full` (Stage 2, gated) | **Jev serves**; Claude audits | **Jev serves**; Claude audits | Claude |
+| `unsafe` (Stage 1, 2026-10-18 to 2026-11-08) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
+| `full` (Stage 2, live since 2026-11-08) | **Jev serves**; Claude audits | **Jev serves**; Claude audits | Claude |
 
-Stage 2 has two preconditions: the F4 data gate, which cleared on 2026-10-18, and the meat-name check below, live since 2026-11-08 (PR #47). Both are met. `full` is still set by hand, followed by a redeploy.
+Stage 2 had two preconditions: the F4 data gate, which cleared on 2026-10-18, and the meat-name check below, live since 2026-11-08 (PR #47). Aaron set `full` by hand once both were met, and it has been live since the 2026-11-08 redeploy (~20:05 UTC). To step back, set `JEV_MODE=unsafe` (or `off`) and redeploy.
 
 ### The meat-name check (Jev's `safe` only)
 
