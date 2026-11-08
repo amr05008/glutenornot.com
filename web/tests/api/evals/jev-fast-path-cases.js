@@ -5,7 +5,10 @@
  *   - soy sauce;
  *   - non-English lists, including grain words GLUTEN_GRAIN_PATTERN misses;
  *   - a free-text cereal trace tag.
- * Two safe controls show the fast path still settles something.
+ * Two safe controls show the fast path still settles something. F11 and F12
+ * (2026-11-07, Stage 2's precondition) are meat products whose list doesn't
+ * name the meat: Jev never reads the name, so only the product-name check
+ * holds them, and a settled safe there is the false-safe it exists to stop.
  *
  * Every product is SYNTHETIC: records written for this eval in the shape Open
  * Food Facts returns, never a real user's scan. `expect` follows the other
@@ -32,4 +35,6 @@ export const JEV_FAST_PATH_CASES = [
   { id: 'F8', expect: 'not-safe', why: 'Italian may-contain line (frumento)', product: off('zucchero, burro di cacao, latte intero in polvere, emulsionante: lecitina di soia. Può contenere tracce di frumento.') },
   { id: 'F9', expect: 'safe', why: 'control: plain French potato crisps', product: off('pommes de terre, huile de tournesol, sel.') },
   { id: 'F10', expect: 'safe', why: 'control: plain Spanish rice cakes', product: off('arroz integral, aceite de girasol, sal marina.') },
+  { id: 'F11', expect: 'caution', reason: 'undeclared_source', why: 'meat named only in the product name (Chicken Broth)', product: { product_name: 'Chicken Broth', ...off('water, salt, natural flavor, carrot juice concentrate, celery juice concentrate, onion juice concentrate.') } },
+  { id: 'F12', expect: 'caution', reason: 'undeclared_source', why: 'German compound meat name, list names no meat (Hühnerbrühe)', product: { product_name: 'Hühnerbrühe', ...off('Wasser, Speisesalz, natürliches Aroma, Karotten, Zwiebeln, Liebstöckel.') } },
 ];

@@ -1090,6 +1090,62 @@ function textBlocksSafe(text) {
   );
 }
 
+// Stage 2's last precondition (decision 007, PR #35 review). Jev and the rule
+// read only the ingredient list; Claude also reads the product name. A meat or
+// poultry product whose list doesn't name the meat ("Chicken Broth": water,
+// salt, natural flavor) is Claude's `undeclared_source`, and Jev's
+// meat_poultry question can't see it. So a meat or poultry word in the name
+// blocks a fast `safe` (jev_via = 'meat_name'). The name is read here and
+// nowhere else on the fast path: it never goes to TypeSafe or into an event,
+// and Jev's unsafe never reads it.
+//
+// Whole words on the lowercased, accent-stripped name: "ham" never matches
+// inside "Champions" (the re-grill's false hit), "porc" inside "porcini",
+// "steak" inside "beefsteak tomatoes". The languages are
+// GLUTEN_GRAIN_PATTERN's. Left out because they mostly name something else:
+// chili (chili sauce), soup, pâté (tomato and fish pâtés), goat and buffalo
+// (cheeses), lomo (tuna loin), ragù (the brand).
+const MEAT_NAME_WORDS = [
+  // English
+  'meats?', 'poultry', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'mutton', 'veal', 'venison', 'bison', 'duck', 'goose',
+  'bacon', 'hams?', 'sausages?', 'pepperoni', 'chorizos?', 'prosciutto', 'pancetta', 'jerky', 'hot[ -]?dogs?',
+  'frankfurters?', 'franks', 'wieners?', 'kielbasa', 'bologna', 'bolognese', 'pastrami', 'meatballs?', 'meatloaf',
+  '(?:ham|cheese)?burgers?', 'steaks?', 'brisket', '(?:spare ?)?ribs?', 'carpaccio', 'broths?', 'stock', 'gravy',
+  'consomme',
+  // French
+  'viandes?', 'volailles?', 'poulets?', 'poules?', 'boeuf', 'porcs?', 'veau', 'agneau', 'dinde', 'canard', 'jambons?',
+  'saucisses?', 'saucissons?', 'lard(?:o|ons?)?', 'merguez', 'chipolatas?', 'andouill(?:e|ette)s?', 'boudins?',
+  'rillettes', 'foie', 'biftecks?', 'poitrine', 'charcuterie', 'cassoulet', 'bolognaise',
+  // Spanish, Catalan, Portuguese
+  'carnes?', 'carn', 'carnitas', 'pollo', 'pollastre', 'frango', 'cerdo', 'porco', 'jamon', 'pernil', 'presunto',
+  'fiambres?', 'salchichas?', 'salchichon', 'salsichas?', 'linguicas?', 'chouricos?', 'botifarras?', 'llonganissas?',
+  'fuet', 'sobrasada', 'morcillas?', 'embutidos?', 'embotits?', 'tocino', 'panceta', 'pavo', 'ternera', 'vedella',
+  'vitela', 'cordero', 'cordeiro', 'xai', 'pato', 'anec', 'dindi', 'albondigas', 'almondegas', 'caldos?', 'brou',
+  // Italian
+  'maiale', 'manzo', 'vitello', 'agnello', 'tacchino', 'anatra', 'pollame', 'salame', 'salsicc(?:ia|e)',
+  'mortadell[ae]', 'bresaola', 'guanciale', 'cotechino', 'zampone', 'nduja', 'polpett(?:a|e|ine)', 'brodo',
+];
+// German and Dutch compound the meat into the word (Hähnchenbrust,
+// Rindfleisch, rookworst, kipfilet, Salamisticks), so these stems match inside
+// a word, each guarded against the look-alikes in the bake-off's replayed
+// safes and beyond (Fleischmann's margarine, Butterschmalz, speckled beans,
+// Dutch spekjes and speculaas).
+const MEAT_NAME_STEMS = [
+  'fleisch(?!mann|los)', 'w(?:u|ue)rst', 'worst', 'schinken', 'speck(?!le)', 'spek(?!\\p{L})', 'salami',
+  'h(?:a|ae)hnchen', 'h(?:u|ue)hn', 'gefl(?:u|ue)gel', 'truthahn', '(?<!\\p{L})pute', 'schwein', '(?<!\\p{L})rinder',
+  '(?<!\\p{L})lamm', 'frikadell', 'frikandel', '(?<!butter)schmalz', 'br(?:u|ue)h(?:e|w)', 'bouillon', 'vlees',
+  '(?<!\\p{L})kip', 'kalkoen', 'varken', 'gehakt',
+];
+const MEAT_NAME_PATTERN = new RegExp(
+  `(?<!\\p{L})(?:${MEAT_NAME_WORDS.join('|')})(?!\\p{L})|${MEAT_NAME_STEMS.join('|')}`,
+  'u'
+);
+
+/** Does the product name mark a meat or poultry product? Read locally, never sent. */
+function nameMarksMeat(name) {
+  return typeof name === 'string' && MEAT_NAME_PATTERN.test(stripAccents(name.toLowerCase()));
+}
+
 /**
  * The code gates, run before Jev is asked: a hit names why the fast path
  * doesn't judge this record, and Claude answers alone. Null means ask Jev.
@@ -1217,6 +1273,8 @@ function decideFastPath(product, scores) {
   const listOk = scores.is_ingredient_list >= LIST_OK_AT && scores.looks_complete >= LIST_OK_AT;
   const danger = Math.max(...JEV_DANGER.map((k) => scores[k]));
   if (!tagged && !worded && listOk && danger < CLEAR_BELOW) {
+    // Last, so `meat_name` counts exactly the fast safes the name check costs.
+    if (nameMarksMeat(product.product_name)) return { settled: false, via: 'meat_name' };
     return { settled: true, via: 'safe', result: fastPathResult('safe') };
   }
   let via = 'not_clear';

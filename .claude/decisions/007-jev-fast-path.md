@@ -171,6 +171,10 @@ On the barcode path, for Open Food Facts records only:
     - It needs word boundaries: the re-grill's one hit in the 167 replayed
       safes was a false "ham" inside "Champions".
   - Stage 1 is unaffected, because it never serves a Jev `safe`.
+  - **Built 2026-11-07** (branch `jev-meat-name-2026-11-07`):
+    - `nameMarksMeat` in `decideFastPath` is the last check before `safe`, and a hit is recorded as `jev_via = meat_name`;
+    - on the 996-record replay it held 1 of 167 settled safes ("Bunte Pepperoni", German for peppers), and unsafe was unchanged;
+    - `api/ENGINES.md` has the details.
 - **A second engine**: every future verdict rule is written in the prompt and
   checked against this rule. A rule that changes what `safe` means must also
   pass the fast-path live eval. For example, decision 006 made natural flavors

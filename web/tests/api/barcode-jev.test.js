@@ -33,8 +33,20 @@ const CLEAN_PRODUCT = {
   labels_tags: [],
 };
 
+// A meat product whose list doesn't name the meat: Jev clears the list, Claude
+// reads the name (decision 007's Stage 2 precondition).
+const MEAT_NAME = 'Chicken Broth';
+const MEAT_NAMED_PRODUCT = {
+  product_name: MEAT_NAME,
+  ingredients_text: 'water, salt, natural flavor, carrot juice concentrate, onion juice concentrate.',
+  allergens_tags: [],
+  traces_tags: [],
+  labels_tags: [],
+};
+
 const CLAUDE_UNSAFE = { verdict: 'unsafe', flagged_ingredients: ['wheat flour'], allergen_warnings: [], explanation: 'Claude: contains wheat flour.', confidence: 'high' };
 const CLAUDE_SAFE = { verdict: 'safe', flagged_ingredients: [], allergen_warnings: [], explanation: 'Claude: nothing to worry about.', confidence: 'high' };
+const CLAUDE_UNDECLARED = { verdict: 'caution', flagged_ingredients: ['natural flavor'], allergen_warnings: [], explanation: 'Claude: flavorings in a chicken product.', confidence: 'medium', caution_reason: 'undeclared_source' };
 const CLAUDE_MAY_CONTAIN = { verdict: 'caution', flagged_ingredients: [], allergen_warnings: [], explanation: 'Claude: shared facility.', confidence: 'medium', caution_reason: 'may_contain' };
 
 function jevOk(scores) {
@@ -350,6 +362,27 @@ describe('JEV_MODE=full (Stage 2): serve both settled verdicts', () => {
     expect(trackScan.mock.calls[0][0]).toMatchObject({ jevOutcome: 'fell_through', jevVia: 'list_quality' });
   });
 
+  it('serves Claude on a clean list whose product name is meat, and records meat_name', async () => {
+    const fetchSpy = stubFetch({ product: MEAT_NAMED_PRODUCT, jev: CLEAR, claude: CLAUDE_UNDECLARED });
+    const res = await scan();
+    expect(res.body).toMatchObject({ engine: 'claude', verdict: 'caution', caution_reason: 'undeclared_source' });
+    expect(trackScan.mock.calls[0][0]).toMatchObject({ engine: 'claude', jevOutcome: 'fell_through', jevVia: 'meat_name' });
+    // Jev is still asked (the name never blocks unsafe), and not settled, so nothing is audited.
+    expect(calls(fetchSpy, 'typesafe')).toHaveLength(1);
+    expect(trackEngineAudit).not.toHaveBeenCalled();
+  });
+
+  it('still serves Jev\'s unsafe on a product whose name is meat', async () => {
+    stubFetch({
+      product: { ...WHEAT_PRODUCT, product_name: MEAT_NAME },
+      jev: { ...CLEAR, wheat: 0.99, meat_poultry: 0.9 },
+      claude: CLAUDE_UNSAFE,
+    });
+    const res = await scan();
+    expect(res.body).toMatchObject({ engine: 'jev', verdict: 'unsafe', product_name: MEAT_NAME });
+    expect(trackScan.mock.calls[0][0]).toMatchObject({ engine: 'jev', jevOutcome: 'settled_unsafe', jevVia: 'unsafe' });
+  });
+
   it('serves Claude after an 800 ms Jev timeout', async () => {
     const fetchSpy = stubFetch({
       product: CLEAN_PRODUCT,
@@ -446,5 +479,17 @@ describe('fast-path privacy (the analytics invariant, and what TypeSafe receives
     expect(events).not.toContain(BARCODE);
     expect(events).not.toContain('wheat flour');
     expect(events).not.toContain('This product lists');
+  });
+
+  it('reads a meat name locally: it reaches neither TypeSafe nor any event', async () => {
+    const fetchSpy = stubFetch({ product: MEAT_NAMED_PRODUCT, jev: CLEAR, claude: CLAUDE_UNDECLARED });
+    await scan();
+    const [, init] = calls(fetchSpy, 'typesafe')[0];
+    expect(JSON.parse(init.body).state).toEqual({ ingredients: MEAT_NAMED_PRODUCT.ingredients_text });
+    expect(init.body).not.toContain('Chicken');
+    const events = JSON.stringify([trackScan.mock.calls, trackScanFailure.mock.calls, trackEngineAudit.mock.calls]);
+    expect(events).toContain('meat_name');
+    expect(events).not.toContain('Chicken');
+    expect(events).not.toContain('Broth');
   });
 });

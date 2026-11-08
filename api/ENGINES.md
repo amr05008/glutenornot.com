@@ -27,7 +27,7 @@ Decision 007 explains why Jev exists, and decision 008 why the fallback exists. 
 | **Config** | `TYPESAFE_API_KEY` + `JEV_MODE` | `ANTHROPIC_API_KEY` | `OPENROUTER_API_KEY` |
 | **Off switch** | `JEV_MODE=off`, then redeploy | none: it's the judge of record | remove the key, then redeploy |
 | **Budget** | 800 ms, no retries, in parallel with Claude | 25 s per attempt, retries on overload | one 25 s attempt |
-| **Data sent** | ingredient text only | ingredient text; for a barcode, also the product name | same as direct |
+| **Data sent** | ingredient text only (the rule reads the product name on our server, for the meat-name check, and never sends it) | ingredient text; for a barcode, also the product name | same as direct |
 
 The two newer engines work on different axes, and that's what keeps this manageable:
 
@@ -55,6 +55,18 @@ What each `JEV_MODE` serves when Jev settles:
 | `shadow` (2026-09-25 to 2026-10-18) | Claude serves; audited | Claude serves; audited | Claude |
 | `unsafe` (Stage 1, live since 2026-10-18) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
 | `full` (Stage 2, gated) | **Jev serves**; Claude audits | **Jev serves**; Claude audits | Claude |
+
+Stage 2 has two preconditions: the F4 data gate, which cleared on 2026-10-18, and the meat-name check below, added 2026-11-07. Once both are live, `full` is still set by hand, followed by a redeploy.
+
+### The meat-name check (Jev's `safe` only)
+
+Claude reads the product name; Jev and the rule read only the ingredient list. Take a meat or poultry product whose list doesn't name the meat, such as a "Chicken Broth" listing water, salt and natural flavor. Claude calls it `caution` (`undeclared_source`: flavorings in a meat product). Jev's `meat_poultry` question can't see the meat, so without this check the rule could settle it `safe`.
+
+- **What it does:** `nameMarksMeat` (`api/barcode.js`) is the last check before a `safe` settles. A meat or poultry word in the Open Food Facts product name sends the scan to Claude, with `jev_outcome = fell_through` and `jev_via = meat_name`.
+- **Unsafe is untouched.** The unsafe branch runs first and never reads the name. The check isn't a code gate either, so Jev is still asked.
+- **Matching:** whole words on the lowercased, accent-stripped name ("ham" never matches inside "Champions"), in `GLUTEN_GRAIN_PATTERN`'s languages. German and Dutch compound stems (Hähnchenbrust, rookworst) match inside a word, each guarded against its known look-alikes.
+- **Privacy:** the name stays on our server. It isn't sent to TypeSafe, and no event records it; `meat_name` is the only trace.
+- **Cost:** on the bake-off's 996 records, replayed with Jev's recorded scores, it held 1 of 167 settled safes. That was "Bunte Pepperoni", German for peppers. Unsafe stayed at 342. A false hit costs only speed, because Claude answers.
 
 ## What triggers the fallback
 
@@ -108,7 +120,7 @@ How long a scan waits before the fallback answers:
    - A new route means a new `claude_via` value, and the same updates.
 4. **Only the direct Claude route decides `healthy` in the deep check.** Jev and the fallback are reported there but never flip it. The fallback gets its own check, `?deep=1&check=fallback`, and its own monitor. So UptimeRobot pages on the one thing that makes every verdict slower or riskier.
 5. **Every engine outside the judge of record can be switched off without a code change,** as in the off-switch row above. Changing `JEV_MODE` or either key takes effect only after a redeploy.
-6. **Each engine's data exposure is in the privacy policy.** Jev gets ingredient text only. Claude, by either route, gets ingredient text, plus the product name for a barcode. Nothing else goes to any of them.
+6. **Each engine's data exposure is in the privacy policy.** Jev gets ingredient text only. Claude, by either route, gets ingredient text, plus the product name for a barcode. Nothing else goes to any of them. The fast path's own code may read more on our server: the meat-name check reads the product name. Sending anything new to TypeSafe would be a privacy-policy change first.
 7. **Bumping a model moves both Claude routes.** Change `CLAUDE_MODEL`, then `OPENROUTER_MODEL`; the pairing test fails until both match. Then check that the new slug has Bedrock or Vertex endpoints: `GET https://openrouter.ai/api/v1/models/<slug>/endpoints`. A new Jev pin needs a re-grade (decision 007).
 
 ## Reading it

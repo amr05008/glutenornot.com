@@ -310,6 +310,81 @@ describe('decideFastPath: word belts on the text side of safe (grill, 2026-09-24
   });
 });
 
+describe('decideFastPath: a meat or poultry product name blocks safe (Stage 2 precondition)', () => {
+  // Jev and the rule read only the list; Claude also reads the name. A meat
+  // product whose list doesn't name the meat is Claude's undeclared_source.
+  const BROTH = 'water, salt, natural flavor, carrot juice concentrate, onion juice concentrate.';
+  const named = (product_name, over = {}) => off({ product_name, ingredients_text: BROTH, ...over });
+
+  it('holds a clean list for Claude when the name is meat, under its own via', () => {
+    expect(decideFastPath(named('Chicken Broth'), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+    // The same record without the name settles safe: the name is what holds it.
+    expect(decideFastPath(named(undefined), CLEAR).via).toBe('safe');
+  });
+
+  it.each([
+    // English: the words, plurals, processed meats, broths
+    'Chicken Broth', 'Beef Bouillon Cubes', 'Bone Broth', 'Turkey Gravy', 'Chicken Stock', 'Smoked HAM', 'Honey Ham Slices',
+    'Hams', 'Pork Rinds', 'Beef Jerky', 'Hot Dogs', 'Hot-Dog', 'Hotdogs', 'Pepperoni Slices', 'Uncured Bacon',
+    'Italian Sausages', 'Swedish Meatballs', 'Lamb Stew', 'Duck Confit', 'Lunch Meat', 'Veal Stock', 'Bison Burgers',
+    'Cheeseburger', 'Venison Sticks', 'Roast Beef Deli Slices', 'Beef Consommé',
+    // French
+    'Jambon de Paris', 'Blanc de poulet', 'Bouillon de bœuf', 'Rillettes du Mans', 'Saucisson sec', 'Lardons fumés',
+    'Fond de volaille', 'Merguez', 'Foie gras de canard',
+    // German: whole words and compounds, umlauts and their ue spellings
+    'Hähnchenbrust', 'Haehnchenbrust', 'Rindfleisch', 'Geflügelwurst', 'Hühnerbrühe', 'Huehnerbruehe', 'Weißwurst',
+    'Wiener Würstchen', 'Schinkenwürfel', 'Frühstücksspeck', 'Putenbrust', 'Schweinebauch', 'Rinderbrühe', 'Gemüsebrühe',
+    'Lammkeule', 'Truthahn Aufschnitt', 'Salami Milano',
+    // Dutch
+    'Rookworst', 'Kipfilet', 'Kip Kerrie', 'Rundvlees', 'Runderbouillon', 'Ontbijtspek', 'Kalkoenfilet', 'Gehaktballen',
+    'Varkenshaas',
+    // Spanish, Catalan, Portuguese
+    'Jamón Serrano', 'Pechuga de pollo', 'Chorizo picante', 'Caldo de pollo', 'Salchichas', 'Pavo en lonchas',
+    'Albóndigas', 'Pernil dolç', 'Botifarra', 'Brou de pollastre', 'Peito de frango', 'Linguiça', 'Chouriço', 'Presunto',
+    // Italian
+    'Prosciutto cotto', 'Brodo di carne', 'Mortadella Bologna', 'Petto di tacchino', 'Salsiccia', "'Nduja", 'Polpettine',
+    // Meat names in the bake-off's records that the first cut missed
+    'Salamisticks Klassik', 'Bio Pfännchen Frikadelle', 'Beans & Franks', 'bifteck', 'Poitrine paysanne',
+    'Knorr Soupe Liquide Poule Vermicelles', 'Jumbo BBQ Sparerib Gegrild', 'Baby Back Ribs', 'Party Schmalz',
+    'Carpaccio Rolletje', 'Frikandellen',
+  ])('%s blocks safe', (name) => {
+    expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+  });
+
+  it.each([
+    // Whole words only: the re-grill's false hit, and its neighbours
+    'Champions ganze Köpfe', 'Champignons', 'Graham Crackers', 'Chamomile Tea', 'Hamachi', 'Porcini Mushrooms',
+    'Beefsteak Tomatoes', 'Turkish Delight', 'Chickpeas', 'Carnauba Candy', 'Apollo Rice Cakes',
+    // Guarded stems, and look-alikes from the bake-off's replayed safes
+    'FLEISCHMANNS Unsalted Soft Spread', 'Fleischlos Grillen', 'Spekulatius Aufstrich', 'Speculaas', 'Spekjes',
+    'Speckled Butter Beans', 'Pate De Tomate Seco Con Aceitunas', 'burrata di bufala', 'Frischkäse aus Ziegenmilch',
+    'Hela Schaschlik Gewürz- Ketchup', 'Leche entera', 'Chili Seasoning Mix', 'Soup', "Frank's RedHot Sauce",
+    'Butterschmalz', 'Ribena Blackcurrant',
+    // No usable name
+    undefined, null, '', 42,
+  ])('%s still settles safe', (name) => {
+    expect(decideFastPath(named(name), CLEAR).via).toBe('safe');
+  });
+
+  it('never blocks unsafe: Jev\'s settled unsafe is unchanged by the name', () => {
+    const product = off({ product_name: 'Chicken Nuggets', ingredients_text: 'chicken, enriched wheat flour, salt.' });
+    expect(decideFastPath(product, WHEAT)).toEqual(decideFastPath({ ...product, product_name: undefined }, WHEAT));
+    expect(decideFastPath(product, WHEAT).via).toBe('unsafe');
+  });
+
+  it('is reported only when it alone stops a safe, so its count is the check\'s cost', () => {
+    expect(decideFastPath(named('Chicken Broth', { traces_tags: ['en:gluten'] }), CLEAR).via).toBe('gluten_tag');
+    expect(decideFastPath(named('Chicken Broth', { traces_tags: ['fr:non'] }), CLEAR).via).toBe('unknown_tag');
+    expect(decideFastPath(named('Chicken Noodle Soup', { ingredients_text: 'chicken, noodles, water.' }), CLEAR).via).toBe('pattern_match');
+    expect(decideFastPath(named('Chicken Broth'), { ...CLEAR, looks_complete: 0.3 }).via).toBe('list_quality');
+    expect(decideFastPath(named('Chicken Broth'), { ...CLEAR, meat_poultry: 0.9 }).via).toBe('not_clear');
+  });
+
+  it('is not a code gate: Jev is still asked, because the name never blocks unsafe', () => {
+    expect(fastPathGate(named('Chicken Broth'))).toBeNull();
+  });
+});
+
 describe('fastPathGate: records the fast path never judges (a hit means no Jev call)', () => {
   const unsafeRecord = { ingredients_text: 'wheat flour, salt.' };
 
@@ -411,5 +486,16 @@ describe('fast-path live-eval cases (offline shape check)', () => {
       expect(fastPathGate(c.product), c.id).toBeNull();
     }
     expect(new Set(JEV_FAST_PATH_CASES.map((c) => c.id)).size).toBe(JEV_FAST_PATH_CASES.length);
+  });
+
+  it('the meat-name cases are held by the name alone: with every question clear they fall through on meat_name', async () => {
+    const { JEV_FAST_PATH_CASES } = await import('./evals/jev-fast-path-cases.js');
+    const meat = JEV_FAST_PATH_CASES.filter((c) => c.product.product_name);
+    expect(meat.length).toBeGreaterThanOrEqual(2);
+    for (const c of meat) {
+      expect(c.expect, c.id).not.toBe('safe');
+      expect(decideFastPath(c.product, CLEAR), c.id).toEqual({ settled: false, via: 'meat_name' });
+      expect(decideFastPath({ ...c.product, product_name: undefined }, CLEAR).via, c.id).toBe('safe');
+    }
   });
 });

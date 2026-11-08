@@ -2,9 +2,10 @@
  * LIVE eval for the Jev fast path (decision 007, plans/jev-fast-path-2026-09-24.md
  * build item 9): the production decision — the code gates (fastPathGate), live
  * Jev (askJev, jev-1.13.0) and the rule (decideFastPath) — on the 30 frozen
- * barcode cases (BARCODE_GF_CLAIM_CASES + BARCODE_CALIBRATION_CASES) plus 10
+ * barcode cases (BARCODE_GF_CLAIM_CASES + BARCODE_CALIBRATION_CASES) plus 12
  * fast-path cases (jev-fast-path-cases.js: may-contain lines, soy sauce,
- * non-English and compound grain words, a free-text trace tag, two controls).
+ * non-English and compound grain words, a free-text trace tag, two controls,
+ * and two meat products only the product name shows).
  *
  * Pass mark: zero settled false-safe. No sample of a case that isn't expected
  * safe may settle `safe`. Falling through is always a pass (Claude answers
@@ -20,8 +21,9 @@
  *
  *   RUN_LIVE_EVALS=1 node --env-file=.env node_modules/vitest/vitest.mjs run --root web tests/api/evals/jev-fast-path.live.test.js
  *
- * Default: up to 40 Jev calls. FULL: up to 10 safe cases × 2 + 30 × 5 = 170
- * (≈ $0.009 of TypeSafe); gated cases make none. A case's samples run one
+ * Default: up to 42 Jev calls. FULL: up to 10 safe cases × 2 + 32 × 5 = 180
+ * (≈ $0.009 of TypeSafe); gated cases make none (25 of the 42 reach Jev, so
+ * 25 calls, or 107 on FULL). A case's samples run one
  * after another, so at most vitest's 5 concurrent cases are in flight: a 429
  * would fail "Jev answered" and spend the hour's one FULL slot. No Anthropic
  * call, no PostHog event, no lookup.
