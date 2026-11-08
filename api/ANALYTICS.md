@@ -51,6 +51,17 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
   four values (`normalizeRetakeAfter`, `api/_analytics.js`), dropped
   otherwise and never echoed. The flag rides on the next photo scan only and
   expires after 5 minutes on the client (spec T4).
+- `retake_withheld` (OCR only; present only when a `retake_after` photo would
+  have asked for a retake again). This is one retake per scan
+  (`plans/retake-one-max-2026-11-08.md`, from 2026-11-08):
+  - A photo carrying `retake_after` never gets `retake_reason` on its
+    response. It gets the amber card with the same verdict, and the reason
+    the server held back is recorded here.
+  - `retake_reason` keeps meaning "the response asked for a retake", so the
+    day-14 read's query 1 still counts screens delivered.
+  - **A loop is now `retake_withheld`**, not `retake_reason`, on a
+    `retake_after` scan.
+  - It's an enum from the same four values, never content.
 - `list_heading_word` (OCR only, only when `list_gate = no_heading`) —
   boolean: a heading term in any supported language appeared somewhere in the
   text, whatever its position or punctuation (`hasHeadingWord`, the gate's
@@ -416,6 +427,12 @@ What to do with the results:
   `retake_reason` set again outnumber those without): the screen is likely
   looping people. Make "See what I could read" the primary button, or flip T1
   to send `unclear` back to the amber card.
+  - **The 2026-11-08 read showed 6 of 7 coming back again**, below the
+    10-event floor. Aaron chose **one retake per scan** instead (plans/retake-one-max-2026-11-08.md).
+  - **From that deploy on, `retake_reason` can't come back on a
+    `retake_after` scan.** "Again" means `retake_withheld IS NOT NULL`, so
+    for windows that span the deploy, group 2a by
+    `coalesce(properties.retake_reason, properties.retake_withheld)`.
 - **2b is mostly `cancelled`:** retakes are being abandoned mid-upload — the
   weak-signal problem, not this screen. Note it for the weak-signal plan.
 - **`list_heading_word` true on half or more:** open the gate investigation.

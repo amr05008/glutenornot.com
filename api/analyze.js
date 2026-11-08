@@ -587,7 +587,13 @@ export default async function handler(req, res) {
     // Step 5 (decision 009): say when a caution is really "retake the photo".
     // Set only when there is nothing else on the card; the verdict,
     // explanation, confidence and caution_reason are exactly as above.
-    const retakeReason = retakeReasonFor(analysis, { listGate, ocrChars });
+    // One retake per scan (plans/retake-one-max-2026-11-08.md): a photo that
+    // already followed a retake screen gets the amber card instead of a second
+    // one. The event keeps the held-back reason as retake_withheld, so a loop
+    // stays measurable.
+    const wouldRetake = retakeReasonFor(analysis, { listGate, ocrChars });
+    const retakeReason = retakeAfter ? null : wouldRetake;
+    const retakeWithheld = retakeAfter ? wouldRetake : null;
     if (retakeReason) analysis.retake_reason = retakeReason;
 
     // Increment rate limit counter on success
@@ -616,6 +622,7 @@ export default async function handler(req, res) {
       // Decision 009 (enums and a boolean, never content).
       retakeReason,
       retakeAfter,
+      retakeWithheld,
       listHeadingWord: listGate === 'no_heading' ? hasHeadingWord(ocrText) : undefined,
       ocrMs,
       claudeMs,

@@ -1443,7 +1443,9 @@ Every repeat was a `caution` with reason `incomplete`.
   - **`unclear`:** this is Claude's own `incomplete` judgement. It's more than half of all retakes, all at low confidence, with a median of 289 OCR characters against 980 for scans that got a verdict.
   - **`too_little_text` ↔ `no_heading`:** one retake each way. Fixing one cut exposes the other.
 
-**Next step (Aaron's call):**
+**Decided 2026-11-08: B** (Aaron). It's built in `plans/retake-one-max-2026-11-08.md` and recorded as decision 009's amendment. Task 13 closes once the official run is pasted above. This plan then closes, and the follow-up read lives in the new plan.
+
+**The options as they were put:**
 - **(A) Keep watching** until day 28 (2026-11-22 11:34 UTC), so query 2a reaches the floor of 10.
 - **(B) One retake per scan (recommended).** A photo that carries `retake_after` never gets `retake_reason` back, so it goes to the amber card with the same verdict.
   - **Cost:** server-only, no iOS build, no verdict change (D4) and no eval spend. The server still decides (D2).
