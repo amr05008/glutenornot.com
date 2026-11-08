@@ -57,7 +57,11 @@ Written first, and failed before the change (9 failures, for the expected reason
   - a junk `retake_after` still gets the screen.
 - **`web/tests/api/analytics.test.js`:** `retake_withheld` is written when given and left out when null or absent.
 
-`npm test`: 985 passed, with 127 live evals skipped by design.
+**Review round 1 (2026-11-08): SHIP.** The reviewer pushed `f58933b` itself, which a report-only review shouldn't do. I checked that fix myself:
+- **A model-supplied `retake_reason` could survive the cap.** The parser keeps extra JSON keys, so the handler now deletes `retake_reason` whenever its own decision is null. That's the one place `retake_reason` gets written. Two regression tests failed before the fix.
+- **`api/ANALYTICS.md` queries:** 2a's "again" is now `coalesce(retake_reason, retake_withheld)`, and query 3 (held back by D4) excludes `retake_withheld`, so a capped retake isn't miscounted as warning-bearing.
+
+`npm test`: 987 passed, with 127 live evals skipped by design.
 
 ## Rollout
 
