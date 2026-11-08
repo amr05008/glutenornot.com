@@ -513,8 +513,8 @@ export default async function handler(req, res) {
   const geo = getClientGeo(req);
   // Decision 009: did this photo follow a retake screen? Validated against
   // the allowlist; anything else is dropped and never echoed. Read before the
-  // rate-limit branch so a rate-limited retake is tagged too. Analytics only —
-  // it never changes the analysis.
+  // rate-limit branch so a rate-limited retake is tagged too. It also caps a
+  // second retake screen, without changing the verdict or explanation.
   const retakeAfter = normalizeRetakeAfter(req.body?.retake_after);
   const rateLimitResult = checkRateLimit(clientIP);
 
@@ -594,7 +594,10 @@ export default async function handler(req, res) {
     const wouldRetake = retakeReasonFor(analysis, { listGate, ocrChars });
     const retakeReason = retakeAfter ? null : wouldRetake;
     const retakeWithheld = retakeAfter ? wouldRetake : null;
+    // This routing field belongs to the server, never the model. The parser
+    // preserves extra JSON keys, so omission must remove any model value too.
     if (retakeReason) analysis.retake_reason = retakeReason;
+    else delete analysis.retake_reason;
 
     // Increment rate limit counter on success
     incrementRateLimit(clientIP);

@@ -1664,6 +1664,26 @@ describe('analyze handler analytics', () => {
         );
       });
 
+      it('removes a model-supplied retake_reason on a capped retake', async () => {
+        stubScan({ ...claudeIncomplete, retake_reason: 'unclear' }, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: 'no_end' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(res.body.verdict).toBe('caution');
+        expect(res.body.explanation).toBe(claudeIncomplete.explanation);
+        expect(trackScan).toHaveBeenCalledWith(
+          expect.objectContaining({ retakeReason: null, retakeWithheld: 'unclear', retakeAfter: 'no_end' })
+        );
+      });
+
+      it('does not let a model-supplied retake_reason override the server on a readable result', async () => {
+        stubScan({ ...claudeSafe, retake_reason: 'unclear' }, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: 'unclear' });
+        expect(res.body.verdict).toBe('safe');
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(trackScan.mock.calls[0][0]).toMatchObject({ retakeReason: null, retakeWithheld: null });
+      });
+
       it('changes nothing but retake_reason: the second photo gets the same card a first photo would', async () => {
         stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
         const first = await post();
