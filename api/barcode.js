@@ -1090,6 +1090,83 @@ function textBlocksSafe(text) {
   );
 }
 
+// Stage 2's last precondition (decision 007, PR #35 review). Jev and the rule
+// read only the ingredient list; Claude also reads the product name. A meat or
+// poultry product whose list doesn't name the meat ("Chicken Broth": water,
+// salt, natural flavor) is Claude's `undeclared_source`, and Jev's
+// meat_poultry question can't see it. So a meat or poultry word in the name
+// blocks a fast `safe` (jev_via = 'meat_name'). The name is read here and
+// nowhere else on the fast path: it never goes to TypeSafe or into an event,
+// and Jev's unsafe never reads it.
+//
+// Whole words on the lowercased, accent-stripped name: "ham" never matches
+// inside "Champions" (the re-grill's false hit), "porc" inside "porcini",
+// "steak" inside "beefsteak tomatoes". The languages are
+// GLUTEN_GRAIN_PATTERN's, and each word carries its plural in that language
+// (the tests hold a singular-and-plural matrix per language). Left out because
+// they mostly name something else: chili (chili sauce), soup, pâté (tomato and
+// fish pâtés), goat and buffalo (cheeses), lomo (tuna loin), ragù (the brand),
+// hen and gallina (egg boxes), quail (quail eggs), vaca (La Vaca que ríe), peru
+// (the country), wild (Wildreis), Italian polli (the Polli brand; pollo stays).
+const MEAT_NAME_WORDS = [
+  // English
+  'meats?', 'poultry', 'beef', 'pork', 'chickens?', 'turkeys?', "lamb(?!['’]?s?\\s+lettuce)s?", 'mutton', 'veal',
+  'venison', 'bison', 'ducks?', 'goose', 'geese', 'rabbits?', 'boars?', 'oxtails?', 'capons?',
+  'bacon', 'hams?', 'sausages?', 'pepperonis?', 'chorizos?', 'prosciutt[oi]', 'pancett[ae]', 'jerky', 'hot[ -]?dogs?',
+  'frankfurters?', 'franks', 'wieners?', 'kielbasas?', 'bologna', 'bolognese', 'pastrami', 'meatballs?', 'meatloaf',
+  '(?:ham|cheese)?burgers?', 'steaks?', 'briskets?', '(?:spare ?)?ribs?', 'carpacc(?:io|i)', 'broths?', 'stocks?',
+  'gravy', 'consomme',
+  // French
+  'viandes?', 'volailles?', 'poulets?', 'poules?', 'boeufs?', 'porcs?', 'veaux?', 'agneaux?', 'moutons?',
+  'dind(?:e|on)s?', 'canards?', 'oies?', 'lapins?', 'coqs?', 'chapons?', 'pintades?', 'magrets?', 'gibiers?',
+  'chevreuils?', 'sangliers?', 'jambons?', 'saucisses?', 'saucissons?', 'lard(?:o|ons?)?', 'merguez', 'chipolatas?',
+  'andouill(?:e|ette)s?', 'boudins?', 'rillettes', 'foies?', 'biftecks?', 'poitrines?', 'charcuteries?',
+  'cassoulets?', 'bolognaises?',
+  // Spanish, Catalan, Portuguese (Catalan's -a plurals as -es)
+  'carnes?', 'carns?', 'carnitas', 'aves?', 'aviram', 'pollos?', 'pollastres?', 'frangos?', 'cerdos?', 'porcos?',
+  'pavos?', 'patos?', 'anecs?', 'gansos?', 'dindis?', 'conejos?', 'conills?', 'coelhos?', 'corderos?', 'cordeiros?',
+  'xais?', 'terneras?', 'vedell(?:a|es)', 'vitelas?', 'vacunos?', 'bue(?:y|yes)', 'jabali(?:es)?', 'javalis?',
+  'venados?', 'ciervos?', 'jamon(?:es)?', 'pernils?', 'presuntos?', 'fiambres?', 'salchichas?', 'salchichon(?:es)?',
+  'salsichas?', 'linguicas?', 'chouricos?', 'botifarr(?:a|es)', 'llonganiss(?:a|es)', 'fuets?', 'sobrasadas?',
+  'morcillas?', 'embutidos?', 'embotits?', 'tocinos?', 'pancetas?', 'albondigas?', 'almondegas?',
+  'hamburgu(?:esas?|er(?:es)?)', 'caldos?', 'brous?',
+  // Italian (pollo is above)
+  'pollame', 'tacchin[oi]', 'anatr[ae]', 'conigli(?:o)?', 'maial[ei]', 'manz[oi]', 'vitell[oi]', 'agnell[oi]',
+  'cinghial[ei]', 'cerv[oi]', 'salame', 'salsicc(?:ia|e)', 'mortadell[ae]', 'bresaol[ae]', 'guancial[ei]',
+  'cotechin[oi]', 'zampon[ei]', 'nduja', 'polpett(?:a|e|ine)', 'brod[oi]',
+  // German and Dutch, as whole words (their compounds are below)
+  'ente', 'gans', 'rund', 'lam', 'hammen',
+];
+// German and Dutch compound the meat into the word (Hähnchenbrust,
+// Rindfleisch, rookworst, kipfilet, Entenfond, Salamisticks), so these stems
+// match inside a word, each guarded against the look-alikes in the bake-off's
+// replayed safes and beyond (Fleischmann's margarine, Butterschmalz, speckled
+// beans, Dutch spekjes and speculaas, Entenmann's, fondant, Dutch lamsoor,
+// German "mit ganzen Haselnüssen"). The stems also carry the German and Dutch
+// plurals (Enten, Gänse, Kälber, Lämmer; kippen, ganzen-, kalveren, lammeren).
+// `fond` is the stock word, like bouillon: Entenfond, Kalbsfond, Wildfond.
+const MEAT_NAME_STEMS = [
+  // German
+  'fleisch(?!mann|los)', 'w(?:u|ue)rst', 'schinken', 'speck(?!le)', 'salami', 'h(?:a|ae)hnchen', 'h(?:u|ue)hn',
+  'gefl(?:u|ue)gel', 'truth(?:a|ae)hn', '(?<!\\p{L})pute', 'schwein', '(?<!\\p{L})rind', '(?<!\\p{L})k(?:a|ae)lb',
+  '(?<!\\p{L})enten(?!mann|d)', '(?<!\\p{L})g(?:a|ae)nse', '(?<!\\p{L})hammel', '(?<!\\p{L})hirsch', 'kaninchen',
+  '(?<!\\p{L})l(?:a|ae)mm', 'lyoner', '(?<!\\p{L})mett', 'frikadell', '(?<!butter)schmalz', 'br(?:u|ue)h(?:e|w)',
+  'bouillon', 'fond(?!\\p{L})',
+  // Dutch
+  'worst', 'spek(?!\\p{L})', 'vlees', 'gevogelte', 'biefstuk', '(?<!\\p{L})kip', 'kalkoen', 'varken', 'gehakt',
+  'frikandel', '(?<!\\p{L})runder', '(?<!\\p{L})eend', '(?<!\\p{L})ganzen(?=\\p{L})', '(?<!\\p{L})kal(?:f|ver)',
+  '(?<!\\p{L})lams(?!oor)', 'konijn',
+];
+const MEAT_NAME_PATTERN = new RegExp(
+  `(?<!\\p{L})(?:${MEAT_NAME_WORDS.join('|')})(?!\\p{L})|${MEAT_NAME_STEMS.join('|')}`,
+  'u'
+);
+
+/** Does the product name mark a meat or poultry product? Read locally, never sent. */
+function nameMarksMeat(name) {
+  return typeof name === 'string' && MEAT_NAME_PATTERN.test(stripAccents(name.toLowerCase()));
+}
+
 /**
  * The code gates, run before Jev is asked: a hit names why the fast path
  * doesn't judge this record, and Claude answers alone. Null means ask Jev.
@@ -1217,6 +1294,8 @@ function decideFastPath(product, scores) {
   const listOk = scores.is_ingredient_list >= LIST_OK_AT && scores.looks_complete >= LIST_OK_AT;
   const danger = Math.max(...JEV_DANGER.map((k) => scores[k]));
   if (!tagged && !worded && listOk && danger < CLEAR_BELOW) {
+    // Last, so `meat_name` counts exactly the fast safes the name check costs.
+    if (nameMarksMeat(product.product_name)) return { settled: false, via: 'meat_name' };
     return { settled: true, via: 'safe', result: fastPathResult('safe') };
   }
   let via = 'not_clear';

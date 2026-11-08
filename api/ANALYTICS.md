@@ -130,7 +130,13 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
     allowlist fails closed, so its count is that choice's cost),
     `pattern_match` (a grain, gluten, oats, cereal or teriyaki word in the
     list blocked safe), `list_quality` (not a complete ingredient list),
-    `not_clear` (a question scored ≥ 0.2), `wheat_sugar` (toggle T3). Skipped:
+    `not_clear` (a question scored ≥ 0.2), `wheat_sugar` (toggle T3),
+    `meat_name` (since 2026-11-07: the record cleared every other check for
+    `safe`, but the product name names meat or poultry, such as "Chicken
+    Broth". Jev never reads the name and Claude does, so a meat product
+    whose list doesn't name the meat goes to Claude. It's checked last, so
+    its count is exactly the fast safes the check costs. Only the value is
+    recorded, never the name). Skipped:
     `source` (not Open Food Facts), `no_text`, `gf_label`, `label_text`,
     `signal_note` (the code gates), `no_key`. Absent on `timeout` / `error`.
   - `jev_ms`: Jev's round-trip. Absent when Jev wasn't asked.
@@ -449,7 +455,7 @@ What to do with the results:
 
 ## Privacy invariant
 
-**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. The fast-path fields follow the same rule: `jev_via` names a code branch, and the templated explanation (which names the grain) never goes into an event. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
+**Never add the scanned barcode or product to these events.** The privacy policy promises "no record of what you scanned" — and a UPC resolves to a product name, so even the raw code is a record. The fast-path fields follow the same rule: `jev_via` names a code branch, and the templated explanation (which names the grain) never goes into an event. `meat_name` records only that the product-name check fired, never the name or the word that matched. Missed barcodes are visible only in ephemeral Vercel runtime logs. If a durable coverage metric is ever wanted, that's a deliberate privacy-policy amendment first, code second. The `barcode_recovery` `flow_id` is not an exception: it is random, minted per flow, and carries no product or device information — the recovery funnel is deliberately content-free.
 
 ## Excluding non-user traffic
 

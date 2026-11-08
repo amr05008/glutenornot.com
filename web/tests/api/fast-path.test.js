@@ -310,6 +310,157 @@ describe('decideFastPath: word belts on the text side of safe (grill, 2026-09-24
   });
 });
 
+describe('decideFastPath: a meat or poultry product name blocks safe (Stage 2 precondition)', () => {
+  // Jev and the rule read only the list; Claude also reads the name. A meat
+  // product whose list doesn't name the meat is Claude's undeclared_source.
+  const BROTH = 'water, salt, natural flavor, carrot juice concentrate, onion juice concentrate.';
+  const named = (product_name, over = {}) => off({ product_name, ingredients_text: BROTH, ...over });
+
+  it('holds a clean list for Claude when the name is meat, under its own via', () => {
+    expect(decideFastPath(named('Chicken Broth'), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+    // The same record without the name settles safe: the name is what holds it.
+    expect(decideFastPath(named(undefined), CLEAR).via).toBe('safe');
+  });
+
+  it.each([
+    // English: the words, plurals, processed meats, broths
+    'Chicken Broth', 'Beef Bouillon Cubes', 'Bone Broth', 'Turkey Gravy', 'Chicken Stock', 'Smoked HAM', 'Honey Ham Slices',
+    'Hams', 'Pork Rinds', 'Beef Jerky', 'Hot Dogs', 'Hot-Dog', 'Hotdogs', 'Pepperoni Slices', 'Uncured Bacon',
+    'Italian Sausages', 'Swedish Meatballs', 'Lamb Stew', 'Duck Confit', 'Lunch Meat', 'Veal Stock', 'Bison Burgers',
+    'Cheeseburger', 'Venison Sticks', 'Roast Beef Deli Slices', 'Beef Consommé',
+    // French
+    'Jambon de Paris', 'Blanc de poulet', 'Bouillon de bœuf', 'Rillettes du Mans', 'Saucisson sec', 'Lardons fumés',
+    'Fond de volaille', 'Merguez', 'Foie gras de canard',
+    // German: whole words and compounds, umlauts and their ue spellings
+    'Hähnchenbrust', 'Haehnchenbrust', 'Rindfleisch', 'Geflügelwurst', 'Hühnerbrühe', 'Huehnerbruehe', 'Weißwurst',
+    'Wiener Würstchen', 'Schinkenwürfel', 'Frühstücksspeck', 'Putenbrust', 'Schweinebauch', 'Rinderbrühe', 'Gemüsebrühe',
+    'Lammkeule', 'Truthahn Aufschnitt', 'Salami Milano',
+    // Dutch
+    'Rookworst', 'Kipfilet', 'Kip Kerrie', 'Rundvlees', 'Runderbouillon', 'Ontbijtspek', 'Kalkoenfilet', 'Gehaktballen',
+    'Varkenshaas',
+    // Spanish, Catalan, Portuguese
+    'Jamón Serrano', 'Pechuga de pollo', 'Chorizo picante', 'Caldo de pollo', 'Salchichas', 'Pavo en lonchas',
+    'Albóndigas', 'Pernil dolç', 'Botifarra', 'Brou de pollastre', 'Peito de frango', 'Linguiça', 'Chouriço', 'Presunto',
+    // Italian
+    'Prosciutto cotto', 'Brodo di carne', 'Mortadella Bologna', 'Petto di tacchino', 'Salsiccia', "'Nduja", 'Polpettine',
+    // Meat names in the bake-off's records that the first cut missed
+    'Salamisticks Klassik', 'Bio Pfännchen Frikadelle', 'Beans & Franks', 'bifteck', 'Poitrine paysanne',
+    'Knorr Soupe Liquide Poule Vermicelles', 'Jumbo BBQ Sparerib Gegrild', 'Baby Back Ribs', 'Party Schmalz',
+    'Carpaccio Rolletje', 'Frikandellen',
+  ])('%s blocks safe', (name) => {
+    expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+  });
+
+  // PR #47 review: the species names on their own, singular and plural, with no
+  // second meat or broth word in the name to carry the match.
+  it.each([
+    // English
+    'Roasted Chickens', 'Smoked Turkeys', 'Whole Ducks', 'Geese Rillons', 'Rabbit Terrine', 'Wild Boar Terrine',
+    'Oxtail Soup', 'Capon', 'Lambs',
+    // German
+    'Entenfond', 'Entenbrust', 'Ente süß-sauer', 'Kalbsfond', 'Kalbsleber', 'Rind Gulasch', 'Rindsuppe', 'Gänsebrust',
+    'Gaensebrust', 'Gans', 'Hammelkeule', 'Hirschgulasch', 'Kaninchenkeule', 'Wildfond', 'Gemüsefond',
+    // German sausages the bake-off's meat lists showed missing
+    'Paprika-Lyoner', 'Rauch Mettenden', 'Mett',
+    // Dutch
+    'Runderfond', 'Rund Rendang', 'Eendenborst', 'Kalfsfond', 'Lamsrack', 'Konijn in zoetzuur',
+    // French
+    'Cuisses de lapin', "Confit d'oie", 'Coq au vin', 'Civet de sanglier', 'Terrine de gibier', 'Magret fumé',
+    'Pintade', 'Chapon', 'Navarin de mouton', 'Chevreuil',
+    // Spanish, Catalan, Portuguese
+    'Conejo al ajillo', 'Conill', 'Coelho', 'Jabalí', 'Venado', 'Ciervo', 'Ganso', 'Chuletón de buey',
+    'Hamburguesa de vacuno', 'Hambúrguer', 'Hambúrgueres', 'Javali',
+    // Italian
+    'Coniglio', 'Cinghiale', 'Cervo',
+    // Round 2: plurals outside English
+    'Lam in saus', 'Canards confits', 'Conejos al ajillo', 'Frangos assados', 'Conigli', 'Conills',
+  ])('%s blocks safe (a species name alone)', (name) => {
+    expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+  });
+
+  // The morphology matrix: every species and core meat word, singular and
+  // plural, in each covered language (German with its ae/ue spellings).
+  const MEAT_WORD_FORMS = {
+    English: 'chicken chickens turkey turkeys duck ducks goose geese lamb lambs rabbit rabbits boar boars capon capons ' +
+      'oxtail oxtails ham hams sausage sausages steak steaks meatball meatballs burger burgers broth broths beef pork veal ' +
+      'mutton venison bison poultry',
+    French: 'poulet poulets poule poules volaille volailles canard canards dinde dindes dindon dindons oie oies lapin lapins ' +
+      'coq coqs chapon chapons pintade pintades bœuf bœufs boeuf veau veaux agneau agneaux mouton moutons porc porcs ' +
+      'sanglier sangliers chevreuil chevreuils gibier gibiers magret magrets jambon jambons saucisse saucisses viande ' +
+      'viandes foie foies',
+    Spanish: 'pollo pollos pavo pavos pato patos ganso gansos conejo conejos cerdo cerdos cordero corderos ternera terneras ' +
+      'buey bueyes vacuno vacunos jabalí jabalíes venado venados ciervo ciervos jamón jamones salchicha salchichas ' +
+      'albóndiga albóndigas hamburguesa hamburguesas caldo caldos carne carnes ave aves',
+    Catalan: 'pollastre pollastres ànec ànecs dindi dindis conill conills xai xais vedella vedelles pernil pernils ' +
+      'botifarra botifarres llonganissa llonganisses fuet fuets carn carns brou brous aviram',
+    Portuguese: 'frango frangos porco porcos pato patos coelho coelhos cordeiro cordeiros vitela vitelas javali javalis ' +
+      'presunto presuntos salsicha salsichas linguiça linguiças chouriço chouriços almôndega almôndegas hambúrguer ' +
+      'hambúrgueres',
+    Italian: 'pollo pollame tacchino tacchini anatra anatre coniglio conigli maiale maiali manzo manzi vitello vitelli ' +
+      'agnello agnelli cinghiale cinghiali cervo cervi salame salami salsiccia salsicce polpetta polpette brodo brodi ' +
+      'prosciutto prosciutti pancetta pancette mortadella mortadelle cotechino cotechini zampone zamponi bresaola ' +
+      'bresaole guanciale guanciali',
+    German: 'Huhn Hühner Huehner Hähnchen Ente Enten Gans Gänse Gaense Pute Puten Truthahn Truthähne Truthaehne Rind ' +
+      'Rinder Kalb Kälber Kaelber Lamm Lämmer Laemmer Schwein Schweine Hammel Hirsch Hirsche Kaninchen Wurst Würste ' +
+      'Wuerste Schinken Geflügel Frikadelle Frikadellen',
+    Dutch: 'kip kippen kalkoen kalkoenen eend eenden gans ganzenborst rund runderen kalf kalveren lam lammeren varken ' +
+      'varkens konijn konijnen worst worsten ham hammen biefstuk biefstukken gevogelte vlees',
+  };
+  it.each(Object.entries(MEAT_WORD_FORMS).flatMap(([language, forms]) => forms.split(' ').map((form) => [language, form])))(
+    '%s: %s blocks safe',
+    (_language, form) => {
+      expect(decideFastPath(named(form), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+    }
+  );
+
+  it.each([
+    // The new words' guards and look-alikes
+    "Entenmann's Little Bites", 'Leche entera sin lactosa', 'Chocolate Fondant', 'Fondue Savoyarde', 'Rundkornreis',
+    'Lamsoor', "Lamb's Lettuce", 'Lamb’s Lettuce', 'Lambs Lettuce', 'Fruchtgummi Schmetterlinge',
+    // Round 2's plurals and their look-alikes (German "ganzen" means whole)
+    'Vollmilch-Schokolade mit ganzen Haselnüssen', 'Cerveza sin alcohol', 'Zumo de manzana', 'Copos de avena',
+    'Avellanas tostadas', 'Patatas fritas', 'Lambrusco', 'Coquilles Saint-Jacques', 'Brousse du Rove',
+    'Polli Pesto alla Genovese',
+    // Left out on purpose: they mostly name something that isn't meat
+    'Wildreis', 'Huevos de gallinas camperas', 'Quail Eggs', 'La Vaca que ríe', 'Quinoa from Peru',
+  ])('%s still settles safe (a new word\'s look-alike, or a word left out)', (name) => {
+    expect(decideFastPath(named(name), CLEAR).via).toBe('safe');
+  });
+
+  it.each([
+    // Whole words only: the re-grill's false hit, and its neighbours
+    'Champions ganze Köpfe', 'Champignons', 'Graham Crackers', 'Chamomile Tea', 'Hamachi', 'Porcini Mushrooms',
+    'Beefsteak Tomatoes', 'Turkish Delight', 'Chickpeas', 'Carnauba Candy', 'Apollo Rice Cakes',
+    // Guarded stems, and look-alikes from the bake-off's replayed safes
+    'FLEISCHMANNS Unsalted Soft Spread', 'Fleischlos Grillen', 'Spekulatius Aufstrich', 'Speculaas', 'Spekjes',
+    'Speckled Butter Beans', 'Pate De Tomate Seco Con Aceitunas', 'burrata di bufala', 'Frischkäse aus Ziegenmilch',
+    'Hela Schaschlik Gewürz- Ketchup', 'Leche entera', 'Chili Seasoning Mix', 'Soup', "Frank's RedHot Sauce",
+    'Butterschmalz', 'Ribena Blackcurrant',
+    // No usable name
+    undefined, null, '', 42,
+  ])('%s still settles safe', (name) => {
+    expect(decideFastPath(named(name), CLEAR).via).toBe('safe');
+  });
+
+  it('never blocks unsafe: Jev\'s settled unsafe is unchanged by the name', () => {
+    const product = off({ product_name: 'Chicken Nuggets', ingredients_text: 'chicken, enriched wheat flour, salt.' });
+    expect(decideFastPath(product, WHEAT)).toEqual(decideFastPath({ ...product, product_name: undefined }, WHEAT));
+    expect(decideFastPath(product, WHEAT).via).toBe('unsafe');
+  });
+
+  it('is reported only when it alone stops a safe, so its count is the check\'s cost', () => {
+    expect(decideFastPath(named('Chicken Broth', { traces_tags: ['en:gluten'] }), CLEAR).via).toBe('gluten_tag');
+    expect(decideFastPath(named('Chicken Broth', { traces_tags: ['fr:non'] }), CLEAR).via).toBe('unknown_tag');
+    expect(decideFastPath(named('Chicken Noodle Soup', { ingredients_text: 'chicken, noodles, water.' }), CLEAR).via).toBe('pattern_match');
+    expect(decideFastPath(named('Chicken Broth'), { ...CLEAR, looks_complete: 0.3 }).via).toBe('list_quality');
+    expect(decideFastPath(named('Chicken Broth'), { ...CLEAR, meat_poultry: 0.9 }).via).toBe('not_clear');
+  });
+
+  it('is not a code gate: Jev is still asked, because the name never blocks unsafe', () => {
+    expect(fastPathGate(named('Chicken Broth'))).toBeNull();
+  });
+});
+
 describe('fastPathGate: records the fast path never judges (a hit means no Jev call)', () => {
   const unsafeRecord = { ingredients_text: 'wheat flour, salt.' };
 
@@ -411,5 +562,16 @@ describe('fast-path live-eval cases (offline shape check)', () => {
       expect(fastPathGate(c.product), c.id).toBeNull();
     }
     expect(new Set(JEV_FAST_PATH_CASES.map((c) => c.id)).size).toBe(JEV_FAST_PATH_CASES.length);
+  });
+
+  it('the meat-name cases are held by the name alone: with every question clear they fall through on meat_name', async () => {
+    const { JEV_FAST_PATH_CASES } = await import('./evals/jev-fast-path-cases.js');
+    const meat = JEV_FAST_PATH_CASES.filter((c) => c.product.product_name);
+    expect(meat.length).toBeGreaterThanOrEqual(2);
+    for (const c of meat) {
+      expect(c.expect, c.id).not.toBe('safe');
+      expect(decideFastPath(c.product, CLEAR), c.id).toEqual({ settled: false, via: 'meat_name' });
+      expect(decideFastPath({ ...c.product, product_name: undefined }, CLEAR).via, c.id).toBe('safe');
+    }
   });
 });
