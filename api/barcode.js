@@ -1102,39 +1102,52 @@ function textBlocksSafe(text) {
 // Whole words on the lowercased, accent-stripped name: "ham" never matches
 // inside "Champions" (the re-grill's false hit), "porc" inside "porcini",
 // "steak" inside "beefsteak tomatoes". The languages are
-// GLUTEN_GRAIN_PATTERN's. Left out because they mostly name something else:
-// chili (chili sauce), soup, pâté (tomato and fish pâtés), goat and buffalo
-// (cheeses), lomo (tuna loin), ragù (the brand).
+// GLUTEN_GRAIN_PATTERN's, and every language names its meat and poultry
+// species, singular and plural. Left out because they mostly name something
+// else: chili (chili sauce), soup, pâté (tomato and fish pâtés), goat and
+// buffalo (cheeses), lomo (tuna loin), ragù (the brand), hen and gallina (egg
+// boxes), quail (quail eggs), vaca (La Vaca que ríe), peru (the country), wild
+// (Wildreis).
 const MEAT_NAME_WORDS = [
   // English
-  'meats?', 'poultry', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'mutton', 'veal', 'venison', 'bison', 'duck', 'goose',
+  'meats?', 'poultry', 'beef', 'pork', 'chickens?', 'turkeys?', "lamb(?!['’]?s?\\s+lettuce)s?", 'mutton', 'veal',
+  'venison', 'bison', 'ducks?', 'goose', 'geese', 'rabbits?', 'boar', 'oxtails?', 'capons?',
   'bacon', 'hams?', 'sausages?', 'pepperoni', 'chorizos?', 'prosciutto', 'pancetta', 'jerky', 'hot[ -]?dogs?',
   'frankfurters?', 'franks', 'wieners?', 'kielbasa', 'bologna', 'bolognese', 'pastrami', 'meatballs?', 'meatloaf',
   '(?:ham|cheese)?burgers?', 'steaks?', 'brisket', '(?:spare ?)?ribs?', 'carpaccio', 'broths?', 'stock', 'gravy',
   'consomme',
   // French
-  'viandes?', 'volailles?', 'poulets?', 'poules?', 'boeuf', 'porcs?', 'veau', 'agneau', 'dinde', 'canard', 'jambons?',
+  'viandes?', 'volailles?', 'poulets?', 'poules?', 'boeuf', 'porcs?', 'veau', 'agneau', 'mouton', 'dinde', 'canard',
+  'oies?', 'lapins?', 'coqs?', 'chapons?', 'pintades?', 'magrets?', 'gibier', 'chevreuil', 'sanglier', 'jambons?',
   'saucisses?', 'saucissons?', 'lard(?:o|ons?)?', 'merguez', 'chipolatas?', 'andouill(?:e|ette)s?', 'boudins?',
   'rillettes', 'foie', 'biftecks?', 'poitrine', 'charcuterie', 'cassoulet', 'bolognaise',
   // Spanish, Catalan, Portuguese
   'carnes?', 'carn', 'carnitas', 'pollo', 'pollastre', 'frango', 'cerdo', 'porco', 'jamon', 'pernil', 'presunto',
   'fiambres?', 'salchichas?', 'salchichon', 'salsichas?', 'linguicas?', 'chouricos?', 'botifarras?', 'llonganissas?',
   'fuet', 'sobrasada', 'morcillas?', 'embutidos?', 'embotits?', 'tocino', 'panceta', 'pavo', 'ternera', 'vedella',
-  'vitela', 'cordero', 'cordeiro', 'xai', 'pato', 'anec', 'dindi', 'albondigas', 'almondegas', 'caldos?', 'brou',
+  'vitela', 'vacuno', 'buey', 'cordero', 'cordeiro', 'xai', 'pato', 'anec', 'ganso', 'dindi', 'conejo', 'conill',
+  'coelho', 'jabali', 'javali', 'venado', 'ciervo', 'hamburgu(?:esas?|er(?:es)?)', 'albondigas', 'almondegas',
+  'caldos?', 'brou',
   // Italian
-  'maiale', 'manzo', 'vitello', 'agnello', 'tacchino', 'anatra', 'pollame', 'salame', 'salsicc(?:ia|e)',
-  'mortadell[ae]', 'bresaola', 'guanciale', 'cotechino', 'zampone', 'nduja', 'polpett(?:a|e|ine)', 'brodo',
+  'maiale', 'manzo', 'vitello', 'agnello', 'tacchino', 'anatra', 'pollame', 'coniglio', 'cinghiale', 'cervo',
+  'salame', 'salsicc(?:ia|e)', 'mortadell[ae]', 'bresaola', 'guanciale', 'cotechino', 'zampone', 'nduja',
+  'polpett(?:a|e|ine)', 'brodo',
+  // German and Dutch, as whole words (their compounds are below)
+  'ente', 'gans', 'rund',
 ];
 // German and Dutch compound the meat into the word (Hähnchenbrust,
-// Rindfleisch, rookworst, kipfilet, Salamisticks), so these stems match inside
-// a word, each guarded against the look-alikes in the bake-off's replayed
-// safes and beyond (Fleischmann's margarine, Butterschmalz, speckled beans,
-// Dutch spekjes and speculaas).
+// Rindfleisch, rookworst, kipfilet, Entenfond, Salamisticks), so these stems
+// match inside a word, each guarded against the look-alikes in the bake-off's
+// replayed safes and beyond (Fleischmann's margarine, Butterschmalz, speckled
+// beans, Dutch spekjes and speculaas, Entenmann's, fondant, Dutch lamsoor).
+// `fond` is the stock word, like bouillon: Entenfond, Kalbsfond, Wildfond.
 const MEAT_NAME_STEMS = [
   'fleisch(?!mann|los)', 'w(?:u|ue)rst', 'worst', 'schinken', 'speck(?!le)', 'spek(?!\\p{L})', 'salami',
-  'h(?:a|ae)hnchen', 'h(?:u|ue)hn', 'gefl(?:u|ue)gel', 'truthahn', '(?<!\\p{L})pute', 'schwein', '(?<!\\p{L})rinder',
-  '(?<!\\p{L})lamm', 'frikadell', 'frikandel', '(?<!butter)schmalz', 'br(?:u|ue)h(?:e|w)', 'bouillon', 'vlees',
-  '(?<!\\p{L})kip', 'kalkoen', 'varken', 'gehakt',
+  'h(?:a|ae)hnchen', 'h(?:u|ue)hn', 'gefl(?:u|ue)gel', 'truthahn', '(?<!\\p{L})pute', 'schwein', '(?<!\\p{L})rind',
+  '(?<!\\p{L})kalb', '(?<!\\p{L})enten(?!mann|d)', '(?<!\\p{L})ga(?:e)?nse', '(?<!\\p{L})hammel', '(?<!\\p{L})hirsch',
+  'kaninchen', '(?<!\\p{L})lamm', 'lyoner', '(?<!\\p{L})mett', 'frikadell', 'frikandel', '(?<!butter)schmalz', 'br(?:u|ue)h(?:e|w)', 'bouillon',
+  'fond(?!\\p{L})', 'vlees', '(?<!\\p{L})kip', 'kalkoen', 'varken', 'gehakt', '(?<!\\p{L})runder', '(?<!\\p{L})eend',
+  '(?<!\\p{L})kalf', '(?<!\\p{L})lams(?!oor)', 'konijn',
 ];
 const MEAT_NAME_PATTERN = new RegExp(
   `(?<!\\p{L})(?:${MEAT_NAME_WORDS.join('|')})(?!\\p{L})|${MEAT_NAME_STEMS.join('|')}`,

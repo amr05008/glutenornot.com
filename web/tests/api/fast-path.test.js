@@ -351,6 +351,41 @@ describe('decideFastPath: a meat or poultry product name blocks safe (Stage 2 pr
     expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
   });
 
+  // PR #47 review: the species names on their own, singular and plural, with no
+  // second meat or broth word in the name to carry the match.
+  it.each([
+    // English
+    'Roasted Chickens', 'Smoked Turkeys', 'Whole Ducks', 'Geese Rillons', 'Rabbit Terrine', 'Wild Boar Terrine',
+    'Oxtail Soup', 'Capon', 'Lambs',
+    // German
+    'Entenfond', 'Entenbrust', 'Ente süß-sauer', 'Kalbsfond', 'Kalbsleber', 'Rind Gulasch', 'Rindsuppe', 'Gänsebrust',
+    'Gaensebrust', 'Gans', 'Hammelkeule', 'Hirschgulasch', 'Kaninchenkeule', 'Wildfond', 'Gemüsefond',
+    // German sausages the bake-off's meat lists showed missing
+    'Paprika-Lyoner', 'Rauch Mettenden', 'Mett',
+    // Dutch
+    'Runderfond', 'Rund Rendang', 'Eendenborst', 'Kalfsfond', 'Lamsrack', 'Konijn in zoetzuur',
+    // French
+    'Cuisses de lapin', "Confit d'oie", 'Coq au vin', 'Civet de sanglier', 'Terrine de gibier', 'Magret fumé',
+    'Pintade', 'Chapon', 'Navarin de mouton', 'Chevreuil',
+    // Spanish, Catalan, Portuguese
+    'Conejo al ajillo', 'Conill', 'Coelho', 'Jabalí', 'Venado', 'Ciervo', 'Ganso', 'Chuletón de buey',
+    'Hamburguesa de vacuno', 'Hambúrguer', 'Hambúrgueres', 'Javali',
+    // Italian
+    'Coniglio', 'Cinghiale', 'Cervo',
+  ])('%s blocks safe (a species name alone)', (name) => {
+    expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+  });
+
+  it.each([
+    // The new words' guards and look-alikes
+    "Entenmann's Little Bites", 'Leche entera sin lactosa', 'Chocolate Fondant', 'Fondue Savoyarde', 'Rundkornreis',
+    'Lamsoor', "Lamb's Lettuce", 'Lamb’s Lettuce', 'Lambs Lettuce', 'Fruchtgummi Schmetterlinge',
+    // Left out on purpose: they mostly name something that isn't meat
+    'Wildreis', 'Huevos de gallinas camperas', 'Quail Eggs', 'La Vaca que ríe', 'Quinoa from Peru',
+  ])('%s still settles safe (a new word\'s look-alike, or a word left out)', (name) => {
+    expect(decideFastPath(named(name), CLEAR).via).toBe('safe');
+  });
+
   it.each([
     // Whole words only: the re-grill's false hit, and its neighbours
     'Champions ganze Köpfe', 'Champignons', 'Graham Crackers', 'Chamomile Tea', 'Hamachi', 'Porcini Mushrooms',
