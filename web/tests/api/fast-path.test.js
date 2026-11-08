@@ -372,14 +372,55 @@ describe('decideFastPath: a meat or poultry product name blocks safe (Stage 2 pr
     'Hamburguesa de vacuno', 'Hambúrguer', 'Hambúrgueres', 'Javali',
     // Italian
     'Coniglio', 'Cinghiale', 'Cervo',
+    // Round 2: plurals outside English
+    'Lam in saus', 'Canards confits', 'Conejos al ajillo', 'Frangos assados', 'Conigli', 'Conills',
   ])('%s blocks safe (a species name alone)', (name) => {
     expect(decideFastPath(named(name), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
   });
+
+  // The morphology matrix: every species and core meat word, singular and
+  // plural, in each covered language (German with its ae/ue spellings).
+  const MEAT_WORD_FORMS = {
+    English: 'chicken chickens turkey turkeys duck ducks goose geese lamb lambs rabbit rabbits boar boars capon capons ' +
+      'oxtail oxtails ham hams sausage sausages steak steaks meatball meatballs burger burgers broth broths beef pork veal ' +
+      'mutton venison bison poultry',
+    French: 'poulet poulets poule poules volaille volailles canard canards dinde dindes dindon dindons oie oies lapin lapins ' +
+      'coq coqs chapon chapons pintade pintades bœuf bœufs boeuf veau veaux agneau agneaux mouton moutons porc porcs ' +
+      'sanglier sangliers chevreuil chevreuils gibier gibiers magret magrets jambon jambons saucisse saucisses viande ' +
+      'viandes foie foies',
+    Spanish: 'pollo pollos pavo pavos pato patos ganso gansos conejo conejos cerdo cerdos cordero corderos ternera terneras ' +
+      'buey bueyes vacuno vacunos jabalí jabalíes venado venados ciervo ciervos jamón jamones salchicha salchichas ' +
+      'albóndiga albóndigas hamburguesa hamburguesas caldo caldos carne carnes ave aves',
+    Catalan: 'pollastre pollastres ànec ànecs dindi dindis conill conills xai xais vedella vedelles pernil pernils ' +
+      'botifarra botifarres llonganissa llonganisses fuet fuets carn carns brou brous aviram',
+    Portuguese: 'frango frangos porco porcos pato patos coelho coelhos cordeiro cordeiros vitela vitelas javali javalis ' +
+      'presunto presuntos salsicha salsichas linguiça linguiças chouriço chouriços almôndega almôndegas hambúrguer ' +
+      'hambúrgueres',
+    Italian: 'pollo pollame tacchino tacchini anatra anatre coniglio conigli maiale maiali manzo manzi vitello vitelli ' +
+      'agnello agnelli cinghiale cinghiali cervo cervi salame salami salsiccia salsicce polpetta polpette brodo brodi ' +
+      'prosciutto prosciutti pancetta pancette mortadella mortadelle cotechino cotechini zampone zamponi bresaola ' +
+      'bresaole guanciale guanciali',
+    German: 'Huhn Hühner Huehner Hähnchen Ente Enten Gans Gänse Gaense Pute Puten Truthahn Truthähne Truthaehne Rind ' +
+      'Rinder Kalb Kälber Kaelber Lamm Lämmer Laemmer Schwein Schweine Hammel Hirsch Hirsche Kaninchen Wurst Würste ' +
+      'Wuerste Schinken Geflügel Frikadelle Frikadellen',
+    Dutch: 'kip kippen kalkoen kalkoenen eend eenden gans ganzenborst rund runderen kalf kalveren lam lammeren varken ' +
+      'varkens konijn konijnen worst worsten ham hammen biefstuk biefstukken gevogelte vlees',
+  };
+  it.each(Object.entries(MEAT_WORD_FORMS).flatMap(([language, forms]) => forms.split(' ').map((form) => [language, form])))(
+    '%s: %s blocks safe',
+    (_language, form) => {
+      expect(decideFastPath(named(form), CLEAR)).toEqual({ settled: false, via: 'meat_name' });
+    }
+  );
 
   it.each([
     // The new words' guards and look-alikes
     "Entenmann's Little Bites", 'Leche entera sin lactosa', 'Chocolate Fondant', 'Fondue Savoyarde', 'Rundkornreis',
     'Lamsoor', "Lamb's Lettuce", 'Lamb’s Lettuce', 'Lambs Lettuce', 'Fruchtgummi Schmetterlinge',
+    // Round 2's plurals and their look-alikes (German "ganzen" means whole)
+    'Vollmilch-Schokolade mit ganzen Haselnüssen', 'Cerveza sin alcohol', 'Zumo de manzana', 'Copos de avena',
+    'Avellanas tostadas', 'Patatas fritas', 'Lambrusco', 'Coquilles Saint-Jacques', 'Brousse du Rove',
+    'Polli Pesto alla Genovese',
     // Left out on purpose: they mostly name something that isn't meat
     'Wildreis', 'Huevos de gallinas camperas', 'Quail Eggs', 'La Vaca que ríe', 'Quinoa from Peru',
   ])('%s still settles safe (a new word\'s look-alike, or a word left out)', (name) => {

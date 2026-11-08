@@ -65,7 +65,7 @@ Claude reads the product name; Jev and the rule read only the ingredient list. T
 - **What it does:** `nameMarksMeat` (`api/barcode.js`) is the last check before a `safe` settles. A meat or poultry word in the Open Food Facts product name sends the scan to Claude, with `jev_outcome = fell_through` and `jev_via = meat_name`.
 - **Unsafe is untouched.** The unsafe branch runs first and never reads the name. The check isn't a code gate either, so Jev is still asked.
 - **Matching:** whole words on the lowercased, accent-stripped name ("ham" never matches inside "Champions"), in `GLUTEN_GRAIN_PATTERN`'s languages.
-  - Each language's meat and poultry species are covered, singular and plural (chickens, Ente, rund, lapin, conejo, coniglio), along with processed meats and the stock words (broth, bouillon, Brühe, fond, caldo, brodo).
+  - Each language's meat and poultry species are covered, singular and plural (chickens, Enten, lam, canards, conejos, conigli), along with processed meats and the stock words (broth, bouillon, Brühe, fond, caldo, brodo). `fast-path.test.js` holds the singular-and-plural matrix per language; a new word goes in with both forms.
   - German and Dutch compound stems (Hähnchenbrust, Entenfond, rookworst) match inside a word, each guarded against its known look-alikes.
   - Some words are left out because they mostly name something else, such as chili, soup, pâté, hen and gallina (egg boxes), and wild (Wildreis). The code comment has the full list and why.
   - What it misses (fish, pâtés, brand-only names) still has Jev's own `meat_poultry` question on the list. Close a gap test-first, with a look-alike control.
