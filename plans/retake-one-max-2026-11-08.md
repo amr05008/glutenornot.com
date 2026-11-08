@@ -1,6 +1,6 @@
 # One retake per scan
 
-**Status:** BUILT 2026-11-08 and up for review. It amends decision 009 (`.claude/decisions/009-retake-not-a-verdict.md`, "Amended 2026-11-08").
+**Status:** **LIVE since 2026-11-08 03:59 UTC.** PR #46 merged at 03:58:35 UTC as `9cafe67`, and the production check passed (see Rollout). The follow-up read is due about 2026-11-22. It amends decision 009 (`.claude/decisions/009-retake-not-a-verdict.md`, "Amended 2026-11-08").
 - **Server-only.** It goes live when Vercel deploys the merge, with no iOS build and no eval spend.
 - **Why:** this is option B from the retake day-14 read (`plans/retake-state-2026-10-11.md`, "Day-14 read"), which Aaron chose on 2026-11-08.
 
@@ -71,6 +71,9 @@ Written first, and failed before the change (9 failures, for the expected reason
      - plain, which should come back with `retake_reason: no_heading`;
      - with `retake_after: "no_heading"`, which should come back with no `retake_reason`, the same verdict and explanation, and `retake_withheld: no_heading` on its `scan` event.
    - Query PostHog with `refresh: force_blocking`. The `-rc` tag keeps both scans out of every read.
+   - **Done 2026-11-08 03:59 UTC. Passed.** The image was the 146-character no-heading list, rendered white on black with headless Chrome. Vision read all 146 characters.
+     - **03:59:24, plain:** `caution` / `incomplete` / low confidence, with `retake_reason: no_heading`. Its event had `list_gate: no_heading` and `retake_reason: no_heading`.
+     - **03:59:26, with `retake_after: "no_heading"`:** the same verdict, `caution_reason`, confidence and explanation, but **no `retake_reason`**. Its event had `retake_after: no_heading` and **`retake_withheld: no_heading`**, with no `retake_reason`.
 
 ## The follow-up read
 

@@ -406,7 +406,9 @@ builds, no Cupertino; `timestamp >=` the 1.5.1 public release time, read from
    `ocr`, mode `label`. Excluding `retake_withheld` keeps capped retakes out
    of the warning-bearing D4 count.
 4. **The diagnostic:** `list_heading_word` among `no_heading` scans from the
-   API merge onward, all clients.
+   API merge onward, all clients, still without `-rc` builds and Cupertino.
+   The 2026-11-08 early read missed that filter, and test builds made up
+   10 of its 18 rows.
 
 ```bash
 KEY=$(grep -m1 '^POSTHOG_PERSONAL_API_KEY=' .env | cut -d= -f2-)
@@ -424,7 +426,7 @@ SELECT properties.retake_after, properties.reason, count() FROM events WHERE eve
 -- 3. held back by D4 (T8)
 SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL AND properties.retake_withheld IS NULL
 -- 4. the diagnostic, all clients, from the API merge onward
-SELECT properties.list_heading_word, count() FROM events WHERE event='scan' AND properties.list_gate='no_heading' AND timestamp >= '<merge time>' GROUP BY 1
+SELECT properties.list_heading_word, count() FROM events WHERE event='scan' AND properties.list_gate='no_heading' AND timestamp >= '<merge time>' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.$geoip_city_name,'') != 'Cupertino' GROUP BY 1
 ```
 
 What to do with the results:

@@ -132,3 +132,9 @@ primary-button change (C).** `plans/retake-one-max-2026-11-08.md` has the detail
   card, or a fresh attempt, can be asked for a retake again.
 - **The loop alarm is measured by `retake_withheld`**, not by
   `retake_reason` (`api/ANALYTICS.md`).
+- **Shipped:** PR #46 merged 2026-11-08 at 03:58:35 UTC as `9cafe67`, and
+  Vercel served it by 03:59 UTC.
+  - Review found a model-supplied `retake_reason` could slip past the cap, so
+    the handler now always deletes it unless the server sets it.
+  - The production check passed: a `retake_after` photo got the same caution,
+    no `retake_reason`, and `retake_withheld` on its event.

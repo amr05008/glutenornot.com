@@ -1,5 +1,7 @@
 # Retake state: a photo we can't read fully is a retake, not a verdict
 
+**CLOSED 2026-11-08: day-14 read done; follow-up is `plans/retake-one-max-2026-11-08.md`.** (Official run 11:42 UTC, see "Day-14 read". Aaron chose B, one retake per scan, live 2026-11-08 03:59 UTC as PR #46.)
+
 **Status:** SPEC grilled to **SHIP** (round 7, 2026-10-11). **Implementation plan written 2026-10-16** — see "Implementation plan" at the end of this file. **Tasks 1–12 done:** implemented 2026-10-16, PR #43 merged and the API half verified on production the same day, and iOS 1.5.1 submitted to App Store review 2026-10-18 (build 2, tag `v1.5.1`). See Execution notes. **Left:** record the public release time once 1.5.1 is live, then the day-14 read (Task 13).
 
 **Review history** (Pi on gpt-6-sol, Herdr tab "grill retake spec"):
@@ -1352,7 +1354,7 @@ Then the query above (and its `scan_failed` twin) must show `retake_after: no_he
 
 ### Task 13: The day-14 read
 
-- [ ] Day 14 after the public release (day 28 if fewer than 20 retake responses): run the four queries from the spec's "The day-14 read" (Task 4 wrote them into `api/ANALYTICS.md`), paste the tables under **Day-14 read** below, apply "What to do with the results", then close this plan or open the follow-ups it names. Add the read's date to `ROADMAP.md` and `CLAUDE.md` so it isn't lost.
+- [x] **Done 2026-11-08** (official run 11:42 UTC, tables under "Day-14 read"; the follow-up is `plans/retake-one-max-2026-11-08.md`). Day 14 after the public release (day 28 if fewer than 20 retake responses): run the four queries from the spec's "The day-14 read" (Task 4 wrote them into `api/ANALYTICS.md`), paste the tables under **Day-14 read** below, apply "What to do with the results", then close this plan or open the follow-ups it names. Add the read's date to `ROADMAP.md` and `CLAUDE.md` so it isn't lost.
 
 ---
 
@@ -1402,8 +1404,10 @@ _Filled in while executing: deviations from the tasks above, the production veri
 
 ## Day-14 read
 
-**Early run: 2026-11-08 03:41 UTC**, 7.9 h before day 14. The official run after 11:34:52 UTC replaces these tables and notes anything that moved.
-- **Filters:** exactly the ones in `api/ANALYTICS.md`, release time `2026-10-25 11:34:52`. Query 4 counts from the PR #43 merge, `2026-10-16 16:29:07`, across all clients.
+**Official run: 2026-11-08 11:42 UTC**, 7 minutes after day 14 (rerun at 19:13 UTC, still unchanged).
+- **What moved since the 03:41 UTC early run:** nothing in queries 1–3. No retake photo arrived after one retake per scan went live at 03:59 UTC, so no retake has been capped (`retake_withheld`) yet.
+- **One correction, query 4:** its SQL in `api/ANALYTICS.md` had no `-rc` or Cupertino filter. 10 of the 18 rows it counted were test builds (TestFlight, plus the two 03:59 UTC production checks for PR #46). The early run's "2 of 16" was wrong. The real figure is below, and the SQL now excludes test builds and Cupertino.
+- **Filters:** exactly the ones in `api/ANALYTICS.md`, release time `2026-10-25 11:34:52`. Query 4 counts from the PR #43 merge, `2026-10-16 16:29:07`, across all clients (no `-rc`, no Cupertino).
 - **Day 14, not day 28:** there were 22 retake responses, at least the 20 the rule needs.
 - **Context:** 60 OCR scans from 24 devices on public 1.5.1. (Devices are IP hashes, so this overcounts people.)
 
@@ -1433,7 +1437,7 @@ Every repeat was a `caution` with reason `incomplete`.
 
 **3. Held back by D4 (T8):** 5, against 22 in query 1. That's small, so T8 stays as it is. This count also sizes the ROADMAP's "Free from" item: at most 5 in 14 days.
 
-**4. `list_heading_word` among `no_heading` blocks:** true on 2 of 16 (13%). That's under half, so no gate investigation.
+**4. `list_heading_word` among `no_heading` blocks:** true on 2 of 8 (25%). That's under half, so no gate investigation. (The early run said 2 of 16 because it counted 8 test-build scans.)
 
 **What it says:**
 - **The loop alarm doesn't formally fire.** Query 2a has 7 events, below the floor of 10. Read literally, the plan says to close.
@@ -1443,7 +1447,7 @@ Every repeat was a `caution` with reason `incomplete`.
   - **`unclear`:** this is Claude's own `incomplete` judgement. It's more than half of all retakes, all at low confidence, with a median of 289 OCR characters against 980 for scans that got a verdict.
   - **`too_little_text` ↔ `no_heading`:** one retake each way. Fixing one cut exposes the other.
 
-**Decided 2026-11-08: B** (Aaron). It's built in `plans/retake-one-max-2026-11-08.md` and recorded as decision 009's amendment. Task 13 closes once the official run is pasted above. This plan then closes, and the follow-up read lives in the new plan.
+**Decided 2026-11-08: B** (Aaron). It's built in `plans/retake-one-max-2026-11-08.md` and recorded as decision 009's amendment. The official run is pasted above, so Task 13 and this plan are closed. The follow-up read lives in the new plan.
 
 **The options as they were put:**
 - **(A) Keep watching** until day 28 (2026-11-22 11:34 UTC), so query 2a reaches the floor of 10.
