@@ -6,7 +6,11 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ⏳ v1.5.1 build 3 RESUBMITTED (2026-10-24), after build 2's rejection (2026-10-19)
+## ✅ v1.5.1 build 3 LIVE since 2026-10-25 11:34:52 UTC, after build 2's rejection (2026-10-19)
+
+**Live:**
+- **When:** the App Store released build 3 on 2026-10-25 at 11:34:52 UTC. That's its `currentVersionReleaseDate`, read 2026-11-08.
+- **Crashes:** through 2026-11-07, Sentry showed no launch or scene crashes on it.
 
 **Build 3 went to App Review 2026-10-24 ~07:01 ET (11:01 UTC)** from `main` at
 `e92def9`, submission `2e8fc8d5-49ec-4e16-b443-ecffa80cdcb3`, with a reply in
