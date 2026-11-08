@@ -101,3 +101,34 @@ Enums and a boolean only; validated server-side against one allowlist
   - **the diagnostic** — `list_heading_word` true on half or more of
     `no_heading` blocks: open a gate investigation with tester photos
     (decision 005's method), as its own PR.
+
+## Amended 2026-11-08: one retake per scan
+
+**The day-14 read** (`plans/retake-state-2026-10-11.md`, "Day-14 read"):
+- 22 retake responses went to public 1.5.1, 37% of its photo scans.
+- **6 of the 7 retake photos came back with another `retake_reason`.** Only
+  one reached a verdict.
+- That's below the loop alarm's floor of 10 events, but every reason looped:
+  - `no_end` → `no_end` twice. One device got three in two minutes. A package
+    whose list doesn't end in a full stop can't pass the gate however it's
+    photographed.
+  - `no_heading` ↔ `too_little_text`, one each way.
+  - `unclear` → `unclear` once.
+
+**Aaron chose option B over waiting for day 28 (A) and the spec's T1 flip or
+primary-button change (C).** `plans/retake-one-max-2026-11-08.md` has the details.
+
+**What changed:**
+- **The response:** a photo carrying `retake_after` (validated) never gets
+  `retake_reason`. It shows the amber card, with the same verdict,
+  explanation, confidence and `caution_reason` a first photo would get.
+- **The event:** it records the reason held back as `retake_withheld`.
+- **D2 holds:** the server still decides. It's server-only, so no app
+  release. Clients that never send `retake_after` (web, 1.5.0 and older) see
+  no change.
+- **D4 holds:** no verdict changes, and no eval spend.
+- **T4 now does double duty:** the client's flag lifetime, which is the next
+  photo within 5 minutes, also defines "one scan". A photo after the amber
+  card, or a fresh attempt, can be asked for a retake again.
+- **The loop alarm is measured by `retake_withheld`**, not by
+  `retake_reason` (`api/ANALYTICS.md`).

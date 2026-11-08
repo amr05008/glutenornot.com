@@ -51,6 +51,17 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
   four values (`normalizeRetakeAfter`, `api/_analytics.js`), dropped
   otherwise and never echoed. The flag rides on the next photo scan only and
   expires after 5 minutes on the client (spec T4).
+- `retake_withheld` (OCR only; present only when a `retake_after` photo would
+  have asked for a retake again). This is one retake per scan
+  (`plans/retake-one-max-2026-11-08.md`, from 2026-11-08):
+  - A photo carrying `retake_after` never gets `retake_reason` on its
+    response. It gets the amber card with the same verdict, and the reason
+    the server held back is recorded here.
+  - `retake_reason` keeps meaning "the response asked for a retake", so the
+    day-14 read's query 1 still counts screens delivered.
+  - **A loop is now `retake_withheld`**, not `retake_reason`, on a
+    `retake_after` scan.
+  - It's an enum from the same four values, never content.
 - `list_heading_word` (OCR only, only when `list_gate = no_heading`) —
   boolean: a heading term in any supported language appeared somewhere in the
   text, whatever its position or punctuation (`hasHeadingWord`, the gate's
@@ -129,8 +140,10 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
 
 **Request and response fields (decision 009).** `POST /api/analyze` accepts
 an optional `retake_after` in the JSON body (`{ image, retake_after }`),
-validated as above and analytics-only — it never changes the analysis. The
-response carries `retake_reason` when the app should show the retake screen
+validated as above. A valid value suppresses a second `retake_reason` and
+records any held-back reason as `retake_withheld`; it never changes the
+verdict, explanation, confidence or `caution_reason`. The response carries
+`retake_reason` when the app should show the retake screen
 instead of a verdict; the app branches only on a known value, like
 `result_reason`. Nothing else in the response changes. Web ignores both
 (spec T3); the barcode path never sets `retake_reason`.
@@ -384,11 +397,14 @@ builds, no Cupertino; `timestamp >=` the 1.5.1 public release time, read from
 2. **Retake outcomes, as two separate tables** — never summed into one ratio
    (the same attempt can produce a server `scan` and a client `scan_failed`):
    - 2a: retake `scan` events (`retake_after IS NOT NULL`), by `retake_after`
-     × verdict × `caution_reason` × whether `retake_reason` is set again;
+     × verdict × `caution_reason` × whether
+     `coalesce(retake_reason, retake_withheld)` is set (works across the cap's deploy);
    - 2b: retake `scan_failed` events, by `retake_after` × reason.
    - Retake rate = 2a's total ÷ query 1. Reported; no target.
 3. **Held back by D4** (T8): `scan` events with `caution_reason =
-   'incomplete'` and no `retake_reason`, method `ocr`, mode `label`.
+   'incomplete'` and neither `retake_reason` nor `retake_withheld`, method
+   `ocr`, mode `label`. Excluding `retake_withheld` keeps capped retakes out
+   of the warning-bearing D4 count.
 4. **The diagnostic:** `list_heading_word` among `no_heading` scans from the
    API merge onward, all clients.
 
@@ -399,23 +415,30 @@ SQL="SELECT properties.retake_reason AS r, count() FROM events WHERE event='scan
 curl -sS -X POST "https://us.posthog.com/api/projects/457245/query/" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
   -d "$(jq -n --arg q "$SQL" '{query:{kind:"HogQLQuery",query:$q},refresh:"force_blocking"}')" | jq -c '.results'
 # 2a. retake scans (never summed with 2b) — same curl
-SQL="SELECT properties.retake_after, properties.verdict, properties.caution_reason, properties.retake_reason IS NOT NULL AS again, count() FROM events WHERE event='scan' AND properties.platform='ios' AND properties.app_version >= '1.5.1' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.\$geoip_city_name,'') != 'Cupertino' AND timestamp >= '<1.5.1 public release time>' AND properties.retake_after IS NOT NULL GROUP BY 1,2,3,4"
+SQL="SELECT properties.retake_after, properties.verdict, properties.caution_reason, coalesce(properties.retake_reason, properties.retake_withheld) IS NOT NULL AS again, count() FROM events WHERE event='scan' AND properties.platform='ios' AND properties.app_version >= '1.5.1' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.\$geoip_city_name,'') != 'Cupertino' AND timestamp >= '<1.5.1 public release time>' AND properties.retake_after IS NOT NULL GROUP BY 1,2,3,4"
 ```
 
 ```sql
 -- 2b. retake failures
 SELECT properties.retake_after, properties.reason, count() FROM events WHERE event='scan_failed' AND <same filters> AND properties.retake_after IS NOT NULL GROUP BY 1,2
 -- 3. held back by D4 (T8)
-SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL
+SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL AND properties.retake_withheld IS NULL
 -- 4. the diagnostic, all clients, from the API merge onward
 SELECT properties.list_heading_word, count() FROM events WHERE event='scan' AND properties.list_gate='no_heading' AND timestamp >= '<merge time>' GROUP BY 1
 ```
 
 What to do with the results:
 - **The loop alarm** (in 2a, with at least 10 events, those with
-  `retake_reason` set again outnumber those without): the screen is likely
-  looping people. Make "See what I could read" the primary button, or flip T1
-  to send `unclear` back to the amber card.
+  `coalesce(retake_reason, retake_withheld)` set outnumber those without):
+  before the cap, the screen was likely looping people; after it, most retakes
+  still can't be read fully, though the second screen is withheld. Consider
+  flipping T1 to send `unclear` straight to the amber card.
+  - **The 2026-11-08 read showed 6 of 7 coming back again**, below the
+    10-event floor. Aaron chose **one retake per scan** instead (plans/retake-one-max-2026-11-08.md).
+  - **From that deploy on, `retake_reason` can't come back on a
+    `retake_after` scan.** "Again" means `retake_withheld IS NOT NULL`, so
+    for windows that span the deploy, group 2a by
+    `coalesce(properties.retake_reason, properties.retake_withheld)`.
 - **2b is mostly `cancelled`:** retakes are being abandoned mid-upload — the
   weak-signal problem, not this screen. Note it for the weak-signal plan.
 - **`list_heading_word` true on half or more:** open the gate investigation.

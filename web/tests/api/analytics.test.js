@@ -221,6 +221,16 @@ describe('buildScanProperties (retake — decision 009)', () => {
     expect(props).not.toHaveProperty('retake_after');
     expect(props).not.toHaveProperty('list_heading_word');
   });
+  // One retake per scan (plans/retake-one-max-2026-11-08.md).
+  it('records retake_withheld, the reason a second retake was held back', () => {
+    const props = buildScanProperties({ method: 'ocr', verdict: 'caution', retakeReason: null, retakeAfter: 'no_end', retakeWithheld: 'no_end' });
+    expect(props).toMatchObject({ retake_after: 'no_end', retake_withheld: 'no_end' });
+    expect(props).not.toHaveProperty('retake_reason');
+  });
+  it('omits retake_withheld when null or absent', () => {
+    expect(buildScanProperties({ method: 'ocr', verdict: 'caution', retakeWithheld: null })).not.toHaveProperty('retake_withheld');
+    expect(buildScanProperties({ method: 'ocr', verdict: 'safe' })).not.toHaveProperty('retake_withheld');
+  });
 });
 
 describe('buildScanFailureProperties (retake_after — decision 009)', () => {

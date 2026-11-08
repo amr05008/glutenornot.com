@@ -51,7 +51,7 @@ function normalizeRetakeAfter(raw) {
  * Build the PostHog event properties for a scan, omitting absent optional fields.
  * Pure — no I/O.
  */
-function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, claudeVia, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, retakeReason, retakeAfter, listHeadingWord, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
+function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSource, platform, appVersion, model, claudeVia, country, region, city, confidence, hadIngredientData, gfLabelPresent, imageKb, ocrChars, gfClaimPresent, listGate, cautionReason, retakeReason, retakeAfter, retakeWithheld, listHeadingWord, ocrMs, claudeMs, totalMs, engine, jevOutcome, jevVia, jevMs, lookupMs } = {}) {
   const props = { method, verdict };
   if (mode != null) props.mode = mode;
   if (detectedLanguage != null) props.detected_language = detectedLanguage;
@@ -118,6 +118,12 @@ function buildScanProperties({ method, mode, verdict, detectedLanguage, dataSour
   // app_version.
   if (retakeReason != null) props.retake_reason = retakeReason;
   if (retakeAfter != null) props.retake_after = retakeAfter;
+  // One retake per scan (plans/retake-one-max-2026-11-08.md): the photo
+  // already followed a retake screen and would have asked for another, so the
+  // response showed the amber card instead. The reason that was held back,
+  // from RETAKE_REASONS. retake_reason stays "what the response asked for", so
+  // a loop is retake_reason OR retake_withheld on a retake_after scan.
+  if (retakeWithheld != null) props.retake_withheld = retakeWithheld;
   // Only when list_gate = no_heading (T5): did an ingredients-heading word in
   // any supported language appear anywhere in the text, whatever its position
   // or punctuation? A boolean from a server-side regex, never the text. Its
@@ -319,6 +325,7 @@ function anonId(ip) {
  * @param {'oats'|'may_contain'|'conflict'|'undeclared_source'|'incomplete'|'other'} [input.cautionReason] label cautions only
  * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeReason] OCR path only: the response asked for a retake, and why (decision 009)
  * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeAfter]  OCR path only: this photo followed a retake screen for that reason (decision 009)
+ * @param {'no_heading'|'no_end'|'too_little_text'|'unclear'} [input.retakeWithheld] OCR path only: a retake photo would have asked for another retake; the amber card showed instead (one retake per scan)
  * @param {boolean} [input.listHeadingWord] OCR path, list_gate = no_heading only: a heading word appeared anywhere in the text (decision 009, T5)
  * @param {boolean} [input.gfLabelPresent]  Barcode path only: the record carried a gluten-free label tag
  * @param {number} [input.ocrMs]            OCR path only: Vision round-trip in ms

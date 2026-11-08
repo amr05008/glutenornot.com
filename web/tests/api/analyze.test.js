@@ -1639,6 +1639,82 @@ describe('analyze handler analytics', () => {
         expect(res.body).not.toHaveProperty('retake_after');
       }
     });
+
+    // One retake per scan (plans/retake-one-max-2026-11-08.md): a photo that
+    // already followed a retake screen never gets a second one. It shows the
+    // amber card with the same verdict, and the event records the reason that
+    // was held back, so the loop alarm stays readable.
+    describe('one retake per scan', () => {
+      const NO_END_TEXT = 'INGREDIENTS: ' + NO_HEADING_TEXT.slice(0, -1) + ', and';
+
+      it.each([
+        ['no_heading', () => stubScan(claudeSafe, ocr(NO_HEADING_TEXT))],
+        ['no_end', () => stubScan(claudeSafe, ocr(NO_END_TEXT))],
+        ['too_little_text', () => stubScan(claudeSafe, ocr('GF!'))],
+        ['unclear', () => stubScan(claudeIncomplete, OCR_TEXT_FULL_LABEL)],
+      ])('withholds a second retake (%s) and records it as retake_withheld', async (reason, stub) => {
+        stub();
+        const res = await post({ image: 'base64data', retake_after: 'no_end' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(res.body.verdict).toBe('caution');
+        expect(res.body.caution_reason).toBe('incomplete');
+        expect(trackScan).toHaveBeenCalledWith(
+          expect.objectContaining({ retakeReason: null, retakeWithheld: reason, retakeAfter: 'no_end' })
+        );
+      });
+
+      it('removes a model-supplied retake_reason on a capped retake', async () => {
+        stubScan({ ...claudeIncomplete, retake_reason: 'unclear' }, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: 'no_end' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(res.body.verdict).toBe('caution');
+        expect(res.body.explanation).toBe(claudeIncomplete.explanation);
+        expect(trackScan).toHaveBeenCalledWith(
+          expect.objectContaining({ retakeReason: null, retakeWithheld: 'unclear', retakeAfter: 'no_end' })
+        );
+      });
+
+      it('does not let a model-supplied retake_reason override the server on a readable result', async () => {
+        stubScan({ ...claudeSafe, retake_reason: 'unclear' }, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: 'unclear' });
+        expect(res.body.verdict).toBe('safe');
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(trackScan.mock.calls[0][0]).toMatchObject({ retakeReason: null, retakeWithheld: null });
+      });
+
+      it('changes nothing but retake_reason: the second photo gets the same card a first photo would', async () => {
+        stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
+        const first = await post();
+        stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
+        const second = await post({ image: 'base64data', retake_after: 'no_heading' });
+        const { retake_reason: firstReason, ...firstCard } = first.body;
+        expect(firstReason).toBe('no_heading');
+        expect(second.body).toEqual(firstCard);
+      });
+
+      it('a first photo withholds nothing', async () => {
+        stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
+        const res = await post();
+        expect(res.body.retake_reason).toBe('no_heading');
+        expect(trackScan.mock.calls[0][0].retakeWithheld).toBeNull();
+      });
+
+      it('a retake photo that reaches a verdict withholds nothing', async () => {
+        stubScan(claudeSafe, OCR_TEXT_FULL_LABEL);
+        const res = await post({ image: 'base64data', retake_after: 'unclear' });
+        expect(res.body.verdict).toBe('safe');
+        expect(trackScan.mock.calls[0][0].retakeWithheld).toBeNull();
+      });
+
+      it('a junk retake_after is not a retake: the photo still gets the screen', async () => {
+        stubScan(claudeSafe, ocr(NO_HEADING_TEXT));
+        const res = await post({ image: 'base64data', retake_after: 'nope' });
+        expect(res.body.retake_reason).toBe('no_heading');
+        expect(trackScan.mock.calls[0][0].retakeWithheld).toBeNull();
+      });
+    });
   });
 });
 

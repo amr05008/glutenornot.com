@@ -1395,8 +1395,62 @@ _Filled in while executing: deviations from the tasks above, the production veri
     - The response path was already verified positively in Task 11. This confirms it on a device.
   - **Finding, for the day-14 read (T8): "free from" lines block the retake screen.** The first heading-cut photos (06:23:33, 06:24:13) hit the gate (`list_gate: no_heading`) but stayed on the amber card. Claude had put the package's "Free from 8 major allergens (includes wheat)" into `allergen_warnings`, and any warning row keeps the amber card (`retakeReasonFor`). Gluten-free products often carry such lines, so query 3 (held back by D4) will include these. The card also shows the line under "ALLERGEN WARNINGS" with a ⚠, which reads like a warning ("…includes wheat"), and that predates 1.5.1. Fixing it is server-only (Vercel, no iOS build) but touches the prompt, so it needs the eval gate and its own PR. Size it with the day-14 read.
   - **Not a bug: close-up blur.** expo-camera uses the physical wide-angle lens, which can't focus much closer than about 20 cm, and it has no macro switching (runbook Notes).
-- **Left:** record `currentVersionReleaseDate` here once 1.5.1 is public, and add the day-14 date to `ROADMAP.md`. Then Task 13 (the day-14 read, counted from that time).
+- **1.5.1 went public 2026-10-25 11:34:52 UTC.** That's `currentVersionReleaseDate` from the iTunes lookup, read 2026-11-08.
+  - It's build 3. Build 2 was rejected 2026-10-19 under 2.1(a) for the iOS 27 launch crash, and build 3 (the UIScene fix, PR #45) was resubmitted 2026-10-24.
+  - It's the `timestamp >=` for the day-14 read, so **day 14 is 2026-11-08 11:34:52 UTC**.
+  - Every `1.5.1` event before that time came from TestFlight devices, not the public. The read's time filter already drops them.
 
 ## Day-14 read
 
-_Filled in by Task 13._
+**Early run: 2026-11-08 03:41 UTC**, 7.9 h before day 14. The official run after 11:34:52 UTC replaces these tables and notes anything that moved.
+- **Filters:** exactly the ones in `api/ANALYTICS.md`, release time `2026-10-25 11:34:52`. Query 4 counts from the PR #43 merge, `2026-10-16 16:29:07`, across all clients.
+- **Day 14, not day 28:** there were 22 retake responses, at least the 20 the rule needs.
+- **Context:** 60 OCR scans from 24 devices on public 1.5.1. (Devices are IP hashes, so this overcounts people.)
+
+**1. Retake responses delivered:** 22, which is 37% of OCR scans on public 1.5.1.
+
+| `retake_reason` | n | devices |
+|---|---|---|
+| `unclear` | 12 | 8 |
+| `no_end` | 4 | 2 |
+| `no_heading` | 3 | 2 |
+| `too_little_text` | 3 | 3 |
+
+**2a. Retake scans:** 7, so the retake rate is 7 / 22 = 32%. Six of the seven came back with another `retake_reason`.
+
+| `retake_after` | came back as | n |
+|---|---|---|
+| `no_end` | `no_end` | 2 |
+| `no_end` | `unclear` | 1 |
+| `no_heading` | `too_little_text` | 1 |
+| `too_little_text` | `no_heading` | 1 |
+| `unclear` | `unclear` | 1 |
+| `unclear` | `safe` (a verdict) | 1 |
+
+Every repeat was a `caution` with reason `incomplete`.
+
+**2b. Retake failures:** none. Nobody abandoned a retake mid-upload, so the weak-signal plan gets no note.
+
+**3. Held back by D4 (T8):** 5, against 22 in query 1. That's small, so T8 stays as it is. This count also sizes the ROADMAP's "Free from" item: at most 5 in 14 days.
+
+**4. `list_heading_word` among `no_heading` blocks:** true on 2 of 16 (13%). That's under half, so no gate investigation.
+
+**What it says:**
+- **The loop alarm doesn't formally fire.** Query 2a has 7 events, below the floor of 10. Read literally, the plan says to close.
+- **But the direction is 6 to 1 the wrong way.** Only one retake in seven reached a verdict.
+- **Each reason has its own loop:**
+  - **`no_end`:** the gate wants a full stop at the end of a line after the heading. A package whose list doesn't end in one can never pass, however many retakes the user takes. One device in Tripoli got `no_end` three times in two minutes on 2026-10-30, at 167–211 characters each.
+  - **`unclear`:** this is Claude's own `incomplete` judgement. It's more than half of all retakes, all at low confidence, with a median of 289 OCR characters against 980 for scans that got a verdict.
+  - **`too_little_text` ↔ `no_heading`:** one retake each way. Fixing one cut exposes the other.
+
+**Decided 2026-11-08: B** (Aaron). It's built in `plans/retake-one-max-2026-11-08.md` and recorded as decision 009's amendment. Task 13 closes once the official run is pasted above. This plan then closes, and the follow-up read lives in the new plan.
+
+**The options as they were put:**
+- **(A) Keep watching** until day 28 (2026-11-22 11:34 UTC), so query 2a reaches the floor of 10.
+- **(B) One retake per scan (recommended).** A photo that carries `retake_after` never gets `retake_reason` back, so it goes to the amber card with the same verdict.
+  - **Cost:** server-only, no iOS build, no verdict change (D4) and no eval spend. The server still decides (D2).
+  - **Effect:** every loop type stops after one retake, while the first retake stays.
+  - **Keep it measurable:** the `scan` event still records the reason the server held back, so the loop alarm can still be read.
+- **(C) The spec's own fixes:**
+  - flip T1 so `unclear` goes to the amber card. That's server-only and removes 12 of the 22 retakes, but not the `no_end` loop;
+  - or make "See what I could read" the main button, which needs an iOS build.
