@@ -56,7 +56,7 @@ What each `JEV_MODE` serves when Jev settles:
 | `unsafe` (Stage 1, live since 2026-10-18) | **Jev serves**; Claude audits | Claude serves; audited | Claude |
 | `full` (Stage 2, gated) | **Jev serves**; Claude audits | **Jev serves**; Claude audits | Claude |
 
-Stage 2 has two preconditions: the F4 data gate, which cleared on 2026-10-18, and the meat-name check below, added 2026-11-07. Once both are live, `full` is still set by hand, followed by a redeploy.
+Stage 2 has two preconditions: the F4 data gate, which cleared on 2026-10-18, and the meat-name check below, live since 2026-11-08 (PR #47). Both are met. `full` is still set by hand, followed by a redeploy.
 
 ### The meat-name check (Jev's `safe` only)
 

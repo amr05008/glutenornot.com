@@ -131,7 +131,8 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
     `pattern_match` (a grain, gluten, oats, cereal or teriyaki word in the
     list blocked safe), `list_quality` (not a complete ingredient list),
     `not_clear` (a question scored ≥ 0.2), `wheat_sugar` (toggle T3),
-    `meat_name` (since 2026-11-07: the record cleared every other check for
+    `meat_name` (since 2026-11-08 ~19:53 UTC, PR #47's deploy; it's
+    recorded in every `JEV_MODE`, Stage 1 too: the record cleared every other check for
     `safe`, but the product name names meat or poultry, such as "Chicken
     Broth". Jev never reads the name and Claude does, so a meat product
     whose list doesn't name the meat goes to Claude. It's checked last, so

@@ -1,7 +1,7 @@
 # 007 — Jev answers first on Open Food Facts barcodes, in stages, with Claude auditing every verdict
 
 **Date**: 2026-09-24
-**Status**: Accepted (Aaron approved the plan, 2026-09-24: "ive read nothing here that gives me pause about jev + opus"). Built in PR #35 (branch `jev-fast-path-2026-09-24`); ships with `JEV_MODE=off`. Shadow from 2026-09-25; Stage 1 (`unsafe`) live since 2026-10-18.
+**Status**: Accepted (Aaron approved the plan, 2026-09-24: "ive read nothing here that gives me pause about jev + opus"). Built in PR #35 (branch `jev-fast-path-2026-09-24`); ships with `JEV_MODE=off`. Shadow from 2026-09-25; Stage 1 (`unsafe`) live since 2026-10-18. Both Stage 2 preconditions met on 2026-11-08 (F4 on 2026-10-18; the meat-name check in PR #47, merged as `6f64f1f`); `full` waits on Aaron's switch.
 **Related**: `plans/jev-fast-path-2026-09-24.md` (F1–F7, T1–T5), `plans/barcode-bakeoff-2026-09-24.md` (the evidence), `plans/barcode-speed-2026-09-24.md` (why speed), decisions 004 and 006 (the policy Jev is held to); `api/ENGINES.md` (how Jev combines with Claude and decision 008's fallback)
 
 ## Context
@@ -148,6 +148,15 @@ On the barcode path, for Open Food Facts records only:
     - 20 samples settled (10 safe, 10 unsafe), and every sample of a case
       gave the same outcome;
     - 17 cases were gated before Jev; p50 137 ms, p95 341 ms from a Mac.
+  - **FULL run for the meat-name check** (2026-11-08, PR #47's merge gate,
+    on `743fae1`):
+    - 42 cases, 107 Jev samples: **0 settled false-safe**; the same 20
+      samples settled as on 2026-09-24, and 17 cases were gated;
+    - the two new cases, F11 "Chicken Broth" and F12 "Hühnerbrühe", fell
+      through on `meat_name` in all 5 samples each. Live Jev cleared both
+      clean lists every time, so the name check is the only thing holding
+      them;
+    - p50 99 ms, p95 172 ms from a Mac.
 
 ## Costs and risks
 
@@ -171,8 +180,9 @@ On the barcode path, for Open Food Facts records only:
     - It needs word boundaries: the re-grill's one hit in the 167 replayed
       safes was a false "ham" inside "Champions".
   - Stage 1 is unaffected, because it never serves a Jev `safe`.
-  - **Built 2026-11-07** (branch `jev-meat-name-2026-11-07`):
+  - **Built 2026-11-07, shipped 2026-11-08** (PR #47, merged as `6f64f1f`):
     - `nameMarksMeat` in `decideFastPath` is the last check before `safe`, and a hit is recorded as `jev_via = meat_name`;
+    - Pi's review took 3 rounds. Rounds 1 and 2 found missing species names and non-English plurals (Entenfond, Canards confits, Conigli). The vocabulary became a per-language singular-and-plural matrix in the tests;
     - on the 996-record replay it held 1 of 167 settled safes ("Bunte Pepperoni", German for peppers), and unsafe was unchanged;
     - `api/ENGINES.md` has the details.
 - **A second engine**: every future verdict rule is written in the prompt and
