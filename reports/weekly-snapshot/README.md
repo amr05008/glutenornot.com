@@ -5,8 +5,9 @@ HTML file (fonts embedded as data URIs, no external requests) in the app's
 "Clinic" design system. It is published as a Claude artifact and refreshed by a
 scheduled Monday-morning routine:
 
-- **Artifact URL (stable, update in place — never mint a new one):**
-  `https://claude.ai/code/artifact/792616b2-6d2c-48eb-9e08-06edd1bed6e5`
+- **Artifact URL (stable, update in place — never mint a new one):** kept out
+  of this public repo. It is in the routine's own prompt and in `CLAUDE.local.md`
+  (gitignored) in Aaron's main checkout.
 - **Data sources:** PostHog `scan` / `scan_failed` events (project 457245) and
   Sentry (`aaron-roy` org, `glutenornot-mobile` project).
 

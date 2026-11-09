@@ -42,6 +42,9 @@ Thumbs.db
 /reports/
 /plans/
 
+# Private project notes for Claude Code (links that stay out of this public repo)
+CLAUDE.local.md
+
 # Project ideas (personal notes)
 PROJECT_IDEAS.md
 .env*.local
