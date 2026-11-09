@@ -1,6 +1,6 @@
 # GlutenOrNot
 
-GlutenOrNot instantly checks if packaged foods are safe for people with celiac disease. Point your camera at an barcode, ingredient label or restaurant menu and get a clear verdict in seconds.
+GlutenOrNot instantly checks if packaged foods are safe for people with celiac disease. Point your camera at a barcode, ingredient label or restaurant menu and get a clear verdict in seconds.
 
 The app is free and requires no account creation to use. Here is a [quick walkthrough of GlutenOrNot](https://www.youtube.com/watch?v=g6qqkZzcHJE) as it works in Sept. 2026, scanning barcodes, ingredient labels and a restaurant menu.
 
