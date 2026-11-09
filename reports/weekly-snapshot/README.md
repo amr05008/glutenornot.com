@@ -25,6 +25,22 @@ after a per-person cluster triage that excludes App Store review / RC-testing
 traffic, 1–3 recommendations). The analyst content is Discord-only — it never
 adds sections to this page, and the update contract below is unchanged by it.
 
+Since 2026-11-09 the analyst read also carries a **Reviews** line: the
+`review_prompt` funnel since 1.5.1 (`api/ANALYTICS.md`), plus public App Store
+rating and written-review counts per storefront from `itunes.apple.com/lookup`
+and the customer-reviews RSS feed. Both are compared against the 2026-11-09
+baseline: ratings US 3, GB 1, CA/AU/LY 0; written reviews US 2 (both Feb 2026,
+v1.0). It flags only when cumulative requests reach 20 (the minimum sample in
+`api/ANALYTICS.md`) with ratings still at baseline, or once 2027-01-08 passes
+with no new rating. Counts, stars and dates only; never review text.
+
+The storefronts checked are US, GB, CA and AU, plus every country a
+`review_prompt` beacon came from since 1.5.1, by IP location (that is how LY is
+in the baseline). A rating from any other storefront is not seen, so the
+2027-01-08 flag means "no new rating in the checked storefronts". On 2026-11-09
+all 173 storefronts the app is sold in were swept: only US and GB had ratings,
+so the baseline is complete as of that date.
+
 ## Exclude App Review traffic (do this in every query)
 
 Apple's App Store review runs the app once per submission and never gets a
