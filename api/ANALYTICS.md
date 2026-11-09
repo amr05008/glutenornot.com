@@ -361,13 +361,16 @@ bodies over 512 bytes → 413; every other property is discarded. Own per-IP cap
 `store_opened`), separate from the scan quota, `/api/track` and `/api/recovery`,
 with the same per-instance caveat.
 
-**Read** (weekly, by hand; first read 2026-10-15 or after 20 `requested` from
+**Read** (weekly; automated since 2026-11-09 as the Reviews line of the
+weekly snapshot routine's analyst read, see `reports/weekly-snapshot/README.md`;
+first read 2026-10-15 or after 20 `requested` from
 non-`-rc` versions, whichever is later): `requested` per week is the count of
 rating requests the client handed to iOS, with best-effort (fire-and-forget)
 delivery — a prompt can be shown while its beacon is lost, so it is an
 *approximate* ceiling on prompts shown, not a hard one. Compare against the
-rating count on App Store Connect → Ratings and Reviews (no API for the count —
-read it from the page and date it in the session log). `store_opened` (distinct
+public rating count per storefront (App Store Connect has no API for it, but
+`itunes.apple.com/lookup?bundleId=com.glutenornot.scanner&country=<cc>` returns
+`userRatingCount`; the routine uses that). `store_opened` (distinct
 ids) is a *floor* on write-review intent; compare against the written reviews
 list. Query:
 
