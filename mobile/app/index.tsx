@@ -124,6 +124,17 @@ function Corners() {
   );
 }
 
+// A slight fixed zoom, so a small label fills the reticle from further back.
+// expo-camera opens the main wide lens, which can't focus closer than about
+// 15-20 cm on recent iPhones, and it never switches to the ultra-wide for
+// macro the way the system Camera does. Framing a small bottle label to fill
+// the reticle at 1x put it inside that distance: the preview stayed blurred
+// and the barcode never decoded (issue #50). This is Apple's own remedy for
+// scanners (zoom to make up for the minimum focus distance). The prop is
+// 0-1 on a log scale of the device's maximum zoom, so 0.1 is roughly
+// 1.3x-1.7x depending on the phone, not a fixed factor.
+const CLOSE_FOCUS_ZOOM = 0.1;
+
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission, getPermission] = useCameraPermissions();
@@ -1014,6 +1025,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
+        zoom={CLOSE_FOCUS_ZOOM}
         enableTorch={torchApplied}
         onCameraReady={() => {
           cameraReadyAtRef.current = Date.now();
