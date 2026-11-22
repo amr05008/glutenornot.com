@@ -163,6 +163,41 @@ fired.
 - **The `list_gate` count mixes right calls with false blocks.** Analytics
   can't separate them, because the text is never recorded.
 
+## Amended 2026-11-21: a missing end is a note, not a retake (issue #50)
+
+**What happened.** A complete hot sauce label came back "incomplete" on every
+photo. Its list ends "Xanthan Gum. ©2024" mid-line, so no full stop ends a
+line. Vision's reads of the maintainer's two photos are pinned as
+`issue-50-close` (keeps "Gum. ©2024") and `issue-50-far` (drops the full stop
+and the ©) in `real-label-ocr.json`; both are `no_end`.
+
+**The numbers** (label photos, 30 days to 2026-11-21, 220 scans): 61 delivered
+`safe`; the gate withheld 37 as `no_end` and 22 as `no_heading`. So the end
+check took back 31% of the labels Claude called safe, and the text is never
+recorded, so nobody can say how many were really cut.
+
+**Rejected: a second end pattern** (PR #51: last comma item, full stop, "©").
+Two reviews broke it. Text after the heading runs to the end of the read, so
+"Store in a cool, dry place. ©2024" beside a cut list vouched for it, and the
+far photo's read has no "©" to match anyway. The text can't show which full
+stop belongs to the list.
+
+**Decision.** The end rule is unchanged, and `no_end` is still never `safe`.
+What changed is what the person is told:
+- The copy says what was read and what to check: "I found no gluten in what I
+  could read, but I couldn't tell where the ingredient list ends. Check that
+  the last ingredient on the pack and any "Contains" line are in your photo."
+  The person holding the pack can make that check; the text can't.
+- `no_end` is never a retake (`retakeReasonFor` returns null). A retake of a
+  complete label fails the same way, which is what the day-14 read's loops
+  showed (decision 009).
+- `no_heading` is unchanged: a missing start is the dangerous cut, and a
+  retake fixes it.
+
+**Not done: delivering `safe` with the note.** The end of a list is where
+"Contains: wheat" and small ingredients such as malt extract sit. Read how the
+amber note lands before going further.
+
 ## Revisit
 
 The `list_gate` read around 2026-10-06 (ROADMAP). Split it three ways:

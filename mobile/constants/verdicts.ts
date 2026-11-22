@@ -17,6 +17,8 @@ export type CautionReason = 'oats' | 'may_contain' | 'conflict' | 'undeclared_so
 // known value (isRetakeReason) and never decides from caution_reason or the
 // explanation — the server can change which cases ask for a retake without
 // an app release. The same enum rides back on the next photo as retake_after.
+// The server stopped sending 'no_end' on 2026-11-21 (issue #50); the value
+// stays so the enum matches the server's allowlist.
 export const RETAKE_REASONS = ['no_heading', 'no_end', 'too_little_text', 'unclear'] as const;
 export type RetakeReason = (typeof RETAKE_REASONS)[number];
 export function isRetakeReason(value: unknown): value is RetakeReason {
