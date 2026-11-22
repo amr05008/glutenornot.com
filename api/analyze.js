@@ -356,7 +356,16 @@ const INGREDIENT_HEADING_PATTERN = new RegExp(
 // phrasing, brackets OCR drops — and the only real read it ever passed was a
 // side crop (decision 005, T1). Known leak: a full stop that happens to end a
 // line inside or beside a cut list.
-const LINE_END_FULL_STOP = new RegExp(String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$)`, 'mu');
+//
+// A copyright notice right after the full stop ends the list too: small labels
+// run the two together on one line ("Xanthan Gum. ©2024" / "RICE'S HONEY, LLC.
+// GREELEY, CO 80631", issue #50), so no full stop ever ends a line and every
+// retake failed the same way. Nothing inside a list is followed by "©" or by
+// "(c)" and a year, so a cut list can't borrow it.
+const LINE_END_FULL_STOP = new RegExp(
+  String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$|©|\([cC]\)[ \t\u00a0]*(?:19|20)\d\d)`,
+  'mu',
+);
 
 const NO_HEADING_EXPLANATION =
   'I can\'t see where the ingredient list starts, so I can\'t call this safe — flour is often the first ingredient. Retake with the word "Ingredients" and the whole list in frame.';

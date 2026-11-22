@@ -325,6 +325,21 @@ describe('checkIngredientList', () => {
     expect(checkIngredientList('Ingredients\nWater, cane sugar, natural flavors, natu…\nShow more')).toBe('no_end');
   });
 
+  // Issue #50: a small bottle label runs the copyright notice on after the
+  // list's full stop, so no full stop ends a line.
+  it('counts a full stop followed by a copyright notice as the end of the list', () => {
+    const list = 'Ingredients: Honey, Water, Mango Puree\nConcentrate, Carrots, Habanero Puree\n(Habanero Peppers, Vinegar, Salt), Lemon\nJuice Concentrate, Salt, Tapioca Starch, Garlic\nPowder, Onion Powder, Xanthan Gum.';
+    expect(checkIngredientList(`${list} ©2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
+    expect(checkIngredientList(`${list} © 2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
+    expect(checkIngredientList(`${list} (C) 2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
+  });
+
+  it('does not let a copyright notice vouch for a list with no full stop before it', () => {
+    expect(checkIngredientList("INGREDIENTS: Honey, Water, Tapioca Starch, Garl\n©2024 RICE'S HONEY, LLC")).toBe('no_end');
+    expect(checkIngredientList('INGREDIENTS: Rice, vit. (C), sugar, cocoa')).toBe('no_end');
+    expect(checkIngredientList('INGREDIENTS: Rice, sugar, natu... ©2024')).toBe('no_end');
+  });
+
   it('does not count a dot inside a word or before a comma as the end', () => {
     expect(checkIngredientList('INGREDIENTS: Rice, vanilla ext., salt, see www.acmefoods.com')).toBe('no_end');
   });
