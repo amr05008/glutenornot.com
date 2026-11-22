@@ -666,6 +666,22 @@ describe('applyIngredientListGate', () => {
     expect(menu.caution_reason).toBe('incomplete');
   });
 
+  // List-end note grill: the parser doesn't make the verdict agree with the
+  // rows, so a "safe" can arrive beside a wheat warning or dish rows. The
+  // copy must not say "no gluten" next to them.
+  it.each([
+    ['a flagged ingredient', { flagged_ingredients: ['wheat flour'] }],
+    ['an allergen warning', { allergen_warnings: ['Contains wheat'] }],
+    ['dish rows', { menu_items: [{ name: 'Pasta', verdict: 'unsafe', notes: 'wheat' }, { name: 'Rice', verdict: 'safe', notes: '' }] }],
+  ])('does not say "no gluten" when the response carries %s', (_label, rows) => {
+    const analysis = { ...safeLabel(), ...rows };
+    expect(applyIngredientListGate(analysis, END_CUT)).toBe('no_end');
+    expect(analysis.verdict).toBe('caution');
+    expect(analysis.explanation).not.toMatch(/no gluten/i);
+    expect(analysis.explanation).toContain("couldn't tell where the ingredient list ends, so I can't call this safe");
+    expect(analysis.explanation).toContain('"Contains" line');
+  });
+
   it('offers the barcode after the check-the-end copy, except on web', () => {
     const app = safeLabel();
     applyIngredientListGate(app, END_CUT);

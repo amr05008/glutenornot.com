@@ -418,7 +418,9 @@ builds, no Cupertino; `timestamp >=` the 1.5.1 public release time, read from
 3. **Held back by D4** (T8): `scan` events with `caution_reason =
    'incomplete'` and neither `retake_reason` nor `retake_withheld`, method
    `ocr`, mode `label`. Excluding `retake_withheld` keeps capped retakes out
-   of the warning-bearing D4 count.
+   of the warning-bearing D4 count. Exclude `list_gate = 'no_end'` too: since
+   the list-end note (issue #50) those cautions carry neither field by
+   design, with or without warning rows, so they would swell this count.
 4. **The diagnostic:** `list_heading_word` among `no_heading` scans from the
    API merge onward, all clients, still without `-rc` builds and Cupertino.
    The 2026-11-08 early read missed that filter, and test builds made up
@@ -438,7 +440,7 @@ SQL="SELECT properties.retake_after, properties.verdict, properties.caution_reas
 -- 2b. retake failures
 SELECT properties.retake_after, properties.reason, count() FROM events WHERE event='scan_failed' AND <same filters> AND properties.retake_after IS NOT NULL GROUP BY 1,2
 -- 3. held back by D4 (T8)
-SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL AND properties.retake_withheld IS NULL
+SELECT count() FROM events WHERE event='scan' AND <same filters> AND properties.method='ocr' AND properties.mode='label' AND properties.caution_reason='incomplete' AND properties.retake_reason IS NULL AND properties.retake_withheld IS NULL AND coalesce(properties.list_gate,'') != 'no_end'
 -- 4. the diagnostic, all clients, from the API merge onward
 SELECT properties.list_heading_word, count() FROM events WHERE event='scan' AND properties.list_gate='no_heading' AND timestamp >= '<merge time>' AND coalesce(properties.app_version,'') NOT LIKE '%-rc%' AND coalesce(properties.$geoip_city_name,'') != 'Cupertino' GROUP BY 1
 ```

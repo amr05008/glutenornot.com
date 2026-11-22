@@ -369,8 +369,14 @@ const NO_HEADING_BARCODE_HINT = ' No ingredient list on the pack? Try scanning t
 // stop either (3 of the 5 real photos). So this says what was read and hands
 // the person holding the pack the one check the text can't make. It is not a
 // retake (retakeReasonFor): a retake of a complete label fails the same way.
+const NO_END_CHECK = ' Check that the last ingredient on the pack and any "Contains" line are in your photo.';
 const NO_END_EXPLANATION =
-  'I found no gluten in what I could read, but I couldn\'t tell where the ingredient list ends. Check that the last ingredient on the pack and any "Contains" line are in your photo.';
+  'I found no gluten in what I could read, but I couldn\'t tell where the ingredient list ends.' + NO_END_CHECK;
+// The verdict said "safe", but the response still carries a flagged
+// ingredient, an allergen warning or dish rows (the parser doesn't make them
+// agree). "I found no gluten" beside a wheat row would be false, so say less.
+const NO_END_EXPLANATION_WITH_ROWS =
+  'I couldn\'t tell where the ingredient list ends, so I can\'t call this safe.' + NO_END_CHECK;
 // The barcode isn't gated.
 const NO_END_BARCODE_HINT = ' Or try scanning the barcode.';
 
@@ -430,7 +436,9 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
     analysis.verdict = 'caution';
     // Claude's reassurance ("Good news! ...") is exactly what must not survive.
     const barcodeHint = reason === 'no_end' ? NO_END_BARCODE_HINT : NO_HEADING_BARCODE_HINT;
-    analysis.explanation = (reason === 'no_end' ? NO_END_EXPLANATION : NO_HEADING_EXPLANATION) +
+    const hasRows = Boolean(analysis.flagged_ingredients?.length || analysis.allergen_warnings?.length || items?.length);
+    const noEndCopy = hasRows ? NO_END_EXPLANATION_WITH_ROWS : NO_END_EXPLANATION;
+    analysis.explanation = (reason === 'no_end' ? noEndCopy : NO_HEADING_EXPLANATION) +
       (platform === 'web' ? '' : barcodeHint);
     analysis.caution_reason = 'incomplete';
   }
