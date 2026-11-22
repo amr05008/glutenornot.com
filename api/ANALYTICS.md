@@ -38,8 +38,12 @@ Which engine answered a scan, and how Jev, Claude direct and the OpenRouter fall
   `api/analyze.js`, added 2026-09-22 after the jev-sandbox truncation test. Its
   count over OCR label scans is the gate's cost in withheld `safe` verdicts; the
   `verdict` on the event is the delivered one. A reason, never the text.
+  Since the list-end note (issue #50, decision 005's 2026-11-21 amendment) a
+  `no_end` scan is the amber card with check-the-end copy and never a retake:
+  it sets no `retake_reason` and no `retake_withheld`.
 - `retake_reason` (OCR only, present only when set) — the response asked for a
-  retake: `no_heading` | `no_end` | `too_little_text` | `unclear`
+  retake: `no_heading` | `too_little_text` | `unclear` (and `no_end` on
+  events before the list-end note, issue #50; the allowlist keeps the value)
   (`retakeReasonFor`, `api/analyze.js`; decision 009,
   `plans/retake-state-2026-10-11.md`). Set only on a label caution whose
   reason is `incomplete` with nothing else on the card (no flagged

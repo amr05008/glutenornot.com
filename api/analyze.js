@@ -363,11 +363,16 @@ const NO_HEADING_EXPLANATION =
 // Single-ingredient foods need not print a list, so no photo of them passes;
 // the barcode is the way through on the clients that have a scanner.
 const NO_HEADING_BARCODE_HINT = ' No ingredient list on the pack? Try scanning the barcode.';
+// The end check can't tell a cut list from a complete one that has no
+// line-ending full stop: "Xanthan Gum. ©2024" on a small bottle failed every
+// photo (issue #50), and the line below a complete list often has no full
+// stop either (3 of the 5 real photos). So this says what was read and hands
+// the person holding the pack the one check the text can't make. It is not a
+// retake (retakeReasonFor): a retake of a complete label fails the same way.
 const NO_END_EXPLANATION =
-  "The ingredient list looks cut off before it ends, so I can't call this safe. Retake with the whole list and the line below it in frame.";
-// The line below a complete list often has no full stop either (3 of the 5
-// real photos), so a retake can fail every time; the barcode isn't gated.
-const NO_END_BARCODE_HINT = ' Still seeing this? Try scanning the barcode.';
+  'I found no gluten in what I could read, but I couldn\'t tell where the ingredient list ends. Check that the last ingredient on the pack and any "Contains" line are in your photo.';
+// The barcode isn't gated.
+const NO_END_BARCODE_HINT = ' Or try scanning the barcode.';
 
 /**
  * Does the OCR text show a whole ingredient list? Returns why not
@@ -442,8 +447,9 @@ function applyIngredientListGate(analysis, ocrText, { platform } = {}) {
  * caution? Only when the response has nothing else to show (D4): a label
  * caution whose one reason is `incomplete`, with no flagged ingredients, no
  * allergen warnings and no menu items (a label response carrying menu_items
- * renders as a menu in the app). In order: the gate's reason, a read under
- * the safe floor, else Claude's own `incomplete` judgement (T1). Pure; runs
+ * renders as a menu in the app). In order: the gate's missing heading (its
+ * missing end is never a retake), a read under the safe floor, else Claude's
+ * own `incomplete` judgement (T1). Pure; runs
  * after applyIngredientListGate. The barcode path never calls it — barcode
  * `incomplete` means no data, which recovery already handles.
  */
@@ -452,7 +458,10 @@ function retakeReasonFor(analysis, { listGate, ocrChars } = {}) {
   if (analysis.verdict !== 'caution' || analysis.caution_reason !== 'incomplete') return null;
   if (analysis.flagged_ingredients?.length || analysis.allergen_warnings?.length) return null;
   if (Array.isArray(analysis.menu_items) && analysis.menu_items.length) return null;
-  if (listGate === 'no_heading' || listGate === 'no_end') return listGate;
+  if (listGate === 'no_heading') return listGate;
+  // An unseen end is the amber card with its own copy, never a retake: the
+  // check fails on complete labels too, so the retake looped (issue #50).
+  if (listGate === 'no_end') return null;
   if (ocrChars < MIN_OCR_CHARS_FOR_SAFE) return 'too_little_text';
   return 'unclear';
 }

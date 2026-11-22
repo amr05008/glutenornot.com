@@ -102,6 +102,17 @@ Enums and a boolean only; validated server-side against one allowlist
     `no_heading` blocks: open a gate investigation with tester photos
     (decision 005's method), as its own PR.
 
+## Amended 2026-11-21: a missing list end is never a retake
+
+`retakeReasonFor` no longer returns `no_end` (issue #50; decision 005's
+amendment of the same date has the evidence). The end check fails on complete
+labels, so that retake could not succeed. A `no_end` response is the amber
+card with check-the-end copy, on a first photo and on a `retake_after` photo
+alike, and records neither `retake_reason` nor `retake_withheld`. The enum
+keeps `no_end`: shipped apps know it, and a 1.5.1 phone may still send it as
+`retake_after`. Reads of `retake_reason` or `retake_withheld` that span the
+deploy must split there.
+
 ## Amended 2026-11-08: one retake per scan
 
 **The day-14 read** (`plans/retake-state-2026-10-11.md`, "Day-14 read"):

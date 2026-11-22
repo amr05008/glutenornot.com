@@ -96,6 +96,18 @@
       "capture": "same photo, right edge cropped off (every line-ending full stop cut away; the surviving \"CONTAINS: WHEAT\" line does not count as the end)",
       "expect": "no_end",
       "text": "100\n00\n-Abse\n9219\nore\nng\nHORE OF\nS DAILY\nA\nLDPE\nPLEASE RECYCLE\nOR REUSE THIS BAG\nNS OR COMMENTS?\nDAVESHILLERBREAD.COM/CONTACT\n13764 02713\n8\nTotal\nDieta\nTotal St\nIncludes\nProtein 3g\nVitamin Do\nCalcium 20\nIron 0.6mg\nPotassium\nThe % Daily Va\nin a serving of\ncalories a day\nINGREDIENTS: ORGANIC WHO\nWHEAT), WATER, ORGANIC C\nWHOLE FLAX SEEDS, ORGANI\nQUINOA, ORGANIC RED QUIN\nORGANIC TRITICALE, ORGANIC\nORGANIC ROLLED RYE, ORG\nORGANIC BROWN RICE FLOUR\nKAMUTO KHORASAN WHEAT,\nFLOUR, ORGANIC POPPY SEED\nLESS OF EACH OF THE FOLLO\nWHEAT FLOUR, ORGANIC VINEG\nCONTAINS: WHEAT\nDISTRIBUTED BY\nDKB-ALPINE ORG\nBAKERIES GROU\n5209 SE INTERNA\nMILWAUKIE, OR S\nCERTIFIED ORGA"
+    },
+    {
+      "id": "issue-50-close",
+      "capture": "complete iPhone photo, list ends \"Xanthan Gum. ©2024\" mid-line (issue #50, read 2026-11-21)",
+      "expect": "no_end",
+      "text": "FRONG\nKEEPS\nPERS\nTotal Fat Og\nSodium 55mg\n%DV*\n0%\nTotal Carbohydrate 2g\n2%\nLEVEL\nTotal Sugars 2g\n1%\nIncludes 1g Added Sugars 2%\nProtein Og\nPotassium 8mg\n0%\nHIVEHONEY Not a significant source of saturated\nfat, trans fat, cholesterol, dietary fiber,\nONEY.COM vitamin D, calcium or iron.\n10002\n9\n*%DV-%Daily Value\nIngredients: Honey, Water, Mango Puree\nConcentrate, Carrots, Habanero Puree\n(Habanero Peppers, Vinegar, Salt), Lemon\nJuice Concentrate, Salt, Tapioca Starch, Garlic\nPowder, Onion Powder, Xanthan Gum. ©2024\nRICE'S HONEY, LLC. GREELEY, CO 80631"
+    },
+    {
+      "id": "issue-50-far",
+      "capture": "complete iPhone photo from further back, Vision dropped the full stop and the © (issue #50, read 2026-11-21)",
+      "expect": "no_end",
+      "text": "THE\nNutrition Facts\nAbout 34 servings per container\nServing size\n1tsp (5g)\nlcan\nEEPER\nAmount per serving\nCalories\n5\nHONEY KEEPS\n%DV\nEKEEPERS\nTotal Fat Og\n0%\nDE\nSodium 55mg\n2%\nLEVEL\nTotal Carbohydrate 2g\n1%\nTotal Sugars 2g\nに\nIncludes 1g Added Sugars 2%\nProtein Og\nPotassium 8mg\n0%\nALHIVEHONEY Not a significant source of saturated\nMONEY.COM vitamin D, calcium or iron.\n70002\n9\nfat, trans fat, cholesterol, dietary fiber\n%DV-%Daily Value\nIngredients: Honey, Water, Mango Puree\nConcentrate, Carrots, Habanero Puree\n(Habanero Peppers, Vinegar, Salt), Lemon\nJuice Concentrate, Salt, Tapioca Starch, Gark\nPowder, Onion Powder, Xanthan Gum 2024\nRICE'S HONEY, LLC. GREELEY, CO 80631"
     }
   ]
 }

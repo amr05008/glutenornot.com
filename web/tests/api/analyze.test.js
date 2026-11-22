@@ -591,7 +591,23 @@ describe('applyIngredientListGate', () => {
     expect(analysis.verdict).toBe('caution');
     expect(analysis.confidence).toBe('low');
     expect(analysis.explanation).not.toContain('Good news');
-    expect(analysis.explanation).toContain('cut off');
+    // Issue #50: the end check fails on complete labels too, so the copy says
+    // what was read and what to check; it doesn't claim a cut or ask for a retake.
+    expect(analysis.explanation).toContain("couldn't tell where the ingredient list ends");
+    expect(analysis.explanation).toContain('"Contains" line');
+    expect(analysis.explanation).not.toMatch(/cut off|retake/i);
+    expect(analysis.caution_reason).toBe('incomplete');
+  });
+
+  // Issue #50: both real reads of a complete label fail the end check (one
+  // keeps "Gum. ©2024" mid-line, one loses the full stop). Neither may reach
+  // "safe", and neither is a retake.
+  it.each(['issue-50-close', 'issue-50-far'])('real read %s: caution with the check-the-end copy, no retake', (id) => {
+    const { text } = realLabelOcr.cases.find((c) => c.id === id);
+    const analysis = safeLabel();
+    expect(applyIngredientListGate(analysis, text)).toBe('no_end');
+    expect(analysis.verdict).toBe('caution');
+    expect(retakeReasonFor(analysis, { listGate: 'no_end', ocrChars: text.length })).toBeNull();
   });
 
   it('marks a gated label as incomplete', () => {
@@ -650,10 +666,13 @@ describe('applyIngredientListGate', () => {
     expect(menu.caution_reason).toBe('incomplete');
   });
 
-  it('asks for the line below the list when the end is missing', () => {
-    const analysis = safeLabel();
-    applyIngredientListGate(analysis, END_CUT);
-    expect(analysis.explanation).toContain('line below');
+  it('offers the barcode after the check-the-end copy, except on web', () => {
+    const app = safeLabel();
+    applyIngredientListGate(app, END_CUT);
+    expect(app.explanation).toMatch(/are in your photo\. Or try scanning the barcode\.$/);
+    const web = safeLabel();
+    applyIngredientListGate(web, END_CUT, { platform: 'web' });
+    expect(web.explanation).toMatch(/are in your photo\.$/);
   });
 
   // Re-grill 5: the line below a complete list often carries no full stop, so
@@ -691,11 +710,17 @@ describe('retakeReasonFor (decision 009)', () => {
     flagged_ingredients: [], allergen_warnings: [], explanation: '…', confidence: 'low', ...extra,
   });
 
-  it('precedence: the gate over the floor, the floor alone, then Claude\'s own incomplete', () => {
+  it('precedence: the gate\'s missing heading over the floor, the floor alone, then Claude\'s own incomplete', () => {
     expect(retakeReasonFor(incomplete(), { listGate: 'no_heading', ocrChars: 40 })).toBe('no_heading');
-    expect(retakeReasonFor(incomplete(), { listGate: 'no_end', ocrChars: 900 })).toBe('no_end');
     expect(retakeReasonFor(incomplete(), { listGate: null, ocrChars: 40 })).toBe('too_little_text');
     expect(retakeReasonFor(incomplete(), { listGate: null, ocrChars: 900 })).toBe('unclear');
+  });
+
+  // Issue #50: the end check fails on complete labels, so a retake can't fix
+  // it. Never 'unclear' or 'too_little_text' by fall-through either.
+  it('is never a retake for a missing list end', () => {
+    expect(retakeReasonFor(incomplete(), { listGate: 'no_end', ocrChars: 900 })).toBeNull();
+    expect(retakeReasonFor(incomplete(), { listGate: 'no_end', ocrChars: 40 })).toBeNull();
   });
 
   it('is null for safe, unsafe, a caution that is not incomplete, and menus', () => {
@@ -1543,11 +1568,15 @@ describe('analyze handler analytics', () => {
       );
     });
 
-    it('returns no_end when the list has a heading but no line-ending full stop, without list_heading_word', async () => {
+    it('a heading but no line-ending full stop is the amber card, not a retake, without list_heading_word', async () => {
       stubScan(claudeSafe, ocr('INGREDIENTS: ' + NO_HEADING_TEXT.slice(0, -1) + ', and'));
       const res = await post();
-      expect(res.body.retake_reason).toBe('no_end');
-      expect(trackScan.mock.calls[0][0].retakeReason).toBe('no_end');
+      expect(res.body).not.toHaveProperty('retake_reason');
+      expect(res.body.verdict).toBe('caution');
+      expect(res.body.caution_reason).toBe('incomplete');
+      expect(res.body.explanation).toContain("couldn't tell where the ingredient list ends");
+      expect(trackScan.mock.calls[0][0].listGate).toBe('no_end');
+      expect(trackScan.mock.calls[0][0].retakeReason).toBeNull();
       expect(trackScan.mock.calls[0][0].listHeadingWord).toBeUndefined();
     });
 
@@ -1649,7 +1678,6 @@ describe('analyze handler analytics', () => {
 
       it.each([
         ['no_heading', () => stubScan(claudeSafe, ocr(NO_HEADING_TEXT))],
-        ['no_end', () => stubScan(claudeSafe, ocr(NO_END_TEXT))],
         ['too_little_text', () => stubScan(claudeSafe, ocr('GF!'))],
         ['unclear', () => stubScan(claudeIncomplete, OCR_TEXT_FULL_LABEL)],
       ])('withholds a second retake (%s) and records it as retake_withheld', async (reason, stub) => {
@@ -1661,6 +1689,17 @@ describe('analyze handler analytics', () => {
         expect(res.body.caution_reason).toBe('incomplete');
         expect(trackScan).toHaveBeenCalledWith(
           expect.objectContaining({ retakeReason: null, retakeWithheld: reason, retakeAfter: 'no_end' })
+        );
+      });
+
+      // A missing end was never going to be a retake, so nothing is withheld.
+      it('records no retake_withheld for a missing list end', async () => {
+        stubScan(claudeSafe, ocr(NO_END_TEXT));
+        const res = await post({ image: 'base64data', retake_after: 'no_heading' });
+        expect(res.body).not.toHaveProperty('retake_reason');
+        expect(res.body.verdict).toBe('caution');
+        expect(trackScan).toHaveBeenCalledWith(
+          expect.objectContaining({ listGate: 'no_end', retakeReason: null, retakeWithheld: null, retakeAfter: 'no_heading' })
         );
       });
 
