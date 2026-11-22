@@ -1025,7 +1025,10 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
-        zoom={CLOSE_FOCUS_ZOOM}
+        // Applied once the session is up, not at mount: expo-camera sets a
+        // mount-time zoom before the session picks its format, which can
+        // drop it (the torch has the same history, see above).
+        zoom={cameraReady ? CLOSE_FOCUS_ZOOM : 0}
         enableTorch={torchApplied}
         onCameraReady={() => {
           cameraReadyAtRef.current = Date.now();
