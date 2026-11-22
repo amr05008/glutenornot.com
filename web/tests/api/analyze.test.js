@@ -327,17 +327,27 @@ describe('checkIngredientList', () => {
 
   // Issue #50: a small bottle label runs the copyright notice on after the
   // list's full stop, so no full stop ends a line.
-  it('counts a full stop followed by a copyright notice as the end of the list', () => {
+  it('counts the last item, a full stop and a copyright mark as the end of the list', () => {
     const list = 'Ingredients: Honey, Water, Mango Puree\nConcentrate, Carrots, Habanero Puree\n(Habanero Peppers, Vinegar, Salt), Lemon\nJuice Concentrate, Salt, Tapioca Starch, Garlic\nPowder, Onion Powder, Xanthan Gum.';
     expect(checkIngredientList(`${list} ©2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
     expect(checkIngredientList(`${list} © 2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
-    expect(checkIngredientList(`${list} (C) 2024\nRICE'S HONEY, LLC. GREELEY, CO 80631`)).toBeNull();
   });
 
-  it('does not let a copyright notice vouch for a list with no full stop before it', () => {
-    expect(checkIngredientList("INGREDIENTS: Honey, Water, Tapioca Starch, Garl\n©2024 RICE'S HONEY, LLC")).toBe('no_end');
-    expect(checkIngredientList('INGREDIENTS: Rice, vit. (C), sugar, cocoa')).toBe('no_end');
-    expect(checkIngredientList('INGREDIENTS: Rice, sugar, natu... ©2024')).toBe('no_end');
+  // PR #51 grill: the text checked runs past the list, so a company line with
+  // a copyright mark beside a cut list must not vouch for it.
+  it.each([
+    ['a company suffix after a comma', 'INGREDIENTS: Rice flour, sugar, cocoa butter, whole milk powder, emuls\nDIST. BY ACME FOODS, INC. ©2024 ACME FOODS\nBOULDER, CO 80301'],
+    ['two columns, list cut', 'INGREDIENTS: Water, tomato paste, sug\nNUTRITION FACTS\nServing size 2 Tbsp (30g)\nB&G FOODS, INC. ©2024 B&G FOODS\nPARSIPPANY, NJ 07054 USA'],
+    ['two products, the second cut', 'INGREDIENTS: Rice, salt.\nNET WT 5 OZ\nINGREDIENTS: Corn, sugar, bar\nACME CO. ©2024'],
+    ['a company line with no comma', 'INGREDIENTS: Sugar, palm oil, coc\nKELLOGG SALES CO. © 2023 Kellogg NA Co'],
+    ['rights boilerplate', 'INGREDIENTS: Sugar, palm oil, coc\nAll rights reserved. ©Mondelez International'],
+    ['lower-case suffix', 'INGREDIENTS: Sugar, palm oil, coc\nAcme Foods, Ltd. ©2024'],
+    ['no full stop before the mark', "INGREDIENTS: Honey, Water, Tapioca Starch, Garl\n©2024 RICE'S HONEY, LLC"],
+    ['an ellipsis before the mark', 'INGREDIENTS: Rice, sugar, natu... ©2024'],
+    ['two dots before the mark', 'INGREDIENTS: Rice, sugar, natu.. ©2024'],
+    ['"(c)" is not the mark', 'INGREDIENTS: Rice, vit. (C) 2000 IU, sugar, cocoa'],
+  ])('does not let a copyright notice vouch for a cut list: %s', (_label, text) => {
+    expect(checkIngredientList(text)).toBe('no_end');
   });
 
   it('does not count a dot inside a word or before a comma as the end', () => {

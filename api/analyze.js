@@ -356,16 +356,29 @@ const INGREDIENT_HEADING_PATTERN = new RegExp(
 // phrasing, brackets OCR drops — and the only real read it ever passed was a
 // side crop (decision 005, T1). Known leak: a full stop that happens to end a
 // line inside or beside a cut list.
-//
-// A copyright notice right after the full stop ends the list too: small labels
-// run the two together on one line ("Xanthan Gum. ©2024" / "RICE'S HONEY, LLC.
-// GREELEY, CO 80631", issue #50), so no full stop ever ends a line and every
-// retake failed the same way. Nothing inside a list is followed by "©" or by
-// "(c)" and a year, so a cut list can't borrow it.
-const LINE_END_FULL_STOP = new RegExp(
-  String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$|©|\([cC]\)[ \t\u00a0]*(?:19|20)\d\d)`,
-  'mu',
+const LINE_END_FULL_STOP = new RegExp(String.raw`(?<![.。][.。])[.。][ \t\u00a0]*(?:\r?\n|$)`, 'mu');
+
+// A second way to see the end: the list's last item, full stop, then "©" on
+// the same line. Small labels run the copyright notice on after the list
+// ("Onion Powder, Xanthan Gum. ©2024" / "RICE'S HONEY, LLC. GREELEY, CO
+// 80631", issue #50), so no full stop ever ends a line and every retake
+// failed the same way. Kept narrow, because the text checked runs past the
+// list to the end of the read, and "ACME FOODS, INC. ©2024" beside a cut list
+// must not vouch for it:
+// - the full stop closes the last item of a comma list on that line, and the
+//   item has no dot of its own (so not "natu.. ©", not "CO. ©" on a bare line);
+// - that item doesn't end in a company or boilerplate word.
+// Known leaks (decision 005's class): a side crop that keeps "Gum. ©", and an
+// address line such as "Boulder, Colorado. ©2024" beside a cut list.
+const COMPANY_WORDS = 'inc|incorporated|co|corp|corporation|company|llc|llp|lp|ltd|limited|plc|gmbh|sa|sas|sarl|srl|spa|bv|nv|ag|ab|oy|as|usa|reserved';
+const LIST_END_BEFORE_COPYRIGHT = new RegExp(
+  String.raw`[,،，、][^,،，、.。\r\n©]*(?<!(?<![\p{L}\p{N}])(?:${COMPANY_WORDS}))[.。][ \t\u00a0]*©`,
+  'iu',
 );
+
+function showsListEnd(list) {
+  return LINE_END_FULL_STOP.test(list) || LIST_END_BEFORE_COPYRIGHT.test(list);
+}
 
 const NO_HEADING_EXPLANATION =
   'I can\'t see where the ingredient list starts, so I can\'t call this safe — flour is often the first ingredient. Retake with the word "Ingredients" and the whole list in frame.';
@@ -395,7 +408,7 @@ function checkIngredientList(ocrText) {
   if (headings.length === 0) return 'no_heading';
   for (const [i, heading] of headings.entries()) {
     const list = ocrText.slice(heading.index + heading[0].length, headings[i + 1]?.index ?? ocrText.length);
-    if (!LINE_END_FULL_STOP.test(list)) return 'no_end';
+    if (!showsListEnd(list)) return 'no_end';
   }
   return null;
 }
