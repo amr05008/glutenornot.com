@@ -278,6 +278,63 @@ describe('CameraScreen torch toggle', () => {
     expect(getByTestId('camera-view').props.enableTorch).toBe(true);
   });
 
+  // Issue #50 / PR #52: the close-focus zoom. expo-camera drops a zoom set
+  // before the session picks its format and ignores an unchanged prop, so the
+  // zoom must reach the camera as a 0→zoom transition after it is ready.
+  it('applies the close-focus zoom a settle window after the camera is ready, never at mount', async () => {
+    cameraReadyControl.auto = false;
+    const { getByTestId } = render(<CameraScreen />);
+    expect(getByTestId('camera-view').props.zoom).toBe(0);
+
+    await act(async () => { cameraReadyControl.fire(); });
+    expect(getByTestId('camera-view').props.zoom).toBe(0);
+
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(getByTestId('camera-view').props.zoom).toBeGreaterThan(0);
+  });
+
+  // PR #52 grill: the 2s fallback marks the camera ready before a slow native
+  // session is. The zoom it applied may have been dropped, and the prop would
+  // not change again — the late real ready must drop it and re-apply it.
+  it('re-applies the zoom when the real camera-ready arrives after the 2s fallback', async () => {
+    cameraReadyControl.auto = false;
+    const { getByTestId } = render(<CameraScreen />);
+
+    await act(async () => { jest.advanceTimersByTime(2000); }); // fallback forces cameraReady
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(getByTestId('camera-view').props.zoom).toBeGreaterThan(0);
+
+    await act(async () => { cameraReadyControl.fire(); });
+    expect(getByTestId('camera-view').props.zoom).toBe(0);
+
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(getByTestId('camera-view').props.zoom).toBeGreaterThan(0);
+  });
+
+  it('resets the zoom when the camera remounts after a scan', async () => {
+    mockAnalyzeImage.mockRejectedValueOnce(
+      new APIError("Couldn't read the text.", 'ocr_failed')
+    );
+    const { getByLabelText, getByText, getByTestId } = render(<CameraScreen />);
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(getByTestId('camera-view').props.zoom).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Capture photo of ingredients'));
+    });
+    await waitFor(() => expect(getByText("Couldn't read that")).toBeTruthy());
+
+    cameraReadyControl.auto = false;
+    await act(async () => {
+      fireEvent.press(getByLabelText('Turn on flashlight & retry'));
+    });
+    expect(getByTestId('camera-view').props.zoom).toBe(0);
+
+    await act(async () => { cameraReadyControl.fire(); });
+    await act(async () => { jest.advanceTimersByTime(750); });
+    expect(getByTestId('camera-view').props.zoom).toBeGreaterThan(0);
+  });
+
   it('starts with the torch off and toggles it from the overlay button', async () => {
     const { getByLabelText, getByTestId } = render(<CameraScreen />);
 

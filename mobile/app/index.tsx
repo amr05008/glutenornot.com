@@ -162,6 +162,8 @@ export default function CameraScreen() {
   // the torch effect re-run when the real ready arrives AFTER the 2s fallback
   // already forced cameraReady (see the torch-application effect).
   const [readySignal, setReadySignal] = useState(0);
+  // What actually reaches CameraView's zoom prop — see the zoom effect below.
+  const [zoomApplied, setZoomApplied] = useState(false);
   const cameraReadyAtRef = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
@@ -383,6 +385,21 @@ export default function CameraScreen() {
     const timer = setTimeout(() => setTorchApplied(true), delay);
     return () => clearTimeout(timer);
   }, [torch, cameraReady, readySignal]);
+
+  // Apply the close-focus zoom the way the torch is applied: as a fresh 0→zoom
+  // transition, a settle window after the camera became ready. expo-camera
+  // writes a mount-time zoom before the session picks its format and ignores
+  // an unchanged prop afterwards, so a zoom set too early is never repaired.
+  // The 2s fallback can mark the camera ready before the native session is;
+  // when the real ready then arrives (readySignal), drop the zoom and apply
+  // it again, timed from that instant.
+  useEffect(() => {
+    setZoomApplied(false);
+    if (!cameraReady) return;
+    const delay = Math.max(0, TORCH_SETTLE_MS - (Date.now() - cameraReadyAtRef.current));
+    const timer = setTimeout(() => setZoomApplied(true), delay);
+    return () => clearTimeout(timer);
+  }, [cameraReady, readySignal]);
 
   // Fallback: if onCameraReady never fires (production build race), force-enable
   // after 2s. Only while the camera is actually mounted — otherwise the timer
@@ -1025,10 +1042,8 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
-        // Applied once the session is up, not at mount: expo-camera sets a
-        // mount-time zoom before the session picks its format, which can
-        // drop it (the torch has the same history, see above).
-        zoom={cameraReady ? CLOSE_FOCUS_ZOOM : 0}
+        // Never set at mount: see the zoom effect above.
+        zoom={zoomApplied ? CLOSE_FOCUS_ZOOM : 0}
         enableTorch={torchApplied}
         onCameraReady={() => {
           cameraReadyAtRef.current = Date.now();
