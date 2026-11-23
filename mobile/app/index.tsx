@@ -124,6 +124,17 @@ function Corners() {
   );
 }
 
+// A slight fixed zoom, so a small label fills the reticle from further back.
+// expo-camera opens the main wide lens, which can't focus closer than about
+// 15-20 cm on recent iPhones, and it never switches to the ultra-wide for
+// macro the way the system Camera does. Framing a small bottle label to fill
+// the reticle at 1x put it inside that distance: the preview stayed blurred
+// and the barcode never decoded (issue #50). This is Apple's own remedy for
+// scanners (zoom to make up for the minimum focus distance). The prop is
+// 0-1 on a log scale of the device's maximum zoom, so 0.1 is roughly
+// 1.3x-1.7x depending on the phone, not a fixed factor.
+const CLOSE_FOCUS_ZOOM = 0.1;
+
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission, getPermission] = useCameraPermissions();
@@ -151,6 +162,8 @@ export default function CameraScreen() {
   // the torch effect re-run when the real ready arrives AFTER the 2s fallback
   // already forced cameraReady (see the torch-application effect).
   const [readySignal, setReadySignal] = useState(0);
+  // What actually reaches CameraView's zoom prop — see the zoom effect below.
+  const [zoomApplied, setZoomApplied] = useState(false);
   const cameraReadyAtRef = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const capturingRef = useRef(false);
@@ -372,6 +385,21 @@ export default function CameraScreen() {
     const timer = setTimeout(() => setTorchApplied(true), delay);
     return () => clearTimeout(timer);
   }, [torch, cameraReady, readySignal]);
+
+  // Apply the close-focus zoom the way the torch is applied: as a fresh 0→zoom
+  // transition, a settle window after the camera became ready. expo-camera
+  // writes a mount-time zoom before the session picks its format and ignores
+  // an unchanged prop afterwards, so a zoom set too early is never repaired.
+  // The 2s fallback can mark the camera ready before the native session is;
+  // when the real ready then arrives (readySignal), drop the zoom and apply
+  // it again, timed from that instant.
+  useEffect(() => {
+    setZoomApplied(false);
+    if (!cameraReady) return;
+    const delay = Math.max(0, TORCH_SETTLE_MS - (Date.now() - cameraReadyAtRef.current));
+    const timer = setTimeout(() => setZoomApplied(true), delay);
+    return () => clearTimeout(timer);
+  }, [cameraReady, readySignal]);
 
   // Fallback: if onCameraReady never fires (production build race), force-enable
   // after 2s. Only while the camera is actually mounted — otherwise the timer
@@ -1014,6 +1042,8 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing="back"
+        // Never set at mount: see the zoom effect above.
+        zoom={zoomApplied ? CLOSE_FOCUS_ZOOM : 0}
         enableTorch={torchApplied}
         onCameraReady={() => {
           cameraReadyAtRef.current = Date.now();
