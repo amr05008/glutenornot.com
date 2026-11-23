@@ -41,7 +41,9 @@ then fills the reticle from a distance the wide lens can focus at.
   Answered for 1.5.2: Medical or Treatment Information **None** (its examples
   are medication guidance, emergency care and treatment information; the app
   reads labels), Health or Wellness Topics **Yes** (its examples include
-  "dieting advice"). Keep the answers the same unless the app changes.
+  "dieting advice"). Result: 9+ in 172 countries or regions, 12+ in Vietnam,
+  A10 in Brazil, ALL in South Korea. Keep the answers the same unless the app
+  changes.
 - **The version page has a new, optional "Header and Search Results" asset**
   (5244 × 2950 or 3840 × 1646). Left empty for 1.5.2; nothing is designed for it.
 - **Check `xcrun simctl runtime list` before counting on the simulator.** The
