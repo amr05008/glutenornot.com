@@ -16,7 +16,8 @@ We built this because we have celiac disease ourselves. Figuring out what we cou
 - **Flashlight assist**: torch toggle on the camera, and one-tap "turn on flashlight & retry" when a label can't be read (iOS)
 - **Honest on weak signal**: shows the photo uploading with a percentage and says when a slow connection is the wait, instead of asking you to start over (iOS 1.4.3+)
 - **Barcode dead ends are a doorway, not a verdict**: when a barcode isn't in the databases or has no ingredient data, the app says so and opens a photo-only camera for the label instead of guessing (iOS 1.5.0+)
-- **A cut-off photo gets a retake, not a verdict**: when a photo misses part of the ingredient list, the app asks for a retake instead of showing a Caution it can't back up, with a "See what I could read" way out (iOS 1.5.1+)
+- **A cut-off photo gets a retake, not a verdict**: when a photo misses the start of the ingredient list, the app asks for a retake instead of showing a Caution it can't back up, with a "See what I could read" way out (iOS 1.5.1+)
+- **Small labels stay in focus**: the camera zooms in slightly, so a small bottle or jar fills the frame from a distance the lens can focus at (iOS 1.5.2+)
 - **Scan history**: Recent scans saved on-device (iOS) — no account, clearable anytime
 - **Multilingual**: Analyzes labels and menus in any language (dedicated Spanish, Dutch, Catalan, and French support)
 - **Offline support**: Works as a PWA with offline fallback

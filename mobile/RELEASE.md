@@ -6,6 +6,39 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
+## ⏳ v1.5.2 build 2 submitted 2026-11-22 ~8:55 pm ET (2026-11-23 ~01:55 UTC)
+
+**What's in it:** the close-focus camera zoom (PR #52, issue #50). `CameraView`
+gets `zoom` 0.1 as a fresh 0→zoom transition 750 ms after the camera is ready,
+re-applied when the real ready event follows the 2 s fallback. A small label
+then fills the reticle from a distance the wide lens can focus at.
+
+- **Source:** `main` at `86e63c7` (PR #54's version bump), tagged `v1.5.2`.
+- **Smoke:** TestFlight build 1, `app_version 1.5.2-rc.smoke`, on Aaron's phone
+  2026-11-23 01:39–01:40 UTC: three barcode scans decoded (two served by Jev,
+  one not found → recovery → photo → result) and four photo scans read 470–1,113
+  characters. Aaron's verdict: "seemed fine". Exclude that version from reads.
+- **Not run:** the iOS 27 simulator launch on the release archive (step 2).
+  Every simulator runtime had vanished from the Mac by then, most likely
+  reclaimed with the disk at 97%. The smoke build launched on the iOS 27
+  simulator the day before, and the release source differs from it only by
+  the version files and a comment.
+- **After it goes public:** read its release time from `currentVersionReleaseDate`,
+  then check Sentry `glutenornot-mobile` for anything from the camera screen,
+  and whether barcode scans per session rise on 1.5.2. If the zoom needs
+  tuning, the constant is `CLOSE_FOCUS_ZOOM` in `app/index.tsx`.
+
+**Runbook lessons (1.5.2):**
+- **Upload fails with "PLA Update available" and "No signing certificate
+  'iOS Distribution'":** Apple has a new Program License Agreement. Accept it
+  at developer.apple.com/account, then retry the same archive.
+- **An agent can archive from the command line**, so the human only uploads:
+  `xcodebuild archive -workspace ios/GlutenOrNot.xcworkspace -scheme GlutenOrNot -configuration Release -destination 'generic/platform=iOS' -archivePath ~/Library/Developer/Xcode/Archives/<date>/<name>.xcarchive -derivedDataPath <its own folder> -allowProvisioningUpdates`,
+  then `open` the `.xcarchive` to show it in the Organizer. Give it its own
+  `-derivedDataPath`: sharing the default one with an open Xcode failed with
+  "accessing build database … disk I/O error". Delete the folder afterwards.
+- **Check `xcrun simctl runtime list` before counting on the simulator.**
+
 ## ✅ v1.5.1 build 3 LIVE since 2026-10-25 11:34:52 UTC, after build 2's rejection (2026-10-19)
 
 **Live:**
@@ -143,7 +176,7 @@ Context still worth knowing:
 
 ## ⏳ Pending on main (not yet shipped)
 
-Nothing: `main` matches 1.5.1 (`35d9be2`). Candidates for the next build
+Nothing: `main` matches 1.5.2 (`86e63c7`, in review since 2026-11-22). Candidates for the next build
 (barcode-recovery enrichment, weak-signal multipart upload, auto-retry) are in
 `ROADMAP.md`.
 
@@ -518,7 +551,8 @@ gh release create v1.2.0 --title "v1.2.0 — <summary>" --notes "<What's New tex
   settle window (`TORCH_SETTLE_MS` in `app/index.tsx`) — if a future device
   still drops it, raise that constant before reaching for bigger refactors.
 - The `MARKETING_VERSION = 1.0` reset (step 4a) bites on **every** prebuild — don't skip it.
-- **Close-up blur is the lens, not a regression** (1.5.1 TestFlight). With no
+- **Close-up blur is the lens, not a regression** (1.5.1 TestFlight; 1.5.2
+  adds a slight fixed zoom so the same framing happens from further back). With no
   `selectedLens`, expo-camera uses the physical wide-angle lens
   (`DeviceDiscovery.swift` → `defaultBackCamera`), which can't focus much closer
   than ~20 cm. The stock Camera app escapes this by switching to the ultra-wide
