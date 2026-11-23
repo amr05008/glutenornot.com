@@ -35,4 +35,4 @@ Issue #50 had two halves, each with an open PR from the agents fork.
 
 - 1.5.2's public release time, then the post-release watch in `mobile/RELEASE.md`.
 - Reads of `retake_reason` / `retake_withheld` must split at 2026-11-22 ~01:45 UTC.
-- The iOS 27 simulator runtime is gone from the M3; re-download it before the next release's launch check.
+- Aaron deleted the M3's simulator runtimes mid-session to free almost 30 GB, so the release archive's iOS 27 launch check did not run (the smoke build's did, the day before). Re-download the newest iOS runtime before the next release's launch check.

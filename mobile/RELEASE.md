@@ -19,8 +19,8 @@ then fills the reticle from a distance the wide lens can focus at.
   one not found → recovery → photo → result) and four photo scans read 470–1,113
   characters. Aaron's verdict: "seemed fine". Exclude that version from reads.
 - **Not run:** the iOS 27 simulator launch on the release archive (step 2).
-  Every simulator runtime had vanished from the Mac by then, most likely
-  reclaimed with the disk at 97%. The smoke build launched on the iOS 27
+  Aaron had deleted the simulator runtimes between the two builds to free
+  almost 30 GB (the disk was at 97%). The smoke build launched on the iOS 27
   simulator the day before, and the release source differs from it only by
   the version files and a comment.
 - **After it goes public:** read its release time from `currentVersionReleaseDate`,
@@ -37,7 +37,10 @@ then fills the reticle from a distance the wide lens can focus at.
   then `open` the `.xcarchive` to show it in the Organizer. Give it its own
   `-derivedDataPath`: sharing the default one with an open Xcode failed with
   "accessing build database … disk I/O error". Delete the folder afterwards.
-- **Check `xcrun simctl runtime list` before counting on the simulator.**
+- **Check `xcrun simctl runtime list` before counting on the simulator.** The
+  runtimes are deleted between releases to save disk. The launch check needs
+  only the newest iOS one (about 8 GB): ask Aaron before downloading it
+  (`xcodebuild -downloadPlatform iOS`), and it can be deleted again after.
 
 ## ✅ v1.5.1 build 3 LIVE since 2026-10-25 11:34:52 UTC, after build 2's rejection (2026-10-19)
 
