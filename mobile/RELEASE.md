@@ -209,7 +209,7 @@ Sanity check the JS before building:
 
 ```bash
 npx tsc --noEmit     # should be clean
-npm test             # jest — all green (229 tests as of the 1.5.1 scene-lifecycle fix)
+npm test             # jest — all green (232 tests as of the 1.5.2 close-focus zoom)
 ```
 
 ## 2. Smoke test (do this BEFORE the release build)
