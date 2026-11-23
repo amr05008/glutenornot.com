@@ -6,7 +6,7 @@ Step-by-step to build and ship a new iOS version. Mirrors the proven
 
 ---
 
-## ⏳ v1.5.2 build 2 submitted 2026-11-22 ~8:55 pm ET (2026-11-23 ~01:55 UTC)
+## ⏳ v1.5.2 build 2 submitted 2026-11-22 ~9:16 pm ET (2026-11-23 ~02:16 UTC)
 
 **What's in it:** the close-focus camera zoom (PR #52, issue #50). `CameraView`
 gets `zoom` 0.1 as a fresh 0→zoom transition 750 ms after the camera is ready,
@@ -37,6 +37,13 @@ then fills the reticle from a distance the wide lens can focus at.
   then `open` the `.xcarchive` to show it in the Organizer. Give it its own
   `-derivedDataPath`: sharing the default one with an open Xcode failed with
   "accessing build database … disk I/O error". Delete the folder afterwards.
+- **App Store Connect asked the Age Ratings questions again (a new 7-step form).**
+  Answered for 1.5.2: Medical or Treatment Information **None** (its examples
+  are medication guidance, emergency care and treatment information; the app
+  reads labels), Health or Wellness Topics **Yes** (its examples include
+  "dieting advice"). Keep the answers the same unless the app changes.
+- **The version page has a new, optional "Header and Search Results" asset**
+  (5244 × 2950 or 3840 × 1646). Left empty for 1.5.2; nothing is designed for it.
 - **Check `xcrun simctl runtime list` before counting on the simulator.** The
   runtimes are deleted between releases to save disk. The launch check needs
   only the newest iOS one (about 8 GB): ask Aaron before downloading it

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-21
-summary: Closed issue #50 (a small hot sauce label blurred in the camera and came back "incomplete" on every photo). The list-end note (PR #53) went live on the server, replacing PR #51's copyright pattern after two reviews broke it. The close-focus camera zoom (PR #52) shipped as iOS 1.5.2, submitted 2026-11-23 ~01:55 UTC.
+summary: Closed issue #50 (a small hot sauce label blurred in the camera and came back "incomplete" on every photo). The list-end note (PR #53) went live on the server, replacing PR #51's copyright pattern after two reviews broke it. The close-focus camera zoom (PR #52) shipped as iOS 1.5.2, submitted 2026-11-23 ~02:16 UTC.
 tags: [issue-50, list-gate, decision-005, decision-009, retake, camera, zoom, ios-release, grill]
 ---
 
